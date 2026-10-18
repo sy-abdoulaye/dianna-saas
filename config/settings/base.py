@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles",
+    "config.apps.StaticFilesConfig",
     "django_htmx",
     "apps.core",
     "apps.accounts",
@@ -125,6 +125,15 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+# E-mails : réglage MAILERS de Django 6.1 (EMAIL_BACKEND est déprécié). Le fournisseur
+# européen (T-13, django-anymail) sera branché avant la recette.
+MAILERS = {
+    "default": {
+        "BACKEND": env("MAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"),
+    },
+}
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Dianna <ne-pas-repondre@dianna.fr>")
 
 # Messages Django affichés en notifications visuelles (components/toast.html)
 MESSAGE_TAGS = {

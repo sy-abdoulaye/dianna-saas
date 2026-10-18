@@ -30,4 +30,6 @@ RUN SECRET_KEY=build-only python manage.py collectstatic --noinput \
     && useradd --system --uid 1000 dianna && chown -R dianna /app
 USER dianna
 EXPOSE 8000
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-"]
+# Journal d'accès sans query string ni adresse IP : les recherches contiennent des noms (règle 5).
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", \
+     "--access-logfile", "-", "--access-logformat", "%(t)s \"%(m)s %(U)s\" %(s)s %(B)s %(M)sms"]
