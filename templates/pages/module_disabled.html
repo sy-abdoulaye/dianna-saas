@@ -1,0 +1,17 @@
+{% extends "layouts/auth.html" %}
+{% load i18n %}
+{% block title %}{% translate "Module désactivé" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Module désactivé" as title %}
+    {% if is_admin %}
+      {% translate "Ce module est désactivé pour votre entreprise. Vous pouvez le réactiver dans Administration." as text %}
+      {% translate "Ouvrir l'administration" as action %}
+      {% include "components/empty_state.html" with heading="h1" icon="set" title=title text=text action_label=action action_url=admin_url %}
+    {% else %}
+      {% translate "Ce module est désactivé pour votre entreprise. Un administrateur peut le réactiver." as text %}
+      {% translate "Retour au tableau de bord" as action %}
+      {% include "components/empty_state.html" with heading="h1" icon="set" title=title text=text action_label=action action_url="/" %}
+    {% endif %}
+  </div>
+{% endblock %}

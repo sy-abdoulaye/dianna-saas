@@ -1,0 +1,18 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% comment %}
+  Confirmation commune. Contexte : title, text, ok_label, action_url, danger (bool), ok_icon.
+  Icône verte (action normale) ou rouge (action destructive), deux boutons de même largeur.
+{% endcomment %}
+{% block modal_icon_class %}{% if danger %} is-danger{% else %} is-ok{% endif %}{% endblock %}
+{% block modal_icon %}{% if danger %}{% icon "alert" %}{% else %}{% icon "check" %}{% endif %}{% endblock %}
+{% block modal_title %}{{ title }}{% endblock %}
+{% block modal_body %}<p class="modal-text">{{ text }}</p>{% endblock %}
+{% block modal_footer %}
+  {% button cancel_label|default:_("Annuler") data_modal_close=True %}
+  {% if danger %}
+    {% button ok_label|default:_("Confirmer") variant="danger" icon=ok_icon hx_post=action_url hx_swap="none" %}
+  {% else %}
+    {% button ok_label|default:_("Confirmer") variant="primary" icon=ok_icon|default:"check" hx_post=action_url hx_swap="none" %}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+{% load ui %}
+{% comment %}
+  Sélecteur segmenté (radios stylés). options : liste de (valeur, libellé, icône facultative).
+  {% include "components/segmented.html" with name="view" legend="Affichage" options=view_options selected="list" %}
+{% endcomment %}
+<fieldset class="segmented" {% if data_attr %}{{ data_attr }}{% endif %}>
+  <legend class="sr-only">{{ legend }}</legend>
+  {% for value, label, icon_name in options %}
+    <label>
+      <input type="radio" name="{{ name }}" value="{{ value }}" {% if value == selected %}checked{% endif %}>
+      <span>
+        {% if icon_name %}{% icon icon_name 16 %}{% endif %}
+        {{ label }}
+      </span>
+    </label>
+  {% endfor %}
+</fieldset>

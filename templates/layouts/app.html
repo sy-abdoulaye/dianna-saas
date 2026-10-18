@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load i18n ui %}
+{% block body %}
+  <div class="app" data-app>
+    <aside class="side" id="side" aria-label="{% translate 'Menu principal' %}">
+      <a class="brand" href="/" aria-label="{% translate 'Dianna, accueil' %}">{% brand_mark 28 %}<span>Dianna</span></a>
+      <nav class="nav" aria-label="{% translate 'Navigation principale' %}">
+        {% for group in nav_groups %}
+          {% if group.label %}<div class="nav-group" id="nav-group-{{ forloop.counter }}">{{ group.label }}</div>{% endif %}
+          <ul class="nav" {% if group.label %}aria-labelledby="nav-group-{{ forloop.counter }}"{% endif %}>
+            {% for item in group.items %}
+              <li>
+                {% if item.url %}
+                  <a class="nav-item" href="{{ item.url }}" {% if item.active %}aria-current="page"{% endif %}>
+                    {% icon item.icon %}<span>{{ item.label }}</span>
+                    {% if item.count %}
+                      <span class="count" aria-hidden="true">{{ item.count }}</span>
+                      <span class="sr-only">, {% blocktranslate count n=item.count %}{{ n }} à traiter{% plural %}{{ n }} à traiter{% endblocktranslate %}</span>
+                    {% endif %}
+                  </a>
+                {% else %}
+                  <span class="nav-item is-soon" aria-disabled="true">{% icon item.icon %}<span>{{ item.label }}</span><span class="soon">{% translate "Bientôt" %}</span></span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endfor %}
+      </nav>
+      {% block side_footer %}{% endblock %}
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button class="btn btn-secondary btn-icon burger"
+                type="button"
+                aria-label="{% translate 'Ouvrir le menu' %}"
+                aria-controls="side"
+                aria-expanded="false"
+                data-nav-toggle>
+          {% icon "menu" %}
+        </button>
+        {% block topbar %}{% endblock %}
+      </header>
+      <main id="content" class="page" tabindex="-1">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+{% endblock %}

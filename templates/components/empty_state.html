@@ -1,0 +1,9 @@
+{% load ui %}
+<div class="empty">
+  <div class="empty-icon" aria-hidden="true">{% icon icon|default:"search" %}</div>
+  {% if heading == "h1" %}<h1 class="empty-title">{{ title }}</h1>{% elif heading == "h2" %}<h2 class="empty-title">{{ title }}</h2>{% else %}<p class="empty-title">{{ title }}</p>{% endif %}
+  {% if text %}<p>{{ text }}</p>{% endif %}
+  {% if action_label and action_url %}
+    {% button action_label variant=action_variant|default:"primary" href=action_url icon=action_icon %}
+  {% endif %}
+</div>

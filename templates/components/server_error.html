@@ -1,0 +1,8 @@
+{% load i18n ui %}
+<div class="banner banner-err" role="alert" data-server-error>
+  {% icon "alert" %}
+  <div>
+    <b>{% translate "Le serveur n'a pas répondu." %}</b>
+    {% translate "Vos saisies sont conservées, vous pouvez réessayer." %}
+  </div>
+</div>

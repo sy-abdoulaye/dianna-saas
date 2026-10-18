@@ -1,0 +1,12 @@
+{% comment %}
+  Onglets de navigation (une URL par onglet, aria-current sur l'onglet actif).
+  tabs : liste de dicts {label, url, count, active}.
+{% endcomment %}
+<nav class="tabs" aria-label="{{ label }}">
+  {% for tab in tabs %}
+    <a href="{{ tab.url }}" {% if tab.active %}aria-current="page"{% endif %}>
+      {{ tab.label }}
+      {% if tab.count %}<span class="count">{{ tab.count }}</span>{% endif %}
+    </a>
+  {% endfor %}
+</nav>

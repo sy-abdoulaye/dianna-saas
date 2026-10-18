@@ -1,0 +1,1 @@
+{% load ui %}{% if is_link %}<a{{ attrs }}>{% else %}<button type="{{ type }}"{{ attrs }}>{% endif %}{% if icon %}{% icon icon icon_size %}{% endif %}{% if not icon_only %}<span>{{ label }}</span>{% endif %}{% if is_link %}</a>{% else %}</button>{% endif %}
