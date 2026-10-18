@@ -1,0 +1,24 @@
+# Contrôles avant chaque commit (T-18). Installés par `make install`.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: djlint
+        name: djlint
+        entry: uv run djlint --lint
+        language: system
+        files: ^templates/.*\.html$
+      - id: no-env-file
+        name: interdit le fichier .env
+        entry: .env ne doit pas être versionné
+        language: fail
+        files: ^\.env$

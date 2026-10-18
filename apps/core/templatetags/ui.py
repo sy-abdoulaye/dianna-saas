@@ -12,7 +12,7 @@
 from django import forms, template
 from django.forms.utils import flatatt
 from django.templatetags.static import static
-from django.utils.html import format_html
+from django.utils.html import conditional_escape, escape, format_html
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.status import get_status
@@ -29,11 +29,14 @@ def _attr_name(key: str) -> str:
 
 
 def _extra_attrs(kwargs: dict) -> dict:
+    """Attributs hx-*, data-* et aria-*. Les valeurs sont toujours échappées, même si elles
+    sont marquées sûres (chaîne littérale d'un gabarit) : une valeur JSON comme
+    hx_vals='{"kind": "ok"}' ne doit jamais pouvoir fermer l'attribut."""
     attrs = {}
     for key, value in kwargs.items():
         if not key.startswith(("hx_", "data_", "aria_")) or value in (None, False, ""):
             continue
-        attrs[_attr_name(key)] = "" if value is True else str(value)
+        attrs[_attr_name(key)] = True if value is True else escape(str(value))
     return attrs
 
 
@@ -47,7 +50,7 @@ def render_icon(name: str, size: int = 20, label: str = "", css: str = ""):
             '<svg class="{}" role="img" aria-label="{}" focusable="false">'
             '<use href="{}"></use></svg>',
             classes,
-            label,
+            escape(str(label)),
             href,
         )
     return format_html(
@@ -110,7 +113,7 @@ def button(
     if id:
         attrs["id"] = id
     if icon_only:
-        attrs["aria-label"] = label
+        attrs["aria-label"] = escape(str(label))
     attrs.update(_extra_attrs(kwargs))
     if "hx-post" in attrs or "hx-delete" in attrs:
         # Pas de double envoi : le bouton est désactivé pendant la requête.
@@ -119,7 +122,7 @@ def button(
         attrs["aria-busy"] = "true"
     is_link = bool(href) and not disabled
     if is_link:
-        attrs["href"] = href
+        attrs["href"] = conditional_escape(href)
     else:
         if name:
             attrs["name"] = name
