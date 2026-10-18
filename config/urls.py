@@ -1,10 +1,15 @@
+"""Routes de l'espace d'une entreprise (<slug>.<BASE_DOMAIN>). Voir apps.core.middleware."""
+
 from django.conf import settings
-from django.contrib import admin
 from django.urls import include, path
 
+from apps.accounts.urls import auth_patterns
+
 urlpatterns = [
-    path("editeur/", admin.site.urls),
+    *auth_patterns,
+    path("", include("apps.accounts.urls")),
     path("", include("apps.core.urls")),
+    path("", include("apps.dashboard.urls")),
 ]
 
 # Guide de style : jamais monté en production (STYLEGUIDE_ENABLED = False dans prod.py) ;

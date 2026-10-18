@@ -1,0 +1,5 @@
+{% load allauth %}
+<details class="card card-body" {% if attrs.open %}open{% endif %}>
+  <summary class="label">{% slot summary %}{% endslot %}</summary>
+  {% slot body %}{% endslot %}
+</details>

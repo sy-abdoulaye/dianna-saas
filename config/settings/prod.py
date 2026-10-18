@@ -20,6 +20,13 @@ SILENCED_SYSTEM_CHECKS = ["security.W021"]
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+SITE_SCHEME = "https"
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "dianna_cache",
+    }
+}
 
 MAILERS = {
     "default": {

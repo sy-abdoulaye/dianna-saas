@@ -1,0 +1,20 @@
+{% extends "layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Double authentification" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="flex flex-col gap-2">
+    <h1 class="h1">{% translate "Double authentification" %}</h1>
+    <p class="meta">{% translate "Saisissez le code à 6 chiffres affiché par votre application d'authentification, ou un code de secours." %}</p>
+  </div>
+  <form class="card card-body flex flex-col gap-4" method="post" action="{% url 'mfa_authenticate' %}" novalidate>
+    {% csrf_token %}
+    {% include "components/form_errors.html" %}
+    {% include "components/field.html" with field=form.code %}
+    {% button _("Valider") variant="primary" type="submit" block=True %}
+    <button class="btn btn-ghost btn-block" type="submit" form="logout-from-stage">{% translate "Annuler" %}</button>
+  </form>
+  <form id="logout-from-stage" method="post" action="{% url 'account_logout' %}">
+    <input type="hidden" name="next" value="{% url 'account_login' %}">
+    {% csrf_token %}
+  </form>
+{% endblock %}

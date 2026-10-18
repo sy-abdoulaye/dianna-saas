@@ -1,0 +1,6 @@
+{% extends base_template|default:"layouts/auth.html" %}
+{% comment %}
+  Les écrans d'allauth reprennent la mise en page de Dianna : authentification pour les
+  écrans d'entrée, application pour les écrans de compte (sécurité, codes de secours).
+{% endcomment %}
+{% block title %}{% block head_title %}{% endblock %} · Dianna{% endblock %}
