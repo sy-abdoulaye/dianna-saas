@@ -1,0 +1,11 @@
+.git
+.venv
+bin
+static/build
+staticfiles
+.env
+**/__pycache__
+.pytest_cache
+.ruff_cache
+test-results
+docs/reference
