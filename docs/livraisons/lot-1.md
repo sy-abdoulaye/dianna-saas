@@ -43,7 +43,7 @@ Date : 19 octobre 2026. Branche : `lot-1`.
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 162 tests ; couverture : `permissions.py` 99 %, `accounts/services.py` 95 %, `core/services.py` 97 %, total 96 % |
+| `make test` | 161 tests ; couverture : `permissions.py` 99 %, `accounts/services.py` 95 %, `core/services.py` 97 %, total 96 % |
 | `make e2e` | 25 parcours, dont le parcours 8 (isolation) et les 4 profils |
 | `make check` | aucune alerte, dont `--deploy` |
 
