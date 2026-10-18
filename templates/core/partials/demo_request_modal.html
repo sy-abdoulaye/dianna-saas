@@ -1,0 +1,22 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "home" %}{% endblock %}
+{% block modal_title %}{% translate "Déclarer du télétravail" %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{% url 'dev:modal' %}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        {% include "components/field.html" with field=form.day %}
+        {% include "components/field.html" with field=form.comment %}
+        {% translate "Règle de l'entreprise" as banner_title %}
+        {% translate "2 jours de télétravail par semaine au maximum. Choisir un samedi affiche l'erreur de validation." as banner_text %}
+        {% include "components/banner.html" with kind="info" title=banner_title text=banner_text %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Envoyer la demande") variant="primary" icon="send" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}
