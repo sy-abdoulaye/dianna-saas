@@ -17,7 +17,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 | summer_leave_hr_step | bool, défaut True | M-03 : validation finale RH des congés d'été |
 | timezone | char, défaut Europe/Paris | |
 
-**CompanyModule** (T) : `module` (choix : people, planning, telework, summer_leave, on_call, transport, equipment, announcements, surveys, careers, interventions), `enabled` (bool). Unique (company, module). Le socle et l'administration ne sont pas désactivables.
+**CompanyModule** (T) : `module` (choix : planning, telework, summer_leave, on_call, transport, equipment, announcements, surveys, careers, interventions), `enabled` (bool). Unique (company, module). Le socle, l'annuaire (L1-05) et l'administration ne sont pas désactivables.
 
 **Site** (T) : `name`, `address` optionnel. Unique (company, `Lower(name)`).
 **Service** (T) : `name`. Unique (company, `Lower(name)`).
@@ -39,13 +39,13 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 |---|---|---|
 | user | OneToOne User, nul | nul tant que l'invitation n'est pas acceptée |
 | first_name, last_name | char | |
-| email | email | unique par entreprise, insensible à la casse : `UniqueConstraint(Lower("email"), "company")` |
+| email | email | contact professionnel, unique par entreprise, insensible à la casse : `UniqueConstraint(Lower("email"), "company")`. Distinct de l'identifiant `User.email` (T-09) |
 | phone, office | char, optionnels | |
 | photo | image, optionnel | ≤ 2 Mo, JPG ou PNG |
 | job_title | char | |
 | service | FK Service | |
 | site | FK Site | |
-| manager | FK self, nul | définit l'équipe |
+| manager | FK self, nul | définit l'équipe ; toute fiche active (L1-02) |
 | role | choix : employee, manager, hr, admin | profil d'accès |
 | status | choix : active, upcoming, left | « Actif », « Arrivée prochaine », « Parti » |
 | arrival_date, departure_date | date | departure nul si en poste |

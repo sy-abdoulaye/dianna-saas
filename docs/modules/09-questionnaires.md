@@ -25,6 +25,10 @@
 
 Brouillon → (Publier, confirmation, notification au public) → Ouvert → (Clore, confirmation) → Clos. Un brouillon peut être supprimé ; un questionnaire publié n'est plus modifiable.
 
+## Limite connue (L1-09)
+
+L'anonymat est garanti au niveau de l'application. En base, l'ordre physique des lignes et la date du jour peuvent permettre de rapprocher un reçu et une réponse quand les réponses sont peu nombreuses. Risque résiduel accepté pour la V1, à revoir au lot 8.
+
 ## Critères d'acceptation
 
 - Aucune requête ni aucun export ne permet de relier une réponse à une personne (pas de clé commune entre `SurveyReceipt` et `SurveyResponse`).

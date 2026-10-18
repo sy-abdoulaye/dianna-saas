@@ -1,5 +1,7 @@
 # Permissions
 
+Colonne « Manager » : elle s'applique à toute personne qui a des collaborateurs directs, quel que soit son profil (L1-02). Le profil « Manager » seul n'ajoute aucun droit.
+
 Légende : **Oui** = autorisé ; **Équipe** = limité aux fiches dont la personne est le manager direct ; **Soi** = ses propres données ; **Non** = interdit et non affiché.
 
 Règles générales :
