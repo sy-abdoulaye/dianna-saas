@@ -25,6 +25,19 @@ docs/reference/                prototype interactif, données de démonstration,
 3. Ouvrez Claude Code dans ce dépôt et envoyez le premier message de `docs/08-prompts-claude-code.md`.
 4. Avancez lot par lot. À la fin de chaque lot, vérifiez la démo avec les comptes de `docs/07-donnees-de-demo.md`.
 
+## Développement local
+
+Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est installé par uv.
+
+```bash
+make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind
+make up          # PostgreSQL 18 (Docker, port 5433), CSS, migrations, serveur sur :8000
+make css         # dans un second terminal : recompile la feuille de style à chaque modification
+```
+
+Le guide de style des composants est sur http://localhost:8000/dev/styleguide/ (développement uniquement).
+Contrôles : `make lint`, `make test`, `make e2e`, `make check`. Liste complète : `make help`.
+
 ## À faire hors code avant la commercialisation
 
 - Avis juridique : entretiens professionnels, durées de conservation, remboursement transport, registre des traitements, contrat de sous-traitance (DPA).

@@ -164,3 +164,16 @@ def test_skip_link_moves_focus_to_content(page, styleguide_url):
     expect(skip).to_be_focused()
     page.keyboard.press("Enter")
     expect(page.locator("#content")).to_be_focused()
+
+
+def test_toasts_stay_visible_and_clickable_above_an_open_modal(page, styleguide_url):
+    open_styleguide(page, styleguide_url)
+    page.locator("#toasts-demo").get_by_role("button", name="Succès", exact=True).click()
+    page.locator("#modals").get_by_role("button", name="Confirmation", exact=True).click()
+    dialog = page.locator("dialog[open]")
+    expect(dialog.locator("#toasts .toast")).to_have_count(1)
+    dialog.get_by_role("button", name="Marquer comme réalisé").click()
+    expect(page.locator("dialog")).to_have_count(0)
+    expect(page.locator("body > #toasts .toast").last).to_contain_text(
+        "Entretien marqué comme réalisé"
+    )

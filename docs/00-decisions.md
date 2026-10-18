@@ -57,6 +57,15 @@ Versions vérifiées le 18 octobre 2026.
 | L0-05 | Branche principale | `main` | Validé (18 oct. 2026) |
 | L0-06 | Dépendances ajoutées | `psycopg` 3 (pilote PostgreSQL), `whitenoise` (fichiers statiques), `gunicorn` (serveur), `django-htmx`, `pytest-cov` (couverture), `pytest-playwright` (parcours de bout en bout sans Node) | Validé (18 oct. 2026) |
 | L0-07 | Ressources front copiées dans le dépôt | HTMX 2.0.11 (`static/vendor/`), icônes `lucide-static` 1.50.0 (sprite généré), polices Fontsource 5.3.0 (sous-ensemble latin, woff2, licence OFL) : aucun appel à un CDN, compatible avec la CSP | Validé (18 oct. 2026) |
+| L0-08 | Port PostgreSQL de développement | **5433** sur l'hôte (un PostgreSQL local occupe souvent 5432), réglable par `DB_PORT` dans `docker-compose.yml` | À confirmer |
+| L0-09 | Envoi des e-mails | Réglage `MAILERS` de Django 6.1 (`EMAIL_BACKEND` est déprécié), variable `MAIL_BACKEND` ; console en développement | À confirmer |
+| L0-10 | Icônes | Icônes Lucide (design system) sous les clés courtes du prototype (`dash`, `users`, `home`…) ; correspondance dans `scripts/vendor_assets.py`. Le prototype dessinait ses propres tracés | À confirmer |
+| L0-11 | Configuration HTMX | `allowEval` désactivé, `historyCacheSize: 0` (aucune copie de page RH dans le `localStorage`), `attributesToSettle` sans `style` (CSP), styles d'indicateur dans `app.css` | À confirmer |
+| L0-12 | Onglets | Liens de navigation (une URL par onglet, `aria-current="page"`), pas de `role="tablist"` : l'onglet est dans l'URL et le bouton Retour fonctionne | À confirmer |
+| L0-13 | Administration de l'éditeur | Montée provisoirement sur `/editeur/` ; l'hôte définitif se décide au lot 1 avec T-08 | À confirmer |
+| L0-14 | Pages d'erreur | Rendues dans la mise en page d'authentification tant qu'il n'y a pas d'utilisateur connecté (lot 1). « Module désactivé » répond 403 | À confirmer |
+| L0-15 | Journal d'accès | Gunicorn journalise méthode, chemin, statut et durée, sans query string ni adresse IP (les recherches contiennent des noms) | À confirmer |
+| L0-16 | Notifications et modales | Pendant qu'une modale est ouverte, la zone des notifications est placée dans la modale pour rester visible et cliquable | À confirmer |
 
 ## Métier : à confirmer
 

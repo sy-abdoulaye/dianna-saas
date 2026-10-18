@@ -23,7 +23,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 **Service** (T) : `name`. Unique (company, `Lower(name)`).
 **Closure** (T) : `date`, `label`, `site` optionnel (fermetures d'entreprise ; les jours fériés viennent du paquet `holidays`).
 
-**User** (pas de company ; `AbstractBaseUser`) : `email` unique, `is_active`, `is_platform_staff` (super-administrateur éditeur), `theme` (system, light, dark), `last_login`. Connexion par e-mail.
+**User** (pas de company ; `AbstractBaseUser` + `PermissionsMixin`, créé au lot 0, L0-01) : `email` unique sans tenir compte de la casse (stocké en minuscules), `is_active`, `is_staff` (équipe Dianna : super-administrateur éditeur, accès à l'administration Django ; propriété `is_platform_staff`), `is_superuser`, groupes et permissions Django, `theme` (system, light, dark), `last_login`. Connexion par e-mail.
 
 **Invitation** (T) : `employee`, `token` (haché), `expires_at` (7 jours), `accepted_at`, `sent_by`.
 
