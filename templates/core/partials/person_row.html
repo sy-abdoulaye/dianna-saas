@@ -1,0 +1,13 @@
+{% load ui %}
+<tr>
+  <td>
+    <div class="who">
+      {% include "components/avatar.html" with person=row %}
+      <span class="who-text"><b>{{ row.full_name }}</b><span class="who-sub">{{ row.job_title }}</span></span>
+    </div>
+  </td>
+  <td>{{ row.service }}</td>
+  <td>{{ row.site }}</td>
+  <td>{{ row.email }}</td>
+  <td>{% status_badge "employee" row.status %}</td>
+</tr>

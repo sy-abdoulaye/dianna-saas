@@ -1,0 +1,300 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}Guide de style · Dianna{% endblock %}
+
+{% block side_footer %}
+  <div class="side-me">
+    {% include "components/avatar.html" with person=me %}
+    <div class="min-w-0"><b>{{ me.full_name }}</b><span>Salarié · {{ me.service }}</span></div>
+  </div>
+{% endblock %}
+
+{% block topbar %}
+  <div class="global-search">
+    <div class="search-input">
+      {% icon "search" %}
+      <input class="input" id="global-search" type="search" placeholder="Rechercher un collaborateur" aria-label="Recherche globale" autocomplete="off">
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="dropdown" data-dropdown>
+    <button class="btn btn-secondary btn-icon" type="button" aria-expanded="false" aria-controls="menu-notifications" aria-label="Notifications, 2 non lues" data-dropdown-toggle>
+      {% icon "bell" %}<span class="count bell-count" aria-hidden="true">2</span>
+    </button>
+    <div class="menu notif-menu" id="menu-notifications" hidden>
+      <header><b>Notifications</b>{% button "Tout marquer comme lu" variant="ghost" size="sm" %}</header>
+      <ul>
+        <li class="is-unread"><a href="#modals"><span>Louise Martin a validé votre télétravail du jeudi 22 oct.</span><span class="hint">Il y a 5 min</span></a></li>
+        <li class="is-unread"><a href="#modals"><span>Nouvelle annonce : Fermeture du site de Lyon le 11 novembre</span><span class="hint">Hier</span></a></li>
+        <li><a href="#modals"><span>Votre entretien annuel est lancé</span><span class="hint">Il y a 3 jours</span></a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="dropdown" data-dropdown>
+    <button class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="menu-user" data-dropdown-toggle>
+      {% include "components/avatar.html" with person=me %}
+      <span class="meta hidden sm:inline">{{ me.full_name }}</span>
+      {% icon "chev" 16 %}
+    </button>
+    <div class="menu" id="menu-user" hidden>
+      <a href="#buttons">{% icon "users" 16 %}Ma fiche</a>
+      <div class="menu-sep"></div>
+      <div class="menu-label caps">Thème</div>
+      {% theme_switch %}
+      <div class="menu-sep"></div>
+      <a href="#top">{% icon "out" 16 %}Se déconnecter</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% url "dev:modal" as modal_url %}
+  {% url "dev:confirm" as confirm_url %}
+  {% url "dev:toast" as toast_url %}
+  {% url "dev:server_error" as server_error_url %}
+  <div class="page-head" id="top">
+    <div>
+      <div class="crumbs">Développement › Design system</div>
+      <h1 class="h1">Guide de style</h1>
+      <p class="sub">Composants communs de docs/05-design-system.md, dans tous leurs états. Page réservée au développement.</p>
+    </div>
+    <div class="actions">
+      {% button "Ouvrir une modale" variant="secondary" icon="plus" hx_get=modal_url hx_target="#modal-root" %}
+      {% button "Déclarer du télétravail" variant="primary" icon="home" hx_get=modal_url hx_target="#modal-root" %}
+    </div>
+  </div>
+
+  <nav class="sg-toc" aria-label="Sections du guide">
+    {% for anchor, label in toc %}<a class="pill" href="#{{ anchor }}">{{ label }}</a>{% endfor %}
+  </nav>
+
+  <section class="sg-section" id="colors" aria-labelledby="h-colors">
+    <h2 class="h2" id="h-colors">Couleurs (rôles)</h2>
+    <div class="sg-grid">
+      <div><div class="sg-swatch bg-app"></div><span class="hint mono">app</span></div>
+      <div><div class="sg-swatch bg-surface"></div><span class="hint mono">surface</span></div>
+      <div><div class="sg-swatch bg-raised"></div><span class="hint mono">raised</span></div>
+      <div><div class="sg-swatch bg-subtle"></div><span class="hint mono">subtle</span></div>
+      <div><div class="sg-swatch bg-field"></div><span class="hint mono">field</span></div>
+      <div><div class="sg-swatch bg-line"></div><span class="hint mono">line</span></div>
+      <div><div class="sg-swatch bg-line-strong"></div><span class="hint mono">line-strong</span></div>
+      <div><div class="sg-swatch bg-title"></div><span class="hint mono">title</span></div>
+      <div><div class="sg-swatch bg-ink"></div><span class="hint mono">ink</span></div>
+      <div><div class="sg-swatch bg-ink-2"></div><span class="hint mono">ink-2</span></div>
+      <div><div class="sg-swatch bg-ink-3"></div><span class="hint mono">ink-3</span></div>
+      <div><div class="sg-swatch bg-brand"></div><span class="hint mono">brand</span></div>
+      <div><div class="sg-swatch bg-link"></div><span class="hint mono">link</span></div>
+      <div><div class="sg-swatch bg-sel-bg"></div><span class="hint mono">sel-bg</span></div>
+      <div><div class="sg-swatch bg-focus"></div><span class="hint mono">focus</span></div>
+      <div><div class="sg-swatch bg-ring"></div><span class="hint mono">ring</span></div>
+      <div><div class="sg-swatch bg-ok-bg"></div><span class="hint mono">ok-bg</span></div>
+      <div><div class="sg-swatch bg-ok-ink"></div><span class="hint mono">ok-ink</span></div>
+      <div><div class="sg-swatch bg-warn-bg"></div><span class="hint mono">warn-bg</span></div>
+      <div><div class="sg-swatch bg-warn-ink"></div><span class="hint mono">warn-ink</span></div>
+      <div><div class="sg-swatch bg-err-bg"></div><span class="hint mono">err-bg</span></div>
+      <div><div class="sg-swatch bg-err-ink"></div><span class="hint mono">err-ink</span></div>
+      <div><div class="sg-swatch bg-info-bg"></div><span class="hint mono">info-bg</span></div>
+      <div><div class="sg-swatch bg-info-ink"></div><span class="hint mono">info-ink</span></div>
+      <div><div class="sg-swatch bg-site-bg"></div><span class="hint mono">site-bg (sur site)</span></div>
+      <div><div class="sg-swatch bg-tel-bg"></div><span class="hint mono">tel-bg (télétravail)</span></div>
+      <div><div class="sg-swatch bg-cng-bg"></div><span class="hint mono">cng-bg (congés)</span></div>
+      <div><div class="sg-swatch bg-ast-bg"></div><span class="hint mono">ast-bg (astreinte)</span></div>
+      <div><div class="sg-swatch bg-av-bg"></div><span class="hint mono">av-bg</span></div>
+      <div><div class="sg-swatch bg-track"></div><span class="hint mono">track</span></div>
+    </div>
+  </section>
+
+  <section class="sg-section" id="type" aria-labelledby="h-type">
+    <h2 class="h2" id="h-type">Typographie</h2>
+    <div class="card card-body flex flex-col gap-3">
+      <p class="h1">Titre de page · Schibsted Grotesk 32/40</p>
+      <p class="h2">Titre de section · 18/28</p>
+      <p class="h3">Sous-titre · 16/24</p>
+      <p>Texte courant · IBM Plex Sans 14/20. Les caractères accentués : é è à ç œ « guillemets » 1 234,50 €.</p>
+      <p class="meta">Aide et méta · 13/20</p>
+      <p class="caps">Capitales · IBM Plex Mono 12/16</p>
+      <p class="mono">N° de série : SN-4F2A-9931</p>
+    </div>
+  </section>
+
+  <section class="sg-section" id="buttons" aria-labelledby="h-buttons">
+    <h2 class="h2" id="h-buttons">Boutons</h2>
+    <div class="card card-body flex flex-col gap-4">
+      <div class="sg-row">
+        {% button "Envoyer la demande" variant="primary" icon="send" %}
+        {% button "Voir le planning" variant="secondary" icon="cal" %}
+        {% button "Réinitialiser" variant="ghost" %}
+        {% button "Archiver" variant="danger" icon="trash" %}
+        {% button "Modifier" variant="secondary" icon="edit" icon_only=True %}
+      </div>
+      <div class="sg-row">
+        {% button "Valider" variant="primary" size="sm" %}
+        {% button "Refuser" variant="secondary" size="sm" %}
+        {% button "Détail" variant="ghost" size="sm" %}
+        {% button "Supprimer" variant="danger" size="sm" %}
+        {% button "Plus d'actions" variant="ghost" icon="more" icon_only=True size="sm" %}
+      </div>
+      <div class="sg-row">
+        {% button "Envoi en cours" variant="primary" loading=True %}
+        {% button "Indisponible" variant="secondary" disabled=True %}
+        {% button "Lien bouton" variant="secondary" href="#buttons" icon="right" %}
+      </div>
+    </div>
+  </section>
+
+  <section class="sg-section" id="badges" aria-labelledby="h-badges">
+    <h2 class="h2" id="h-badges">Badges de statut, compteurs, avatars</h2>
+    <div class="card card-body flex flex-col gap-4">
+      {% for domain, values in statuses.items %}
+        <div class="sg-row">
+          <span class="caps w-32">{{ domain }}</span>
+          {% for value in values %}{% status_badge domain value %}{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="sg-row">
+        <span class="pill">Épinglée</span>
+        <span class="count">3</span>
+        <span class="soon">Bientôt</span>
+      </div>
+      <div class="sg-row">
+        {% include "components/avatar.html" with person=me %}
+        {% include "components/avatar.html" with person=me size="m" %}
+        {% include "components/avatar.html" with person=me size="l" %}
+        {% include "components/avatar.html" with person="Hélène Faure" size="m" %}
+      </div>
+    </div>
+  </section>
+
+  <section class="sg-section" id="fields" aria-labelledby="h-fields">
+    <h2 class="h2" id="h-fields">Champs de formulaire</h2>
+    <div class="grid gap-6 lg:grid-cols-2">
+      <form class="card card-body flex flex-col gap-4" novalidate>
+        <h3 class="h3">État normal</h3>
+        <div class="form-grid">
+          {% include "components/field.html" with field=fields_form.first_name %}
+          {% include "components/field.html" with field=fields_form.service %}
+          {% include "components/field.html" with field=fields_form.email full=True %}
+          {% include "components/field.html" with field=fields_form.note full=True %}
+          {% include "components/field.html" with field=fields_form.pinned full=True %}
+        </div>
+        {% include "components/file_drop.html" with field=fields_form.proof hint="PDF, JPG ou PNG · 5 Mo maximum" %}
+        {% include "components/rating.html" with field=fields_form.score %}
+        <div class="field">
+          <span class="label">Affichage</span>
+          {% include "components/segmented.html" with name="view" legend="Affichage" options=view_options selected="list" %}
+        </div>
+      </form>
+      <form class="card card-body flex flex-col gap-4" novalidate aria-label="Formulaire en erreur">
+        <h3 class="h3">En erreur</h3>
+        {% include "components/form_errors.html" with form=invalid_form %}
+        <div class="form-grid">
+          {% include "components/field.html" with field=invalid_form.first_name %}
+          {% include "components/field.html" with field=invalid_form.service %}
+          {% include "components/field.html" with field=invalid_form.email full=True %}
+          {% include "components/field.html" with field=invalid_form.note full=True %}
+        </div>
+        {% include "components/file_drop.html" with field=invalid_form.proof hint="PDF, JPG ou PNG · 5 Mo maximum" %}
+        {% include "components/rating.html" with field=invalid_form.score %}
+      </form>
+    </div>
+  </section>
+
+  <section class="sg-section" id="banners" aria-labelledby="h-banners">
+    <h2 class="h2" id="h-banners">Bandeaux</h2>
+    {% include "components/banner.html" with kind="info" title="Les informations RH ne sont pas affichées." text="Elles sont réservées aux RH et à la personne concernée." %}
+    {% include "components/banner.html" with kind="warn" title="Conflit d'absence." text="2 personnes du service Support client sont absentes sur cette période." %}
+    {% include "components/banner.html" with kind="ok" title="Compte rendu validé." text="Louise Martin l'a validé le 12 octobre." %}
+    {% include "components/banner.html" with kind="err" title="Complément demandé." text="Précisez les difficultés rencontrées sur la migration." %}
+    {% include "components/server_error.html" %}
+  </section>
+
+  <section class="sg-section" id="kpis" aria-labelledby="h-kpis">
+    <h2 class="h2" id="h-kpis">Indicateurs et barres</h2>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {% include "components/kpi.html" with label="Télétravail cette semaine" value="1 / 2" note="Règle de l'entreprise : 2 jours" %}
+      {% include "components/kpi.html" with label="Campagne terminée" value="40 %" progress=40 %}
+      {% include "components/kpi.html" with label="Demandes à valider" value="2" note="Télétravail et congés" %}
+      {% include "components/kpi.html" with label="Effectif en poste" value="22" %}
+    </div>
+    <div class="card card-body flex flex-col gap-3">
+      <span class="label" id="meter-label">Réalisation des travaux (élément meter, 30 % : sous le seuil)</span>
+      <meter class="meter" min="0" max="100" low="50" high="80" optimum="100" value="30" aria-labelledby="meter-label">30 %</meter>
+      <span class="label" id="meter-label-2">Réalisation (85 %)</span>
+      <meter class="meter" min="0" max="100" low="50" high="80" optimum="100" value="85" aria-labelledby="meter-label-2">85 %</meter>
+    </div>
+  </section>
+
+  <section class="sg-section" id="tabs" aria-labelledby="h-tabs">
+    <h2 class="h2" id="h-tabs">Onglets</h2>
+    {% include "components/tabs.html" with tabs=tabs label="Demandes" %}
+  </section>
+
+  <section class="sg-section" id="table" aria-labelledby="h-table">
+    <h2 class="h2" id="h-table">Filtres, tableau, pagination</h2>
+    <p class="meta">Recherchez « zzzz » pour voir l'état vide. Les filtres et la page sont dans l'URL.</p>
+    <div class="card">
+      {% include "components/filters.html" with form=filter_form action=results_url target="#results" %}
+      <div id="results" aria-live="polite">
+        {% partialdef results inline %}
+          {% include "components/table.html" with caption="Collaborateurs (démonstration)" columns=columns rows=page_obj.object_list row_template="core/partials/person_row.html" empty_title="Aucun collaborateur trouvé" empty_text="Modifiez la recherche ou les filtres." empty_action_label="Réinitialiser les filtres" empty_action_url=results_url %}
+          {% pagination page_obj "#results" %}
+        {% endpartialdef %}
+      </div>
+    </div>
+  </section>
+
+  <section class="sg-section" id="states" aria-labelledby="h-states">
+    <h2 class="h2" id="h-states">États vides et chargement</h2>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="card">
+        {% include "components/empty_state.html" with icon="check" title="Rien à valider" text="Les nouvelles demandes de votre équipe apparaîtront ici." %}
+      </div>
+      <div class="card">
+        {% include "components/empty_state.html" with icon="file" title="Aucune demande pour le moment" text="Déclarez votre premier jour de télétravail." action_label="Nouvelle demande" action_url="#modals" action_icon="plus" %}
+      </div>
+    </div>
+    <div class="card card-body">{% include "components/skeleton.html" %}</div>
+  </section>
+
+  <section class="sg-section" id="stepper" aria-labelledby="h-stepper">
+    <h2 class="h2" id="h-stepper">Étapes</h2>
+    <div class="card card-body">{% include "components/stepper.html" with steps=steps %}</div>
+  </section>
+
+  <section class="sg-section" id="modals" aria-labelledby="h-modals">
+    <h2 class="h2" id="h-modals">Fenêtres modales et confirmations</h2>
+    <div class="card card-body sg-row">
+      {% button "Formulaire en modale" variant="primary" icon="home" hx_get=modal_url hx_target="#modal-root" %}
+      {% button "Confirmation" variant="secondary" icon="check" hx_get=confirm_url hx_target="#modal-root" %}
+      {% button "Confirmation destructive" variant="danger" icon="trash" hx_get=confirm_url|add:"?danger=1" hx_target="#modal-root" %}
+    </div>
+  </section>
+
+  <section class="sg-section" id="toasts-demo" aria-labelledby="h-toasts">
+    <h2 class="h2" id="h-toasts">Notifications visuelles et erreurs serveur</h2>
+    <div class="card card-body sg-row">
+      {% button "Succès" hx_post=toast_url hx_vals='{"kind": "ok"}' hx_swap="none" %}
+      {% button "Information" hx_post=toast_url hx_vals='{"kind": "info"}' hx_swap="none" %}
+      {% button "Avertissement" hx_post=toast_url hx_vals='{"kind": "warn"}' hx_swap="none" %}
+      {% button "Erreur" hx_post=toast_url hx_vals='{"kind": "err"}' hx_swap="none" %}
+    </div>
+    <form class="card card-body flex flex-col gap-4" hx-post="{{ server_error_url }}" hx-swap="none" novalidate>
+      <p class="meta">Ce formulaire reçoit une erreur 500 : le bandeau s'affiche en tête et la saisie est conservée.</p>
+      <div class="field">
+        <label class="label" for="srv-text">Texte saisi</label>
+        <input class="input" id="srv-text" name="text" value="Ma saisie reste en place">
+      </div>
+      <div>{% button "Enregistrer" variant="primary" type="submit" %}</div>
+    </form>
+  </section>
+
+  <section class="sg-section" id="pages" aria-labelledby="h-pages">
+    <h2 class="h2" id="h-pages">Pages d'erreur</h2>
+    <div class="card card-body sg-row">
+      {% for slug, label in error_pages %}
+        {% url "dev:page" slug as page_url %}
+        {% button label href=page_url variant="secondary" %}
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
