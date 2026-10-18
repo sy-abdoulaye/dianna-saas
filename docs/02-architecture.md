@@ -102,15 +102,15 @@ pending      → cancelled                     (demandeur)
 approved     → cancelled                     (RH, avec motif ; lot 8)
 ```
 
-**Annulation immédiate (« Annuler » dans la notification visuelle, 10 s, auteur de l'action uniquement) :**
+**Annulation immédiate (« Annuler » dans la notification visuelle, 30 s côté serveur, auteur de l'action uniquement) :**
 - après un envoi : la demande, son événement de calendrier et la notification au valideur sont **supprimés** ;
 - après une décision (validation, refus, validation manager) : la demande revient à l'état précédent, un `RequestEvent` `reverted` est ajouté, la notification au demandeur est supprimée.
 
-Les e-mails liés à une action annulable sont mis en file avec un **délai de 15 secondes** et ne partent pas si l'action a été annulée entre-temps.
+Les e-mails liés à une action annulable sont mis en file avec un **délai de 45 secondes** et ne partent pas si l'action a été annulée entre-temps.
 
 Chaque transition est une fonction de service : vérifie l'état, enregistre un `RequestEvent` (qui, quand, quoi, commentaire), met à jour le `CalendarEvent` lié, crée les notifications, écrit le journal d'audit. Les transitions sont atomiques (`transaction.atomic`) et protégées contre la double soumission (`select_for_update`).
 
-L'annulation immédiate proposée dans les notifications visuelles (bouton « Annuler ») appelle une transition inverse autorisée pendant 10 secondes après l'action, uniquement par son auteur.
+L'annulation immédiate proposée dans les notifications visuelles (bouton « Annuler ») appelle une transition inverse autorisée pendant 30 secondes après l'action, uniquement par son auteur (L0-03). Passé ce délai : notification d'erreur « Il est trop tard pour annuler cette action. ».
 
 ## Planning : événement de calendrier commun
 
