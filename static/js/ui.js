@@ -130,7 +130,12 @@ let modalOpener = null;
 
 function openModal(dialog, opener) {
   modalOpener = opener || document.activeElement;
+  // La modale est dans la couche supérieure et rend le reste inerte : la zone des
+  // notifications y est déplacée pour rester visible et cliquable (« Annuler »).
+  const toasts = $("#toasts");
+  if (toasts) dialog.append(toasts);
   dialog.addEventListener("close", () => {
+    if (toasts) document.body.append(toasts);
     dialog.remove();
     if (modalOpener && document.body.contains(modalOpener)) modalOpener.focus();
     modalOpener = null;
