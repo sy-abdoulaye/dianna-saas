@@ -1,0 +1,20 @@
+# PostgreSQL 18 pour le développement (T-03). `make db` le démarre.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: dianna
+      POSTGRES_USER: dianna
+      POSTGRES_PASSWORD: dianna
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dianna -d dianna"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:
