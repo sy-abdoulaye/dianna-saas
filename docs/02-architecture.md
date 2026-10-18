@@ -49,6 +49,8 @@ Une base PostgreSQL, un schéma, une colonne `company_id` sur chaque table méti
 
 **Résolution de l'entreprise.** `CompanyMiddleware` lit le sous-domaine (`exemple.dianna.fr` → `Company.slug = "exemple"`), charge l'entreprise active et la place dans `request.company` et dans une `ContextVar` (`apps.core.tenancy.current_company`). Une entreprise suspendue renvoie une page dédiée. En développement, `exemple.localhost:8000` fonctionne, ou le paramètre `DEV_COMPANY_SLUG`.
 
+**Hôtes (T-08, T-22).** `dianna.fr` : page vitrine (« Accéder à mon espace »). `admin.dianna.fr` : administration éditeur seule. `<slug>.dianna.fr` : espace d'une entreprise. Le domaine de base est le réglage `BASE_DOMAIN` (`dianna.fr`, `localhost` en développement).
+
 **Modèle de base.**
 
 ```python

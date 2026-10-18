@@ -7,10 +7,10 @@ Route : `/planning/`. Actions : « Exporter », « Déclarer du télétravail »
 - **Barre de navigation :** précédent, Aujourd'hui, suivant, titre de la période (« Semaine du 19 oct. au 25 octobre 2026 » ou « octobre 2026 »), sélecteur Semaine / Mois.
 - **Filtres :** nom ; service (RH, Admin) ; site ; légende (Sur site, Télétravail, Congés, Astreinte, En attente hachuré).
 - **Grille :** une ligne par personne (l'utilisateur en premier, avec « (vous) »), une colonne par jour ; première colonne et en-tête figés ; colonne du jour en surbrillance ; week-ends grisés. Semaine : pastilles avec libellé. Mois : pastilles avec lettre (S, T, C, A) et libellé complet en info-bulle et pour les lecteurs d'écran.
-- **Calcul d'une case :** congé > télétravail > astreinte > sur site (jour ouvré) ; vide le week-end, les jours fériés (libellé du jour férié) et les fermetures ; « — » avant l'arrivée. Source unique : `CalendarEvent`.
+- **Calcul d'une case (L1-07) :** état principal congé > télétravail > sur site (jour ouvré) ; l'astreinte se cumule et s'affiche par un repère « A » dans la case ; vide le week-end, les jours fériés (libellé du jour férié) et les fermetures ; « — » avant l'arrivée. Source unique : `CalendarEvent`.
 - **Interaction :** cliquer sur une de ses propres journées « Sur site » à venir ouvre la modale de télétravail pré-remplie.
 - **Pied :** nombre de personnes, nombre sur site aujourd'hui.
-- **Périmètre :** salarié et manager : leur service ; RH et Admin : toute l'entreprise.
+- **Périmètre :** salarié : son service ; manager (personne qui a des collaborateurs directs) : son service plus les membres de son équipe rattachés à d'autres services (L1-06) ; RH et Admin : toute l'entreprise.
 - **Performance :** une requête pour les événements de la période (pas de requête par case) ; 200 personnes × 31 jours en moins de 300 ms côté serveur.
 
 ## Export du planning
