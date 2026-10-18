@@ -1,0 +1,20 @@
+{% load i18n ui %}
+{% comment %}
+  Fenêtre modale (<dialog>), à étendre. Insérée dans #modal-root par HTMX ; ui.js l'ouvre,
+  piège le focus (dialog modal natif), la ferme par Échap, par le fond et par la croix, puis
+  rend le focus au déclencheur. Blocs : modal_icon, modal_title, modal_body, modal_footer,
+  ou modal_content pour remplacer corps et pied (formulaire).
+{% endcomment %}
+<dialog class="modal{% block modal_class %}{% endblock %}" aria-labelledby="modal-title" data-modal>
+  <div class="modal-inner">
+    <header class="modal-head">
+      <span class="modal-icon{% block modal_icon_class %}{% endblock %}" aria-hidden="true">{% block modal_icon %}{% icon "info" %}{% endblock %}</span>
+      <h2 id="modal-title">{% block modal_title %}{% endblock %}</h2>
+      {% button _("Fermer") variant="ghost" icon="x" icon_only=True size="sm" data_modal_close=True %}
+    </header>
+    {% block modal_content %}
+      <div class="modal-body">{% block modal_body %}{% endblock %}</div>
+      <footer class="modal-foot">{% block modal_footer %}{% endblock %}</footer>
+    {% endblock %}
+  </div>
+</dialog>

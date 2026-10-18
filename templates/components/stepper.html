@@ -1,0 +1,18 @@
+{% load i18n ui %}
+{% comment %}
+  Étapes : steps = liste de dicts {label, state} avec state = done, current ou todo.
+{% endcomment %}
+<ol class="stepper" aria-label="{% translate 'Étapes' %}">
+  {% for step in steps %}
+    {% if not forloop.first %}<li class="step-line{% if step.state != 'todo' %} is-done{% endif %}" aria-hidden="true"></li>{% endif %}
+    <li class="step is-{{ step.state }}" {% if step.state == "current" %}aria-current="step"{% endif %}>
+      <span class="step-num" aria-hidden="true">
+        {% if step.state == "done" %}{% icon "check" 16 %}{% else %}{{ forloop.counter }}{% endif %}
+      </span>
+      <b>{{ step.label }}</b>
+      <span class="step-meta">
+        {% if step.state == "done" %}{% translate "Terminé" %}{% elif step.state == "current" %}{% translate "En cours" %}{% else %}{% translate "À venir" %}{% endif %}
+      </span>
+    </li>
+  {% endfor %}
+</ol>

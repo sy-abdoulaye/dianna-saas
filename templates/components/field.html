@@ -1,0 +1,22 @@
+{% load ui %}
+{% comment %}
+  Champ de formulaire : libellé lié, étoile si obligatoire, aide, erreur liée (aria-describedby).
+  {% include "components/field.html" with field=form.email full=True %}
+{% endcomment %}
+{% if field.widget_type == "checkbox" %}
+  <div class="field{% if full %} full{% endif %}">
+    <label class="checkbox" for="{{ field.id_for_label }}">{% control field %}<span>{{ field.label }}</span></label>
+    {% if field.help_text %}<span class="hint" id="{{ field.auto_id }}-hint">{{ field.help_text }}</span>{% endif %}
+    {% if field.errors %}<p class="field-error" id="{{ field.auto_id }}-error">{% icon "alert" 16 %}{{ field.errors|first }}</p>{% endif %}
+  </div>
+{% else %}
+  <div class="field{% if full %} full{% endif %}">
+    <label class="label" for="{{ field.id_for_label }}">
+      {{ field.label }}
+      {% if field.field.required %}<span class="req" aria-hidden="true">*</span>{% endif %}
+    </label>
+    {% control field %}
+    {% if field.help_text %}<span class="hint" id="{{ field.auto_id }}-hint">{{ field.help_text }}</span>{% endif %}
+    {% if field.errors %}<p class="field-error" id="{{ field.auto_id }}-error">{% icon "alert" 16 %}{{ field.errors|first }}</p>{% endif %}
+  </div>
+{% endif %}

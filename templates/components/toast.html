@@ -1,0 +1,15 @@
+{% load ui %}
+{% comment %}
+  Notification visuelle. Rendue côté serveur (messages Django) ou clonée par ui.js depuis
+  <template id="tpl-toast"> pour les événements HTMX « toast ».
+{% endcomment %}
+<div class="toast toast-{{ kind|default:'ok' }}" role="{% if kind == 'err' %}alert{% else %}status{% endif %}" data-toast>
+  <span class="toast-badge" aria-hidden="true" data-toast-badge>
+    {% if kind == "err" or kind == "warn" %}{% icon "alert" %}{% elif kind == "info" %}{% icon "info" %}{% else %}{% icon "check" %}{% endif %}
+  </span>
+  <div class="toast-content">
+    <b class="toast-title" data-toast-title>{{ title }}</b>
+    <div class="toast-message" data-toast-message {% if not message %}hidden{% endif %}>{{ message }}</div>
+    <div class="toast-actions" data-toast-actions hidden></div>
+  </div>
+</div>

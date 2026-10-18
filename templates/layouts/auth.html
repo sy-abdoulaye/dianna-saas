@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% load i18n ui %}
+{% block body %}
+  <main id="content" class="auth" tabindex="-1">
+    <div class="auth-box">
+      <a class="brand" href="/" aria-label="{% translate 'Dianna, accueil' %}">{% brand_mark 32 %}<span>Dianna</span></a>
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+{% endblock %}

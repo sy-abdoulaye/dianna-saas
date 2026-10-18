@@ -1,0 +1,36 @@
+{% load i18n ui %}
+{% if page_obj.paginator.count %}
+  <div class="pager">
+    <span class="num">{% blocktranslate with first=first last=last total=page_obj.paginator.count %}{{ first }} à {{ last }} sur {{ total }}{% endblocktranslate %}</span>
+    <nav aria-label="{% translate 'Pagination' %}">
+      <ul>
+        <li>
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}" hx-get="{% querystring page=page_obj.previous_page_number %}" hx-target="{{ target }}" hx-push-url="true" aria-label="{% translate 'Page précédente' %}">{% icon "left" 16 %}</a>
+          {% else %}
+            <span class="page-off" aria-hidden="true">{% icon "left" 16 %}</span>
+          {% endif %}
+        </li>
+        {% for n in numbers %}
+          <li>
+            {% if n == ellipsis %}
+              <span class="page-gap" aria-hidden="true">…</span>
+            {% elif n == page_obj.number %}
+              <a href="{% querystring page=n %}" aria-current="page">{{ n }}</a>
+            {% else %}
+              <a href="{% querystring page=n %}" hx-get="{% querystring page=n %}" hx-target="{{ target }}" hx-push-url="true">{{ n }}</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+        <li>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}" hx-get="{% querystring page=page_obj.next_page_number %}" hx-target="{{ target }}" hx-push-url="true" aria-label="{% translate 'Page suivante' %}">{% icon "right" 16 %}</a>
+          {% else %}
+            <span class="page-off" aria-hidden="true">{% icon "right" 16 %}</span>
+          {% endif %}
+        </li>
+      </ul>
+    </nav>
+    <span>{% blocktranslate with per=page_obj.paginator.per_page %}{{ per }} par page{% endblocktranslate %}</span>
+  </div>
+{% endif %}

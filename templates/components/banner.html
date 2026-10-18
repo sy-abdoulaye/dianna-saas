@@ -1,0 +1,11 @@
+{% load ui %}
+{% comment %}
+  Bandeau : kind = info, warn, err ou ok ; title (gras) et text.
+{% endcomment %}
+<div class="banner banner-{{ kind|default:'info' }}" {% if kind == "err" %}role="alert"{% endif %}>
+  {% if kind == "err" or kind == "warn" %}{% icon "alert" %}{% elif kind == "ok" %}{% icon "check" %}{% else %}{% icon "info" %}{% endif %}
+  <div>
+    {% if title %}<b>{{ title }}</b>{% endif %}
+    {{ text }}
+  </div>
+</div>

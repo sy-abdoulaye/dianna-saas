@@ -1,0 +1,19 @@
+{% load i18n ui %}
+{% comment %}
+  Zone de fichier : {% include "components/file_drop.html" with field=form.file hint="PDF, JPG ou PNG · 5 Mo maximum" %}
+{% endcomment %}
+<div class="field{% if full %} full{% endif %}">
+  <span class="label" id="{{ field.auto_id }}-label">
+    {{ field.label }}
+    {% if field.field.required %}<span class="req" aria-hidden="true">*</span>{% endif %}
+  </span>
+  <label class="dropzone{% if field.errors %} is-invalid{% endif %}" for="{{ field.id_for_label }}" data-dropzone>
+    {% control field aria_labelledby=field.auto_id|add:"-label" %}
+    <span class="dropzone-icon" aria-hidden="true">{% icon "upload" %}</span>
+    <span>
+      <b data-dropzone-name>{% translate "Choisir un fichier" %}</b>
+      {% if hint %}<span class="hint block" id="{{ field.auto_id }}-hint">{{ hint }}</span>{% endif %}
+    </span>
+  </label>
+  {% if field.errors %}<p class="field-error" id="{{ field.auto_id }}-error">{% icon "alert" 16 %}{{ field.errors|first }}</p>{% endif %}
+</div>

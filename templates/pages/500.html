@@ -1,0 +1,11 @@
+{% extends "layouts/auth.html" %}
+{% load i18n %}
+{% block title %}{% translate "Erreur du serveur" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Le serveur n'a pas répondu" as title %}
+    {% translate "Une erreur est survenue de notre côté. Réessayez dans quelques instants." as text %}
+    {% translate "Retour au tableau de bord" as action %}
+    {% include "components/empty_state.html" with heading="h1" icon="alert" title=title text=text action_label=action action_url="/" %}
+  </div>
+{% endblock %}

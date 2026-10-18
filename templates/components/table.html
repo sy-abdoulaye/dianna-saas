@@ -1,0 +1,34 @@
+{% comment %}
+  Tableau : en-têtes en capitales Mono, lignes de 56 px, défilement horizontal sur mobile.
+  columns : liste de dicts {label, css} ; chaque ligne est rendue par row_template (variable row).
+  {% include "components/table.html" with caption="Collaborateurs" columns=columns rows=page_obj row_template="people/partials/row.html" %}
+{% endcomment %}
+<div class="table-wrap">
+  <table class="table">
+    <caption class="sr-only">{{ caption }}</caption>
+    <thead>
+      <tr>
+        {% for column in columns %}
+          <th scope="col" {% if column.css %}class="{{ column.css }}"{% endif %}>
+            {% if column.label %}
+              {{ column.label }}
+            {% else %}
+              <span class="sr-only">{{ column.sr_label|default:"Actions" }}</span>
+            {% endif %}
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        {% include row_template with row=row %}
+      {% empty %}
+        <tr>
+          <td colspan="{{ columns|length }}">
+            {% include "components/empty_state.html" with icon=empty_icon|default:"search" title=empty_title text=empty_text action_label=empty_action_label action_url=empty_action_url %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

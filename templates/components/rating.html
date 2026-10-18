@@ -1,0 +1,21 @@
+{% load ui %}
+{% comment %}
+  Note de 1 à N : champ ChoiceField avec widget RadioSelect.
+  {% include "components/rating.html" with field=form.score %}
+{% endcomment %}
+<fieldset class="field" {% if field.help_text or field.errors %}aria-describedby="{% if field.help_text %}{{ field.auto_id }}-hint{% endif %}{% if field.errors %} {{ field.auto_id }}-error{% endif %}"{% endif %}>
+  <legend class="label">
+    {{ field.label }}
+    {% if field.field.required %}<span class="req" aria-hidden="true">*</span>{% endif %}
+  </legend>
+  <div class="rating">
+    {% for radio in field %}
+      <label for="{{ radio.id_for_label }}">
+        <input type="radio" id="{{ radio.id_for_label }}" name="{{ radio.data.name }}" value="{{ radio.data.value }}" {% if radio.data.selected %}checked{% endif %}{% if field.errors %} aria-invalid="true"{% endif %}>
+        <span>{{ radio.choice_label }}</span>
+      </label>
+    {% endfor %}
+  </div>
+  {% if field.help_text %}<span class="hint" id="{{ field.auto_id }}-hint">{{ field.help_text }}</span>{% endif %}
+  {% if field.errors %}<p class="field-error" id="{{ field.auto_id }}-error">{% icon "alert" 16 %}{{ field.errors|first }}</p>{% endif %}
+</fieldset>

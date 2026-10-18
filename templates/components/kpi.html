@@ -1,0 +1,13 @@
+{% comment %}
+  Carte indicateur : libellé, valeur, note facultative, barre de progression facultative
+  (élément <progress> natif, L0-02).
+  {% include "components/kpi.html" with label="Campagne terminée" value="40 %" progress=40 %}
+{% endcomment %}
+<div class="card kpi">
+  <span class="kpi-label">{{ label }}</span>
+  <b class="kpi-value">{{ value }}</b>
+  {% if note %}<span class="hint">{{ note }}</span>{% endif %}
+  {% if progress is not None and progress != "" %}
+    <progress class="progress" max="{{ progress_max|default:100 }}" value="{{ progress }}" aria-label="{{ label }}">{{ value }}</progress>
+  {% endif %}
+</div>

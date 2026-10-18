@@ -1,0 +1,8 @@
+{% load ui %}
+{% comment %}
+  Avatar : photo si disponible, sinon initiales. size : "" (32 px), "m" (40 px), "l" (72 px).
+  Décoratif : le nom de la personne est toujours écrit à côté.
+{% endcomment %}
+<span class="avatar{% if size %} avatar-{{ size }}{% endif %}" aria-hidden="true">
+  {% if photo_url %}<img src="{{ photo_url }}" alt="">{% else %}{{ person|initials }}{% endif %}
+</span>
