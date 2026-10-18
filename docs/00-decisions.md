@@ -81,6 +81,19 @@ Versions vérifiées le 18 octobre 2026.
 | L1-08 | Annulation après envoi | La demande est supprimée ; le journal d'audit garde « demande envoyée puis retirée » | Validé (18 oct. 2026) |
 | L1-09 | Anonymat des questionnaires | Risque résiduel accepté pour la V1 (rapprochement possible en base par l'ordre physique des lignes et la date du jour quand les réponses sont peu nombreuses). À documenter dans la fiche et à revoir au lot 8 | Validé (18 oct. 2026) |
 
+## Décisions prises pendant le lot 1 (19 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L1-10 | Routage par hôte | `CompanyMiddleware` choisit les routes selon l'hôte : `config.urls_public` (vitrine), `config.urls_platform` (éditeur), `config.urls` (espace client). En développement : `localhost:8000`, `admin.localhost:8000` et `<slug>.localhost:8000` ; `/editeur/` reste aussi disponible sur `localhost` (L0-13) | À confirmer |
+| L1-11 | Connexion liée à l'hôte | Un compte ne se connecte que sur le sous-domaine de son entreprise (même message qu'un mauvais mot de passe) ; une session présentée sur un autre hôte est fermée. L'équipe Dianna ne se connecte que sur l'hôte éditeur | À confirmer |
+| L1-12 | Vitrine et confidentialité | « Accéder à mon espace » redirige vers l'espace de l'entreprise : la page révèle donc à quelle entreprise appartient une adresse connue. Limité à 10 tentatives par adresse IP et par 10 minutes. Alternative plus discrète : envoyer le lien de connexion par e-mail sans rien afficher | À confirmer |
+| L1-13 | Mot de passe oublié | Le lien n'est envoyé qu'aux comptes de l'espace où la demande est faite ; une adresse inconnue ne reçoit aucun e-mail (`ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False`) ; la réponse est la même dans tous les cas | À confirmer |
+| L1-14 | E-mail d'invitation | Envoyé après la validation de la transaction, de façon synchrone, jusqu'à l'arrivée des tâches en arrière-plan (T-11, lot 3) | À confirmer |
+| L1-15 | Suppression d'un service ou d'un site | Clés étrangères des fiches en `RESTRICT` : un service ou un site utilisé ne peut pas être supprimé, mais la suppression d'une entreprise entière reste possible | À confirmer |
+| L1-16 | Cache | Mémoire en développement, base de données en production (`createcachetable` au déploiement) : la limitation des tentatives est partagée entre les processus | À confirmer |
+| L1-17 | Écrans du lot 1 | Tableau de bord réduit à l'en-tête et à l'état « Tout est à jour » ; recherche globale et « Ma fiche » masquées jusqu'à l'annuaire (lot 2) ; logo de l'entreprise reporté au lot 2 (stockage des fichiers, T-12), son nom est affiché à la connexion ; pas de notification visuelle à la connexion et à la déconnexion | À confirmer |
+
 ## Métier : à confirmer
 
 | ID | Sujet | Recommandation appliquée par défaut | Statut |
