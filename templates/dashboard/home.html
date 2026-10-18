@@ -1,0 +1,16 @@
+{% extends "layouts/app.html" %}
+{% load i18n %}
+{% block title %}{% translate "Tableau de bord" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% blocktranslate with name=current_employee.first_name %}Bonjour {{ name }}{% endblocktranslate %}</h1>
+      <p class="sub">{{ today|date:"l j F Y"|capfirst }} · {{ current_employee.get_role_display }} · {{ current_company.name }}</p>
+    </div>
+  </div>
+  <div class="card">
+    {% translate "Tout est à jour" as empty_title %}
+    {% translate "Les éléments à traiter apparaîtront ici." as empty_text %}
+    {% include "components/empty_state.html" with icon="check" title=empty_title text=empty_text %}
+  </div>
+{% endblock %}

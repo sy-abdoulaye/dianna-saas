@@ -269,7 +269,7 @@
   .count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font: 600 12px/16px var(--font-sans); }
   .side-me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--line); }
   .side-me b { display: block; font: 500 14px/20px var(--font-sans); color: var(--ink); }
-  .side-me span { display: block; font: 400 12px/16px var(--font-sans); color: var(--ink-2); }
+  .side-me .side-me-meta { display: block; font: 400 12px/16px var(--font-sans); color: var(--ink-2); }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: auto; }
   .topbar { position: sticky; top: 0; z-index: 20; flex: none; min-height: 64px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
   .topbar .burger { display: none; }
@@ -466,6 +466,13 @@
   .notif-menu li a { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 0; border-bottom: 1px solid var(--line); min-height: 0; }
   .notif-menu li.is-unread a { background: var(--sel-bg); }
   .bell-count { position: absolute; top: -6px; right: -6px; }
+  .menu form { margin: 0; }
+  .menu-footer { justify-content: center; color: var(--link) !important; font-weight: 500; min-height: 44px !important; }
+  .notif-list li a { display: flex; flex-direction: column; gap: 2px; padding: 14px 20px; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+  .notif-list li:first-child a { border-top: 0; }
+  .notif-list li a:hover { background: var(--subtle); }
+  .notif-list li.is-unread a { background: var(--sel-bg); }
+  .nav-item.is-soon { color: var(--ink-3); }
 
   /* ---------- Fenêtre modale (<dialog>) ---------- */
   .modal { margin: auto; padding: 12px 12px 8px; width: calc(100% - 32px); max-width: 600px; max-height: calc(100% - 32px); background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--sh-3); }
@@ -527,3 +534,8 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
+
+@layer components {
+  /* QR code de la double authentification : fond clair dans les deux thèmes pour la lecture. */
+  .qr { width: 200px; height: 200px; align-self: center; border-radius: 12px; border: 1px solid var(--line); background: var(--on-brand); padding: 8px; }
+}

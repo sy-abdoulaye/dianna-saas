@@ -1,4 +1,4 @@
-{% extends "layouts/auth.html" %}
+{% extends base_template|default:"layouts/auth.html" %}
 {% load i18n %}
 {% block title %}{% translate "Erreur du serveur" %} · Dianna{% endblock %}
 {% block content %}

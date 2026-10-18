@@ -1,0 +1,40 @@
+{% load i18n ui %}
+<div class="dropdown" data-dropdown id="bell">
+  <button class="btn btn-secondary btn-icon"
+          type="button"
+          aria-expanded="false"
+          aria-controls="menu-notifications"
+          aria-label="{% if unread_count %}{% blocktranslate count n=unread_count %}Notifications, {{ n }} non lue{% plural %}Notifications, {{ n }} non lues{% endblocktranslate %}{% else %}{% translate 'Notifications' %}{% endif %}"
+          data-dropdown-toggle>
+    {% icon "bell" %}
+    {% if unread_count %}<span class="count bell-count" aria-hidden="true">{{ unread_count }}</span>{% endif %}
+  </button>
+  <div class="menu notif-menu" id="menu-notifications" hidden>
+    <header>
+      <b>{% translate "Notifications" %}</b>
+      {% if unread_count %}
+        <form method="post" action="{% url 'core:notifications_read_all' %}" hx-post="{% url 'core:notifications_read_all' %}" hx-target="#bell" hx-swap="outerHTML">
+          {% csrf_token %}
+          {% button _("Tout marquer comme lu") variant="ghost" size="sm" type="submit" %}
+        </form>
+      {% endif %}
+    </header>
+    {% if latest_notifications %}
+      <ul>
+        {% for notification in latest_notifications %}
+          <li {% if notification.is_unread %}class="is-unread"{% endif %}>
+            <a href="{% url 'core:notification_open' notification.pk %}">
+              <span>{{ notification.text }}</span>
+              <span class="hint">{{ notification.created_at|timesince }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+      <a class="menu-footer" href="{% url 'core:notifications' %}">{% translate "Voir toutes les notifications" %}</a>
+    {% else %}
+      {% translate "Aucune notification" as empty_title %}
+      {% translate "Les demandes et validations apparaîtront ici." as empty_text %}
+      {% include "components/empty_state.html" with icon="bell" title=empty_title text=empty_text %}
+    {% endif %}
+  </div>
+</div>

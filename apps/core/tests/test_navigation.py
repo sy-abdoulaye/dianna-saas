@@ -1,4 +1,15 @@
+from types import SimpleNamespace
+
+from apps.core.models import Module
 from apps.core.navigation import NAV, build_demo_nav, build_nav
+
+
+def person(role="employee", has_reports=False):
+    return SimpleNamespace(role=role, has_reports=has_reports)
+
+
+def keys(groups):
+    return [item.key for group in groups for item in group.items]
 
 
 def test_menu_groups_follow_the_prototype():
@@ -6,11 +17,20 @@ def test_menu_groups_follow_the_prototype():
     assert labels == ["", "Demandes", "Activité", "Talents", "Entreprise"]
 
 
-def test_real_menu_hides_entries_whose_route_does_not_exist_yet():
-    items = [item for group in build_nav() for item in group.items]
-    # Aucun module n'est livré au lot 0 : seules les entrées « Bientôt » restent, sans lien.
-    assert items
-    assert all(item.soon and item.url is None for item in items)
+def test_real_menu_shows_existing_routes_and_soon_entries_without_link():
+    groups = build_nav(person(), set(Module.values))
+    items = {item.key: item for group in groups for item in group.items}
+    assert items["dashboard"].url == "/"
+    assert items["workload"].soon and items["workload"].url is None
+    # Les modules des lots suivants n'ont pas encore de route : pas d'entrée.
+    assert "telework" not in items
+
+
+def test_recruitment_is_shown_to_people_with_reports_not_to_the_manager_profile_alone():
+    assert "recruitment" not in keys(build_nav(person(), set()))
+    assert "recruitment" not in keys(build_nav(person("manager"), set()))
+    assert "recruitment" in keys(build_nav(person("employee", has_reports=True), set()))
+    assert "recruitment" in keys(build_nav(person("hr"), set()))
 
 
 def test_demo_menu_marks_active_entry_and_counts():
