@@ -26,18 +26,29 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "config.apps.StaticFilesConfig",
     "django_htmx",
+    "allauth",
+    "allauth.account",
+    "allauth.mfa",
     "apps.core",
     "apps.accounts",
+    "apps.people",
+    "apps.dashboard",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # Hôte → entreprise courante et routes (vitrine, éditeur, espace client).
+    "apps.core.middleware.CompanyMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+    "apps.core.middleware.EmployeeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.accounts.middleware.TwoFactorEnrollmentMiddleware",
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
@@ -58,6 +69,7 @@ TEMPLATES = [
                 "django.template.context_processors.csp",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.core.context_processors.app",
             ],
         },
     },
@@ -70,8 +82,43 @@ DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Comptes (L0-01)
+# Hôtes (T-08, T-22) : <BASE_DOMAIN> vitrine, admin.<BASE_DOMAIN> éditeur, <slug>.<BASE_DOMAIN>
+BASE_DOMAIN = env("BASE_DOMAIN", default="localhost")
+PLATFORM_SUBDOMAIN = "admin"
+SITE_SCHEME = env("SITE_SCHEME", default="https")
+SITE_PORT = env("SITE_PORT", default="")
+DEV_COMPANY_SLUG = env("DEV_COMPANY_SLUG", default="")
+
+# Comptes (L0-01, T-09, T-10)
 AUTH_USER_MODEL = "accounts.User"
+AUTHENTICATION_BACKENDS = ["apps.accounts.auth.HostAwareBackend"]
+LOGIN_URL = "account_login"
+LOGIN_REDIRECT_URL = "/"
+ACCOUNT_ADAPTER = "apps.accounts.adapter.AccountAdapter"
+ACCOUNT_FORMS = {
+    "login": "apps.accounts.adapter.DiannaLoginForm",
+    "reset_password": "apps.accounts.adapter.TenantResetPasswordForm",
+}
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_SESSION_REMEMBER = True  # pas de case « se souvenir de moi » : session de 12 h
+ACCOUNT_LOGOUT_REDIRECT_URL = "account_login"
+ACCOUNT_PREVENT_ENUMERATION = True
+# Adresse inconnue de l'espace : aucun e-mail (il citerait l'espace à un tiers).
+ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
+ACCOUNT_EMAIL_SUBJECT_PREFIX = "Dianna : "
+ACCOUNT_LOGIN_ON_PASSWORD_RESET = False
+MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
+MFA_TOTP_ISSUER = "Dianna"
+MFA_TRUST_ENABLED = False
+# Double authentification des comptes de démonstration RH et Admin : développement seulement.
+DEMO_DISABLE_2FA = env.bool("DEMO_DISABLE_2FA", default=False)
+
+# Cache : limitation des tentatives (allauth, vitrine). Base de données en production pour
+# être partagé entre les processus Gunicorn (`createcachetable` au déploiement).
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {

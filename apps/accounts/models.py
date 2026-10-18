@@ -2,9 +2,10 @@ from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.models import Timestamped
+from apps.core.models import TenantModel, Timestamped
 
 
 def normalize_email(email: str) -> str:
@@ -83,3 +84,48 @@ class User(Timestamped, AbstractBaseUser, PermissionsMixin):
     def clean(self):
         super().clean()
         self.email = normalize_email(self.email)
+
+
+class Invitation(TenantModel):
+    """Invitation à créer son mot de passe (7 jours). Seule l'empreinte du jeton est stockée."""
+
+    VALIDITY_DAYS = 7
+
+    employee = models.ForeignKey(
+        "people.Employee",
+        on_delete=models.CASCADE,
+        related_name="invitations",
+        verbose_name=_("fiche"),
+    )
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    expires_at = models.DateTimeField(_("expire le"))
+    accepted_at = models.DateTimeField(_("acceptée le"), null=True, blank=True)
+    revoked_at = models.DateTimeField(_("remplacée le"), null=True, blank=True)
+    renewal_requested_at = models.DateTimeField(
+        _("nouvelle invitation demandée le"), null=True, blank=True
+    )
+    sent_by = models.ForeignKey(
+        "people.Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("envoyée par"),
+    )
+
+    class Meta:
+        verbose_name = _("invitation")
+        verbose_name_plural = _("invitations")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Invitation {self.employee}"
+
+    @property
+    def is_usable(self) -> bool:
+        return (
+            self.accepted_at is None
+            and self.revoked_at is None
+            and self.expires_at > timezone.now()
+            and self.employee.user_id is None
+        )

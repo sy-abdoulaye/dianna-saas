@@ -36,4 +36,9 @@ class UserAdmin(BaseUserAdmin):
         ),
         (_("Dates"), {"fields": ("last_login", "created_at", "updated_at")}),
     )
+
+    def get_queryset(self, request):
+        # Seule l'équipe Dianna est visible ici : pas de données des clients (T-22).
+        return super().get_queryset(request).filter(is_staff=True)
+
     add_fieldsets = ((None, {"classes": ("wide",), "fields": ("email", "password1", "password2")}),)

@@ -1,0 +1,12 @@
+{% extends "layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Se déconnecter" %} · Dianna{% endblock %}
+{% block content %}
+  <h1 class="h1">{% translate "Se déconnecter" %}</h1>
+  <form class="card card-body flex flex-col gap-4" method="post" action="{% url 'account_logout' %}">
+    {% csrf_token %}
+    <p class="meta">{% translate "Voulez-vous vraiment vous déconnecter ?" %}</p>
+    {{ redirect_field }}
+    {% button _("Se déconnecter") variant="primary" icon="out" type="submit" block=True %}
+  </form>
+{% endblock %}

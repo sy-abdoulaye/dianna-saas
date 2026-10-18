@@ -1,0 +1,20 @@
+{% extends "layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Créer votre mot de passe" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="flex flex-col gap-2">
+    <h1 class="h1">{% translate "Créer votre mot de passe" %}</h1>
+    <p class="meta">{% blocktranslate with name=employee.first_name company=company.name %}Bienvenue {{ name }}. Choisissez le mot de passe de votre espace {{ company }}.{% endblocktranslate %}</p>
+  </div>
+  <form class="card card-body flex flex-col gap-4" method="post" novalidate>
+    {% csrf_token %}
+    {% include "components/form_errors.html" %}
+    <div class="field">
+      <span class="label">{% translate "Identifiant de connexion" %}</span>
+      <span class="mono">{{ employee.email }}</span>
+    </div>
+    {% include "components/field.html" with field=form.password1 %}
+    {% include "components/field.html" with field=form.password2 %}
+    {% button _("Créer mon mot de passe") variant="primary" type="submit" block=True %}
+  </form>
+{% endblock %}

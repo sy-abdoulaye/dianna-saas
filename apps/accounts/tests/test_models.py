@@ -11,7 +11,9 @@ def test_user_logs_in_with_email_and_email_is_normalized():
     assert user.email == "camille.durand@exemple.fr"
     assert user.check_password("demo-dianna-2026")
     assert not user.is_staff and not user.is_superuser and not user.is_platform_staff
-    assert authenticate(username="CAMILLE.DURAND@exemple.fr", password="demo-dianna-2026") == user
+    assert User.objects.get_by_natural_key("CAMILLE.DURAND@exemple.fr") == user
+    # Sans requête rattachée à un hôte, aucune connexion n'est possible (HostAwareBackend).
+    assert authenticate(username=user.email, password="demo-dianna-2026") is None
 
 
 def test_email_is_unique_regardless_of_case():

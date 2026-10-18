@@ -1,0 +1,17 @@
+{% load allauth %}
+<div class="field">
+  {% if attrs.type == "checkbox" %}
+    <label class="checkbox" for="{{ attrs.id }}">
+      <input type="checkbox" id="{{ attrs.id }}" {% if attrs.name %}name="{{ attrs.name }}"{% endif %} {% if attrs.checked %}checked{% endif %} {% if attrs.required %}required{% endif %}>
+      <span>{% slot label %}{% endslot %}</span>
+    </label>
+  {% else %}
+    <label class="label" for="{{ attrs.id }}">{% slot label %}{% endslot %}</label>
+    {% if attrs.type == "textarea" %}
+      <textarea class="input mono" id="{{ attrs.id }}" {% if attrs.name %}name="{{ attrs.name }}"{% endif %} {% if attrs.rows %}rows="{{ attrs.rows }}"{% endif %} {% if attrs.readonly %}readonly{% endif %} {% if attrs.disabled %}disabled{% endif %} {% if slots.help_text %}aria-describedby="{{ attrs.id }}-hint"{% endif %}>{% slot value %}{% endslot %}</textarea>
+    {% else %}
+      <input class="input{% if attrs.disabled or attrs.readonly %} mono{% endif %}" type="{{ attrs.type }}" id="{{ attrs.id }}" {% if attrs.name %}name="{{ attrs.name }}"{% endif %} {% if attrs.value is not None %}value="{{ attrs.value }}"{% endif %} {% if attrs.required %}required{% endif %} {% if attrs.readonly %}readonly{% endif %} {% if attrs.disabled %}disabled{% endif %} {% if attrs.autocomplete %}autocomplete="{{ attrs.autocomplete }}"{% endif %} {% if slots.help_text %}aria-describedby="{{ attrs.id }}-hint"{% endif %}>
+    {% endif %}
+  {% endif %}
+  {% if slots.help_text %}<span class="hint" id="{{ attrs.id }}-hint">{% slot help_text %}{% endslot %}</span>{% endif %}
+</div>

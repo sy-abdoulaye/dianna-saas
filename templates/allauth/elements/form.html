@@ -1,0 +1,14 @@
+{% load allauth %}
+<form class="card card-body flex flex-col gap-4"
+      method="{{ attrs.method }}"
+      {% if attrs.action %}action="{{ attrs.action }}"{% endif %}
+      {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
+      novalidate>
+  {% if attrs.form %}{% include "components/form_errors.html" with form=attrs.form %}{% endif %}
+  {% slot body %}
+  {% endslot %}
+  <div class="actions">
+    {% slot actions %}
+    {% endslot %}
+  </div>
+</form>
