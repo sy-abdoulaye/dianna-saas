@@ -1,0 +1,189 @@
+/* Jetons du design system Dianna, format Tailwind CSS v4.
+ * Copier dans static/css/app.css. Le script du <head> pose toujours data-theme="light" ou "dark" sur <html>
+ * (le choix « système » est résolu en JavaScript avec prefers-color-scheme). */
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400 600; font-display: swap; src: url("../fonts/IBMPlexSans-Variable.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap; src: url("../fonts/IBMPlexMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: swap; src: url("../fonts/IBMPlexMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Schibsted Grotesk"; font-weight: 500 700; font-display: swap; src: url("../fonts/SchibstedGrotesk-Variable.woff2") format("woff2"); }
+
+/* Rôles sémantiques : thème clair */
+:root {
+  --app: #F5F7FA;
+  --surface: #FFFFFF;
+  --raised: #FFFFFF;
+  --subtle: #F5F7FA;
+  --field: #FFFFFF;
+  --line: #DFE4EC;
+  --line-strong: #7F8CA3;
+  --btn-line: #C6CEDA;
+  --title: #0F1D40;
+  --ink: #121826;
+  --ink-2: #475267;
+  --ink-3: #5F6B80;
+  --brand: #2559CF;
+  --brand-hover: #1D46A6;
+  --on-brand: #FFFFFF;
+  --link: #1D46A6;
+  --sel-bg: #EEF4FF;
+  --sel-ink: #1D46A6;
+  --focus: #3A6FE8;
+  --ring: #C0D5FF;
+  --ok-bg: #E7F6EC;
+  --ok-ink: #14693A;
+  --err-bg: #FDECEE;
+  --err-ink: #A61E2D;
+  --warn-bg: #FFF5E1;
+  --warn-ink: #8F5206;
+  --info-bg: #EEF4FF;
+  --info-ink: #1D46A6;
+  --site-bg: #DEE9FF;
+  --site-ink: #1D46A6;
+  --tel-bg: #C7E9E7;
+  --tel-ink: #0E6663;
+  --ast-bg: #E0D9F8;
+  --ast-ink: #5A3FB0;
+  --cng-bg: #FDE7BE;
+  --cng-ink: #8F5206;
+  --av-bg: #DEE9FF;
+  --av-ink: #1D46A6;
+  --track: #ECEFF4;
+  --sim-bg: #192E5E;
+  --sim-ink: #EAF0FF;
+  --sh-1: 0 1px 2px rgba(18,24,38,.06);
+  --sh-3: 0 12px 32px rgba(18,24,38,.16);
+  --scrim: rgba(15,29,64,.45);
+  color-scheme: light;
+}
+
+/* Rôles sémantiques : thème sombre */
+[data-theme="dark"] {
+  --app: #0D1220;
+  --surface: #141B2B;
+  --raised: #1A2336;
+  --subtle: #19233A;
+  --field: #0F1626;
+  --line: #2B3753;
+  --line-strong: #66759A;
+  --btn-line: #4A5878;
+  --title: #E9EDF5;
+  --ink: #E9EDF5;
+  --ink-2: #B6C0D2;
+  --ink-3: #8F9BB1;
+  --brand: #2F63DB;
+  --brand-hover: #3A6FE8;
+  --link: #8FB2FB;
+  --sel-bg: #17284D;
+  --sel-ink: #A9C4FD;
+  --focus: #6190F5;
+  --ring: #27438A;
+  --ok-bg: #12301F;
+  --ok-ink: #5FD08A;
+  --err-bg: #3B141B;
+  --err-ink: #FF8A94;
+  --warn-bg: #3A2A0E;
+  --warn-ink: #F0B35A;
+  --info-bg: #14264D;
+  --info-ink: #8DB2FB;
+  --site-bg: #172B57;
+  --site-ink: #9DBBFB;
+  --tel-bg: #0F3A39;
+  --tel-ink: #6ED3CD;
+  --ast-bg: #2A2158;
+  --ast-ink: #B8A5F5;
+  --cng-bg: #3A2A0E;
+  --cng-ink: #F0B35A;
+  --av-bg: #1F3566;
+  --av-ink: #BFD2FD;
+  --track: #26314A;
+  --sim-bg: #0A0F1C;
+  --sh-1: 0 1px 2px rgba(0,0,0,.4);
+  --sh-3: 0 12px 32px rgba(0,0,0,.5);
+  --scrim: rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+/* Exposition à Tailwind : bg-surface, text-ink, border-line, bg-ok-bg, text-ok-ink… */
+@theme inline {
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-subtle: var(--subtle);
+  --color-field: var(--field);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-btn-line: var(--btn-line);
+  --color-title: var(--title);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-link: var(--link);
+  --color-sel-bg: var(--sel-bg);
+  --color-sel-ink: var(--sel-ink);
+  --color-focus: var(--focus);
+  --color-ring: var(--ring);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-ink: var(--ok-ink);
+  --color-err-bg: var(--err-bg);
+  --color-err-ink: var(--err-ink);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-ink: var(--warn-ink);
+  --color-info-bg: var(--info-bg);
+  --color-info-ink: var(--info-ink);
+  --color-site-bg: var(--site-bg);
+  --color-site-ink: var(--site-ink);
+  --color-tel-bg: var(--tel-bg);
+  --color-tel-ink: var(--tel-ink);
+  --color-ast-bg: var(--ast-bg);
+  --color-ast-ink: var(--ast-ink);
+  --color-cng-bg: var(--cng-bg);
+  --color-cng-ink: var(--cng-ink);
+  --color-av-bg: var(--av-bg);
+  --color-av-ink: var(--av-ink);
+  --color-track: var(--track);
+  --color-sim-bg: var(--sim-bg);
+  --color-sim-ink: var(--sim-ink);
+
+  --font-display: "Schibsted Grotesk", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --shadow-xs: var(--sh-1);
+  --shadow-lg: var(--sh-3);
+}
+
+/* Échelles fixes (identiques dans les deux thèmes) : bleu de marque et ardoise */
+@theme {
+  --color-brand-50: #EEF4FF; --color-brand-100: #DEE9FF; --color-brand-200: #C0D5FF; --color-brand-300: #96B8FC;
+  --color-brand-400: #6190F5; --color-brand-500: #3A6FE8; --color-brand-600: #2559CF; --color-brand-700: #1D46A6;
+  --color-brand-800: #1C3B80; --color-brand-900: #192E5E; --color-brand-950: #0F1D40;
+  --color-slate-25: #FAFBFD; --color-slate-50: #F5F7FA; --color-slate-100: #ECEFF4; --color-slate-200: #DFE4EC;
+  --color-slate-300: #C6CEDA; --color-slate-400: #97A3B6; --color-slate-500: #5F6B80; --color-slate-600: #475267;
+  --color-slate-700: #333D50; --color-slate-800: #1F2837; --color-slate-900: #121826;
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-2xl: 20px;
+}
+
+@layer base {
+  body { @apply bg-app text-ink font-sans antialiased; font-size: 14px; line-height: 20px; }
+  h1, h2, h3 { @apply font-display text-title; text-wrap: balance; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }
+}
+
+/* Les variantes s’'utilisent avec la classe de base : class="btn btn-primary". */
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-transparent text-sm font-medium whitespace-nowrap cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed; }
+  .btn-primary { @apply bg-brand text-on-brand hover:bg-brand-hover; }
+  .btn-secondary { @apply bg-surface text-ink border-btn-line hover:bg-subtle; }
+  .btn-ghost { @apply text-link hover:bg-sel-bg; }
+  .btn-danger { @apply text-err-ink border-err-ink hover:bg-err-bg; }
+  .input { @apply h-10 w-full rounded-md border border-line-strong bg-field px-3 text-sm text-ink placeholder:text-ink-3; }
+  .card { @apply bg-surface border border-line rounded-lg shadow-xs; }
+  .badge { @apply inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-xs font-medium whitespace-nowrap; }
+}
