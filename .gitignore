@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Environnement
+.env
+
+# Outils et fichiers générés
+bin/
+static/build/
+staticfiles/
+media/
+test-results/
+playwright-report/
+
+# Éditeurs
+.vscode/
+.idea/
+.DS_Store

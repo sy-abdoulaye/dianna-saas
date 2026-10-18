@@ -1,0 +1,66 @@
+[project]
+name = "dianna"
+version = "0.1.0"
+description = "Dianna : gestion RH et organisation du travail, SaaS multi-entreprise"
+readme = "LISEZ-MOI.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "django>=6.1.2,<6.2",
+    "django-environ>=0.14.0",
+    "django-htmx>=1.29.0",
+    "gunicorn>=26.2.0",
+    "psycopg[binary]>=3.2",
+    "whitenoise>=6.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "djlint>=1.46.6",
+    "factory-boy>=3.3.3",
+    "pre-commit>=4.7.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-django>=4.14.0",
+    "pytest-playwright>=0.10.0",
+    "ruff>=0.17.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["docs", "static/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "DJ", "S", "SIM", "RUF", "N"]
+# RUF001-003 : la typographie française utilise « », ’, × et les espaces insécables.
+ignore = ["RUF001", "RUF002", "RUF003", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S105", "S106"]
+"**/migrations/**" = ["E501", "RUF"]
+"scripts/**" = ["S310", "S603", "S607", "E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["apps", "tests"]
+addopts = "--strict-markers -p no:cacheprovider"
+markers = ["e2e: parcours de bout en bout Playwright (make e2e)"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.djlint]
+profile = "django"
+indent = 2
+max_line_length = 120
+ignore = "H006,H021,H023,H030,H031,T002"
+extension = "html"
