@@ -23,12 +23,12 @@ Versions vérifiées le 18 octobre 2026.
 
 | ID | Sujet | Recommandation | Alternative | Statut |
 |---|---|---|---|---|
-| T-01 | Version de Python | 3.13 | 3.14 si toutes les dépendances la supportent | À confirmer |
-| T-02 | Version de Django | 6.1 pour démarrer, puis passage à **6.2 LTS** (prévue en avril 2027) avant la mise en production | 5.2 LTS (sécurité jusqu'en avril 2028), plus conservatrice mais sans les fragments de templates ni la CSP intégrés | À confirmer |
+| T-01 | Version de Python | Python 3.13, environnement et dépendances gérés par **uv** (`pyproject.toml`, `uv.lock`) | 3.14 si toutes les dépendances la supportent | Validé (18 oct. 2026) |
+| T-02 | Version de Django | Django **6.1** pour démarrer, puis passage à **6.2 LTS** (prévue en avril 2027) avant la mise en production | 5.2 LTS (sécurité jusqu'en avril 2028), plus conservatrice mais sans les fragments de templates ni la CSP intégrés | Validé (18 oct. 2026) |
 | T-03 | PostgreSQL | 18 (version stable actuelle ; la 19 est en release candidate) | 17 si l'hébergeur ne propose pas encore la 18 | À confirmer |
-| T-04 | Tailwind CSS | v4, outil autonome (binaire), via le paquet `django-tailwind-cli` ou un script `make css` | npm + Tailwind CLI si une chaîne Node existe déjà | À confirmer |
+| T-04 | Tailwind CSS | Tailwind v4, **binaire autonome** téléchargé par le `Makefile` (version et somme SHA-256 fixées dans le `Makefile`), sans paquet Python ni Node | npm + Tailwind CLI si une chaîne Node existe déjà | Validé (18 oct. 2026) |
 | T-05 | HTMX | **2.x** avec `django-htmx`. La 4.0 (sortie le 28 août 2026) change l'héritage des attributs et les noms d'événements ; on migrera plus tard | 4.0 directement | À confirmer |
-| T-06 | Fragments HTMX | Fragments de templates intégrés à Django 6 (`{% partialdef %}`) ; sinon fichiers dans `partials/` | `django-template-partials` | À confirmer |
+| T-06 | Fragments HTMX | Fragments intégrés à Django 6 (`{% partialdef %}`) pour les résultats de liste d'une page ; fichiers `templates/<app>/partials/` pour les fragments réutilisés (modales, lignes, blocs communs) | `django-template-partials` | Validé (18 oct. 2026) |
 | T-07 | Architecture multi-entreprise | Une base, un schéma, colonne `company_id` sur chaque table métier, gestionnaire filtrant automatiquement, entreprise résolue par le middleware. Défense en profondeur par Row Level Security PostgreSQL au lot 8 | Un schéma par entreprise (`django-tenants`) : isolation plus forte, mais migrations et opérations plus lourdes | À confirmer |
 | T-08 | Accès des entreprises | Sous-domaine par entreprise (`exemple.dianna.fr`) | Domaine unique et choix de l'entreprise à la connexion | À confirmer |
 | T-09 | Comptes | `User` personnalisé, connexion par e-mail. Un compte appartient à une seule entreprise en V1 (hypothèse H8 du cahier des charges), mais le modèle `Employee` sépare l'identité de connexion de la fiche RH pour permettre le multi-entreprise plus tard | — | À confirmer |
@@ -45,6 +45,18 @@ Versions vérifiées le 18 octobre 2026.
 | T-20 | Polices | IBM Plex Sans, IBM Plex Mono et Schibsted Grotesk hébergées dans `static/fonts/` (licence OFL), pas d'appel à Google Fonts en production (RGPD) | — | À confirmer |
 | T-21 | Supervision | Sentry (région UE) et journaux structurés sans données personnelles | Solution auto-hébergée | À confirmer |
 | T-22 | Super-administration éditeur | Interface d'administration Django réservée à l'équipe Dianna (création des entreprises, activation des modules). Aucun accès aux données métier d'une entreprise sans accès support tracé | Back-office dédié plus tard | À confirmer |
+
+## Décisions du lot 0
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L0-01 | Modèle utilisateur | `accounts.User` créé dès le lot 0, avant la première migration : connexion par e-mail, `PermissionsMixin`, `is_staff` (accès à l'administration Django de l'éditeur) | Validé (18 oct. 2026) |
+| L0-02 | Barres de progression et CSP | Éléments natifs `<progress>` et `<meter>`, stylés en CSS. Aucun attribut `style`, aucun `'unsafe-inline'` dans la CSP | Validé (18 oct. 2026) |
+| L0-03 | Annulation immédiate | Fenêtre de **30 s** côté serveur (la notification peut rester affichée plus longtemps au survol). Après expiration : notification d'erreur « Il est trop tard pour annuler cette action. ». Les e-mails liés à une action annulable partent après **45 s** | Validé (18 oct. 2026) |
+| L0-04 | Thème sans JavaScript | Repli `prefers-color-scheme` dans `app.css` en plus de `data-theme`, comme le prototype | Validé (18 oct. 2026) |
+| L0-05 | Branche principale | `main` | Validé (18 oct. 2026) |
+| L0-06 | Dépendances ajoutées | `psycopg` 3 (pilote PostgreSQL), `whitenoise` (fichiers statiques), `gunicorn` (serveur), `django-htmx`, `pytest-cov` (couverture), `pytest-playwright` (parcours de bout en bout sans Node) | Validé (18 oct. 2026) |
+| L0-07 | Ressources front copiées dans le dépôt | HTMX 2.0.11 (`static/vendor/`), icônes `lucide-static` 1.50.0 (sprite généré), polices Fontsource 5.3.0 (sous-ensemble latin, woff2, licence OFL) : aucun appel à un CDN, compatible avec la CSP | Validé (18 oct. 2026) |
 
 ## Métier : à confirmer
 

@@ -15,7 +15,7 @@ Les quatre modules partagent le moteur de validation (`02-architecture.md`) et l
 
 **États vides :** « Rien à valider » (onglet À valider) ; « Aucune demande ne correspond » (filtres) ; « Aucune demande pour le moment » avec bouton de création (Mes demandes).
 
-**Transitions :** voir `02-architecture.md`. Après envoi, validation ou refus : notification visuelle avec « Annuler » (10 s), notification au destinataire, e-mail selon M-16, journal d'audit.
+**Transitions :** voir `02-architecture.md`. Après envoi, validation ou refus : notification visuelle avec « Annuler » (30 s, L0-03), notification au destinataire, e-mail selon M-16, journal d'audit.
 
 ## Télétravail
 
