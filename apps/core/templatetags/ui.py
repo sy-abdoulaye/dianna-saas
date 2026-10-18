@@ -13,6 +13,7 @@ from django import forms, template
 from django.forms.utils import flatatt
 from django.templatetags.static import static
 from django.utils.html import conditional_escape, escape, format_html
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.status import get_status
@@ -228,13 +229,17 @@ THEME_OPTIONS = (
 
 
 @register.inclusion_tag("components/segmented.html")
-def theme_switch():
-    """Choix Clair / Sombre / Système (menu utilisateur). Le choix est appliqué et mémorisé
-    par ui.js ; il sera enregistré dans User.theme au lot 1."""
+def theme_switch(save_url: str = ""):
+    """Choix Clair / Sombre / Système (menu utilisateur). ui.js l'applique, le mémorise dans le
+    navigateur et, avec `save_url`, l'enregistre dans User.theme."""
+    if save_url:
+        attrs = format_html('data-theme-switch data-theme-url="{}"', save_url)
+    else:
+        attrs = mark_safe("data-theme-switch")
     return {
         "name": "theme",
         "legend": _("Thème"),
         "options": THEME_OPTIONS,
         "selected": "system",
-        "data_attr": "data-theme-switch",
+        "data_attr": attrs,
     }

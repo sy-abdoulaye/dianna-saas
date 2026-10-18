@@ -4,9 +4,14 @@
     <div class="banner banner-err" role="alert" data-form-errors>
       {% icon "alert" %}
       <div>
-        <b>{% blocktranslate count n=n %}{{ n }} information est à corriger.{% plural %}{{ n }} informations sont à corriger.{% endblocktranslate %}</b>
-        {% translate "Les champs concernés sont signalés ci-dessous." %}
-        {% for error in form.non_field_errors %}<span class="block">{{ error }}</span>{% endfor %}
+        {% if form.errors|length == 1 and form.non_field_errors %}
+          {# Erreur générale seule (identifiants incorrects…) : le message suffit. #}
+          {% for error in form.non_field_errors %}<b class="block">{{ error }}</b>{% endfor %}
+        {% else %}
+          <b>{% blocktranslate count n=n %}{{ n }} information est à corriger.{% plural %}{{ n }} informations sont à corriger.{% endblocktranslate %}</b>
+          {% translate "Les champs concernés sont signalés ci-dessous." %}
+          {% for error in form.non_field_errors %}<span class="block">{{ error }}</span>{% endfor %}
+        {% endif %}
       </div>
     </div>
   {% endif %}

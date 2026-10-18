@@ -1,0 +1,22 @@
+{% load i18n ui %}
+{# La recherche globale arrive avec l'annuaire (lot 2) : elle n'est pas affichée avant. #}
+<div class="spacer"></div>
+{% include "core/partials/bell.html" %}
+<div class="dropdown" data-dropdown>
+  <button class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="menu-user" data-dropdown-toggle>
+    {% include "components/avatar.html" with person=current_employee %}
+    <span class="meta hidden sm:inline">{{ current_employee.full_name }}</span>
+    {% icon "chev" 16 %}
+  </button>
+  <div class="menu" id="menu-user" hidden>
+    <div class="menu-label caps">{% translate "Thème" %}</div>
+    {% url "accounts:theme" as theme_url %}
+    {% theme_switch theme_url %}
+    <div class="menu-sep"></div>
+    <a href="{% url 'mfa_index' %}">{% icon "lock" 16 %}{% translate "Sécurité du compte" %}</a>
+    <form method="post" action="{% url 'account_logout' %}">
+      {% csrf_token %}
+      <button type="submit">{% icon "out" 16 %}{% translate "Se déconnecter" %}</button>
+    </form>
+  </div>
+</div>

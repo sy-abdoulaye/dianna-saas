@@ -1,0 +1,15 @@
+{% extends "layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}Dianna · {% translate "Gestion RH et organisation du travail" %}{% endblock %}
+{% block content %}
+  <div class="flex flex-col gap-2">
+    <h1 class="h1">{% translate "Accéder à mon espace" %}</h1>
+    <p class="meta">{% translate "Saisissez votre adresse e-mail professionnelle : nous vous conduisons vers l'espace de votre entreprise." %}</p>
+  </div>
+  <form class="card card-body flex flex-col gap-4" method="post" novalidate>
+    {% csrf_token %}
+    {% include "components/form_errors.html" %}
+    {% include "components/field.html" with field=form.email %}
+    {% button _("Continuer") variant="primary" icon="right" type="submit" block=True %}
+  </form>
+{% endblock %}

@@ -37,7 +37,7 @@ NAV: tuple[NavGroup, ...] = (
         "",
         (
             NavItem("dashboard", _("Tableau de bord"), "dash", "dashboard:home"),
-            NavItem("people", _("Annuaire"), "users", "people:list", module="people"),
+            NavItem("people", _("Annuaire"), "users", "people:list"),
             NavItem("planning", _("Planning"), "cal", "planning:week", module="planning"),
         ),
     ),
@@ -116,21 +116,53 @@ def _resolve(url_name: str | None) -> str | None:
         return None
 
 
-def build_nav(current: str | None = None, counts: dict[str, int] | None = None):
-    """Menu réel : seules les entrées dont la route existe sont rendues.
+def _allowed(item: NavItem, employee) -> bool:
+    if item.roles is None:
+        return True
+    from apps.people.models import Role
 
-    Les entrées « Bientôt » sont affichées sans lien (décision du lot 1 sur la page
-    d'information). Le filtrage par module et par profil arrive au lot 1."""
+    # « Manager » : toute personne qui a des collaborateurs directs, pas le profil (L1-02).
+    if employee.role != Role.MANAGER and employee.role in item.roles:
+        return True
+    return "manager" in item.roles and employee.has_reports
+
+
+def _is_active(item: NavItem, match) -> bool:
+    if match is None or not item.url_name:
+        return False
+    if match.view_name == item.url_name:
+        return True
+    namespace = item.url_name.split(":")[0]
+    # Une sous-page active son module, sauf l'export du planning qui a sa propre entrée.
+    return (
+        bool(match.namespace)
+        and match.namespace == namespace
+        and item.key != "planning_export"
+        and match.view_name != "planning:export"
+    )
+
+
+def build_nav(employee, modules: set[str], match=None, counts: dict[str, int] | None = None):
+    """Menu réel : modules activés, entrées permises au profil, routes existantes.
+
+    Les entrées « Bientôt » restent visibles sans lien (L1-01). Une entrée dont la route
+    n'existe pas encore (module livré dans un lot suivant) n'est pas affichée."""
     counts = counts or {}
     groups = []
     for group in NAV:
         items = []
         for item in group.items:
-            url = _resolve(item.url_name)
+            if item.module and item.module not in modules:
+                continue
+            if not _allowed(item, employee):
+                continue
+            url = None if item.soon else _resolve(item.url_name)
             if url is None and not item.soon:
                 continue
             items.append(
-                replace(item, url=url, active=item.key == current, count=counts.get(item.key, 0))
+                replace(
+                    item, url=url, active=_is_active(item, match), count=counts.get(item.key, 0)
+                )
             )
         if items:
             groups.append(NavGroup(group.label, tuple(items)))

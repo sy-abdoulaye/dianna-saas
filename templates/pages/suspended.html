@@ -1,0 +1,10 @@
+{% extends "layouts/auth.html" %}
+{% load i18n %}
+{% block title %}{% translate "Espace suspendu" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Espace suspendu" as title %}
+    {% blocktranslate asvar text with company=company.name %}L'espace {{ company }} est momentanément suspendu. Contactez votre service RH ou l'équipe Dianna.{% endblocktranslate %}
+    {% include "components/empty_state.html" with heading="h1" icon="lock" title=title text=text %}
+  </div>
+{% endblock %}

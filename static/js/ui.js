@@ -49,7 +49,13 @@ media.addEventListener("change", () => {
 
 document.addEventListener("change", (event) => {
   const input = event.target.closest("[data-theme-switch] input[name=theme]");
-  if (input) setTheme(input.value);
+  if (!input) return;
+  setTheme(input.value);
+  // Compte connecté : le choix est enregistré dans User.theme.
+  const url = input.closest("[data-theme-switch]").dataset.themeUrl;
+  if (url && window.htmx) {
+    window.htmx.ajax("POST", url, { source: document.body, values: { theme: input.value }, swap: "none" });
+  }
 });
 
 /* ---------- Tiroir de navigation (sous 1 024 px) ---------- */
