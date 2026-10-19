@@ -12,6 +12,7 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.core.models import AuditLog
 from apps.core.tenancy import tenant_context
+from apps.core.tests.test_files import bomb_png
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 from apps.people.tests.conftest import image_bytes
 from tests.factories import EmployeeFactory
@@ -364,6 +365,7 @@ def test_photo_url_expires(client_for, company_a, settings):
     [
         ("virus.exe", b"MZ\x90\x00", "Choisissez une image JPG ou PNG."),
         ("grande.png", image_bytes() + b"0" * (2 * 1024 * 1024), "Le fichier dépasse 2 Mo."),
+        ("bombe.png", bomb_png(), "Image trop grande."),
     ],
 )
 def test_invalid_photos_are_refused(client_for, company_a, name, content, message):
