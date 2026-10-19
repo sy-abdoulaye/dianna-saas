@@ -3,13 +3,8 @@
 Ne jamais passer de contenu personnel dans `summary` : seulement l'action et, au besoin, le
 nom de la personne concernée (déjà visible dans l'application par les administrateurs)."""
 
+from apps.core.http import client_ip
 from apps.core.models import AuditLog
-
-
-def client_ip(request):
-    if request is None:
-        return None
-    return request.META.get("REMOTE_ADDR") or None
 
 
 def log(action: str, summary: str, *, actor=None, target=None, request=None, company=None):

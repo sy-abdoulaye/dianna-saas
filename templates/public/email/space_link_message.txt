@@ -1,0 +1,10 @@
+{% load i18n %}{% autoescape off %}{% blocktranslate with first_name=employee.first_name company=company.name %}Bonjour {{ first_name }},
+
+Pour accéder à l'espace {{ company }} sur Dianna, ouvrez ce lien :{% endblocktranslate %}
+
+{{ url }}
+
+{% blocktranslate %}Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.{% endblocktranslate %}
+
+Dianna
+{% endautoescape %}

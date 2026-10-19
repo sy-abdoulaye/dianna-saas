@@ -1,0 +1,1 @@
+{% load i18n %}{% blocktranslate with company=company.name %}Votre lien de connexion à l'espace {{ company }}{% endblocktranslate %}
