@@ -91,6 +91,7 @@ class DirectoryView(PermissionRequiredMixin, View):
         page_obj = Paginator(people, PER_PAGE[view]).get_page(request.GET.get("page"))
         for person in page_obj.object_list:
             person.photo_url = photo_url(person)
+            person.can_archive = not services.archive_refusal(person, me)
         in_post = Employee.objects.filter(status__in=IN_POST_STATUSES)
         context = {
             "filter_form": form,
@@ -156,6 +157,7 @@ class EmployeeDetailView(PermissionRequiredMixin, View):
             "is_self": employee.pk == me.pk,
             "is_hr": is_hr,
             "can_view_hr": permissions.can(me, "people.view_hr", employee),
+            "can_archive": is_hr and not services.archive_refusal(employee, me),
             "tab": tab,
             "detail_url": url,
             "tabs": [

@@ -24,7 +24,7 @@
         {% url "people:reactivate" person.public_id as reactivate_url %}
         {% blocktranslate asvar reactivate_label with name=person.full_name %}Réactiver {{ name }}{% endblocktranslate %}
         {% button reactivate_label variant="ghost" icon="plus" icon_only=True size="sm" hx_post=reactivate_url hx_swap="none" %}
-      {% else %}
+      {% elif person.can_archive %}
         {% url "people:archive" person.public_id as archive_url %}
         {% blocktranslate asvar archive_label with name=person.full_name %}Archiver {{ name }}{% endblocktranslate %}
         {% button archive_label variant="ghost" icon="trash" icon_only=True size="sm" hx_get=archive_url hx_target="#modal-root" %}

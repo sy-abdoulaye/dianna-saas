@@ -24,6 +24,7 @@ RULES: dict[str, tuple] = {
     "people.view_hr":                   (SELF,    SELF,    ALL,     ALL),
     "people.edit_contact":              (SELF,    SELF,    ALL,     ALL),
     "people.manage":                    (NONE,    NONE,    ALL,     ALL),
+    "people.archive_admin":             (NONE,    NONE,    NONE,    ALL),
     "people.assign_role":               (NONE,    NONE,    NONE,    ALL),
     "people.import":                    (NONE,    NONE,    NONE,    ALL),
     # Demandes : télétravail, congés, astreintes

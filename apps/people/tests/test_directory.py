@@ -468,6 +468,39 @@ def test_invalid_photos_are_refused(client_for, company_a, name, content, messag
 # ---------- Archivage ----------
 
 
+def test_hr_cannot_archive_an_administrator(client_for, company_a):
+    EmployeeFactory(company=company_a.company, role=Role.ADMIN)  # pas le dernier admin
+    admin = company_a.admin
+    client = client_for(company_a.hr)
+    detail = client.get(detail_url(admin)).content.decode()
+    assert f"/annuaire/{admin.public_id}/archiver/" not in detail
+    listing = client.get("/annuaire/").content.decode()
+    assert f"/annuaire/{admin.public_id}/archiver/" not in listing
+    assert f"/annuaire/{company_a.employee.public_id}/archiver/" in listing
+    response = client.post(
+        f"/annuaire/{admin.public_id}/archiver/",
+        {"departure_date": timezone.localdate().isoformat()},
+    )
+    assert response.status_code == 422
+    assert "Seul un administrateur peut archiver un administrateur." in response.content.decode()
+    refreshed = Employee.all_companies.get(pk=admin.pk)
+    assert refreshed.status == EmployeeStatus.ACTIVE and refreshed.user.is_active
+
+
+def test_an_administrator_can_archive_another_administrator(client_for, company_a):
+    other = EmployeeFactory(company=company_a.company, role=Role.ADMIN)
+    client = client_for(company_a.admin)
+    assert (
+        f"/annuaire/{other.public_id}/archiver/" in client.get(detail_url(other)).content.decode()
+    )
+    response = client.post(
+        f"/annuaire/{other.public_id}/archiver/",
+        {"departure_date": timezone.localdate().isoformat()},
+    )
+    assert response.status_code == 204
+    assert Employee.all_companies.get(pk=other.pk).status == EmployeeStatus.LEFT
+
+
 def test_archive_then_undo_restores_active(client_for, company_a):
     client = client_for(company_a.hr)
     url = f"/annuaire/{company_a.employee.public_id}/archiver/"
@@ -516,7 +549,11 @@ def test_hr_cannot_archive_themselves_nor_the_last_admin(client_for, company_a):
     admin = client.post(
         f"/annuaire/{company_a.admin.public_id}/archiver/", {"departure_date": today}
     )
-    assert "dernier administrateur actif" in admin.content.decode()
+    assert "Seul un administrateur peut archiver un administrateur." in admin.content.decode()
+    # Le dernier administrateur reste protégé, même hors requête (plateforme, commande).
+    with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
+        services.archive(company_a.admin, actor=None)
+    assert "dernier administrateur actif" in str(error.value.message)
 
 
 def test_employees_cannot_archive(client_for, company_a):

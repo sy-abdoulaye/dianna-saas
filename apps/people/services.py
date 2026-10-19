@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.core import audit
+from apps.core import audit, permissions
 from apps.core.tenancy import get_current_company
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 
@@ -154,6 +154,18 @@ def update_contact(employee: Employee, *, phone: str, office: str, request=None)
     return changed
 
 
+def archive_refusal(employee: Employee, actor) -> str:
+    """Motif de refus de l'archivage par cette personne (chaîne vide si permis). Sans auteur
+    (plateforme, commande), seules les règles de la fiche s'appliquent."""
+    if actor is None:
+        return ""
+    if actor.pk == employee.pk:
+        return _("Vous ne pouvez pas archiver votre propre fiche.")
+    if employee.role == Role.ADMIN and not permissions.can(actor, "people.archive_admin"):
+        return _("Seul un administrateur peut archiver un administrateur.")
+    return ""
+
+
 @transaction.atomic
 def archive(employee: Employee, *, actor, departure_date=None, request=None) -> dict:
     """Statut « Parti », date de départ (aujourd'hui par défaut), compte désactivé, données
@@ -161,8 +173,9 @@ def archive(employee: Employee, *, actor, departure_date=None, request=None) -> 
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if employee.status == EmployeeStatus.LEFT:
         raise PeopleError(_("Cette fiche est déjà archivée."))
-    if actor is not None and actor.pk == employee.pk:
-        raise PeopleError(_("Vous ne pouvez pas archiver votre propre fiche."))
+    refusal = archive_refusal(employee, actor)
+    if refusal:
+        raise PeopleError(refusal)
     ensure_an_admin_remains(employee, leaving=True)
     previous = {
         "status": employee.status,

@@ -16,7 +16,7 @@
           {% if person.status == "left" %}
             {% url "people:reactivate" person.public_id as reactivate_url %}
             {% button _("Réactiver") hx_post=reactivate_url hx_swap="none" %}
-          {% elif not is_self %}
+          {% elif can_archive %}
             {% url "people:archive" person.public_id as archive_url %}
             {% button _("Archiver") hx_get=archive_url hx_target="#modal-root" %}
           {% endif %}
