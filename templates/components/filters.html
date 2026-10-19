@@ -11,7 +11,7 @@
       hx-get="{{ action }}"
       hx-target="{{ target|default:'#results' }}"
       hx-push-url="true"
-      hx-trigger="input changed delay:300ms, change, submit"
+      hx-trigger="input changed delay:300ms, submit"
       hx-sync="this:replace">
   {% for field in form %}
     {% if forloop.first %}

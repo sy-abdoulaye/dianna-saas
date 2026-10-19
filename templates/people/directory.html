@@ -34,7 +34,7 @@
           hx-get="{{ list_url }}"
           hx-target="#results"
           hx-push-url="true"
-          hx-trigger="input changed delay:300ms, change, submit"
+          hx-trigger="input changed delay:300ms, submit"
           hx-sync="this:replace">
       <div class="field grow">
         <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>

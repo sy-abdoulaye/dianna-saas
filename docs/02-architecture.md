@@ -122,7 +122,7 @@ L'annulation immédiate proposée dans les notifications visuelles (bouton « An
 
 | Interaction | Modèle |
 |---|---|
-| Recherche, filtres, tri, pagination | Formulaire `hx-get` sur la vue de liste, `hx-target="#results"`, `hx-push-url="true"`, `hx-trigger="input changed delay:300ms, change"`. La vue renvoie le fragment `results` si `request.htmx`, la page entière sinon |
+| Recherche, filtres, tri, pagination | Formulaire `hx-get` sur la vue de liste, `hx-target="#results"`, `hx-push-url="true"`, `hx-trigger="input changed delay:300ms, submit"` (l'événement `input` couvre aussi les listes, les cases et les dates ; `change` en plus ajoutait une entrée d'historique en double). La vue renvoie le fragment `results` si `request.htmx`, la page entière sinon |
 | Fenêtre modale | `hx-get` vers une vue qui renvoie le fragment de la modale dans `#modal-root`, élément `<dialog>` ouvert par `ui.js` |
 | Envoi de formulaire | `hx-post` ; en cas d'erreur, la vue renvoie le formulaire avec les erreurs (statut 422 : HTMX 2 n'insère pas les réponses 4xx par défaut, configurer `htmx.config.responseHandling` dans `ui.js` pour insérer les 422) ; en cas de succès, en-tête `HX-Trigger` (`{"toast": {...}, "closeModal": true}`) et `HX-Redirect` ou nouveau rendu de la zone concernée |
 | Notifications visuelles | Événement `toast` déclenché par l'en-tête `HX-Trigger`, ou messages Django rendus dans `#toasts` pour les pages complètes |

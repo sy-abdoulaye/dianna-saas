@@ -2,7 +2,7 @@
 {% load i18n ui %}
 {% block admin_content %}
   <div class="card">
-    <form class="filters" method="get" action="{{ results_url }}" role="search" hx-get="{{ results_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, change, submit" hx-sync="this:replace">
+    <form class="filters" method="get" action="{{ results_url }}" role="search" hx-get="{{ results_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
       <div class="field grow">
         <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
         <div class="search-input">{% icon "search" %}{% control filter_form.q %}</div>

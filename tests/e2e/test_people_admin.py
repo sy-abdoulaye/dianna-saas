@@ -136,8 +136,13 @@ def test_directory_filters_and_cards(page, urls, company_a):
     expect(page.get_by_text("Aucun collaborateur trouvé")).to_be_visible()
     expect(page).to_have_url(re.compile(r"q=zzzz"))
     page.get_by_role("link", name="Réinitialiser les filtres").click()
+    expect(page).not_to_have_url(re.compile(r"q=zzzz"))
     page.locator("label").filter(has_text="Cartes").click()
     expect(page.locator(".person-card").first).to_be_visible()
+    # L'adresse « Cartes » doit être dans l'historique avant de revenir en arrière.
+    expect(page).to_have_url(re.compile(r"vue=cartes"))
     page.go_back()
+    expect(page).not_to_have_url(re.compile(r"vue=cartes"))
+    expect(page.get_by_role("heading", level=1)).to_have_text("Annuaire")
     page.go_back()
     expect(page).to_have_url(re.compile(r"q=zzzz"))
