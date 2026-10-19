@@ -372,6 +372,31 @@ def test_profile_given_at_creation_is_logged_as_a_role_change(client_for, compan
 # ---------- Photo ----------
 
 
+def test_photo_given_at_creation_is_stored_under_the_company_and_shown(
+    client_for, company_a, settings
+):
+    client = client_for(company_a.hr)
+    photo = SimpleUploadedFile("moi.png", image_bytes(), content_type="image/png")
+    response = client.post("/annuaire/nouveau/", form_data(company_a, photo_upload=photo))
+    assert response.status_code == 302
+    created = Employee.all_companies.get(company=company_a.company, email="ada.lovelace@exemple.fr")
+    assert created.photo.name.startswith(f"{company_a.company.pk}/photos/")
+    root = settings.PRIVATE_MEDIA_ROOT
+    assert not (root / "None").exists()
+    page = client.get(response["Location"]).content.decode()
+    url = page.split('<img src="')[1].split('"')[0]
+    served = client.get(url)
+    assert served.status_code == 200 and served["Content-Type"] == "image/png"
+
+
+def test_photo_path_never_uses_an_unknown_company(db):
+    from apps.core.tenancy import NoCurrentCompanyError
+    from apps.people.models import employee_photo_path
+
+    with pytest.raises(NoCurrentCompanyError):
+        employee_photo_path(Employee(first_name="A", last_name="B"), "x.png")
+
+
 def test_photo_is_reencoded_and_served_by_a_signed_url(client_for, company_a, company_b):
     client = client_for(company_a.hr)
     photo = SimpleUploadedFile("moi.png", image_bytes(), content_type="image/png")

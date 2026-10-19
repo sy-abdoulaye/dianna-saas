@@ -39,7 +39,12 @@ class WorkTime(models.TextChoices):
 
 
 def employee_photo_path(instance, filename):
-    return random_name(f"{instance.company_id}/photos", filename)
+    """<company_id>/photos/<uuid>.<ext>. Une fiche pas encore enregistrée prend l'entreprise
+    courante ; sans entreprise, NoCurrentCompanyError (jamais de dossier « None/ »)."""
+    from apps.core.tenancy import get_current_company
+
+    company_id = instance.company_id or get_current_company().pk
+    return random_name(f"{company_id}/photos", filename)
 
 
 # Statuts « en poste » : l'arrivée prochaine est comptée avec les actifs (L1-04).

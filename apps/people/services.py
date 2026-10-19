@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit
+from apps.core.tenancy import get_current_company
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 
 # Champs suivis dans l'historique ; « photo » est enregistrée à part (fichier).
@@ -88,6 +89,7 @@ def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
     data = dict(data)
     role = data.pop("role", None) or Role.EMPLOYEE
     employee = Employee(**data)
+    employee.company = get_current_company()  # avant le fichier : chemin <company_id>/photos/
     employee.status = status_for_arrival(employee.arrival_date)
     if photo is not None:
         employee.photo.save(photo.name, photo, save=False)
