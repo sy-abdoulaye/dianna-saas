@@ -18,7 +18,7 @@ from apps.core.models import (
     TenantModel,
 )
 from apps.core.tenancy import NoCurrentCompanyError, current_company, tenant_context
-from apps.people.models import Employee
+from apps.people.models import Employee, EmployeeChange
 from tests.factories import PASSWORD, EmployeeFactory
 from tests.isolation import ISOLATION_CASES, NOT_TENANT_OBJECTS
 
@@ -50,6 +50,26 @@ def test_tenant_models_filter_by_default_and_refuse_queries_without_company(mode
     assert not isinstance(model._base_manager, TenantManager)
     with pytest.raises(NoCurrentCompanyError):
         list(model.objects.all())
+    for operation in ("count", "exists", "first", "delete"):
+        with pytest.raises(NoCurrentCompanyError):
+            getattr(model.objects.all(), operation)()
+    with pytest.raises(NoCurrentCompanyError):
+        model.objects.update(updated_at=None)
+    # Construire un queryset sans l'évaluer reste permis (champs de ModelForm à l'import).
+    model.objects.filter(pk__gt=0)
+
+
+def test_queryset_without_company_is_empty_as_a_subquery(company_a):
+    lazy = Employee.objects.all()  # aucune entreprise courante
+    with tenant_context(company_a.company):
+        assert Employee.objects.filter(pk__in=lazy.values("pk")).count() == 0
+
+
+def test_project_imports_without_a_current_company():
+    import importlib
+
+    for module in ("apps.people.forms", "apps.administration.forms", "config.urls"):
+        importlib.reload(importlib.import_module(module))
 
 
 # ---------- Données : deux entreprises équivalentes ----------
@@ -61,6 +81,7 @@ TENANT_ROWS = {
     Notification: lambda d: d.notification,
     AuditLog: lambda d: d.audit,
     Invitation: lambda d: d.invitation,
+    EmployeeChange: lambda d: d.change,
     CompanyModule: lambda d: CompanyModule.all_companies.filter(company=d.company).first(),
 }
 

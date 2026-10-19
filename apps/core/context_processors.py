@@ -2,6 +2,7 @@ from django.utils.functional import SimpleLazyObject
 
 from apps.core import notifications
 from apps.core.access import enabled_modules
+from apps.core.files import signed_url
 from apps.core.navigation import build_nav
 
 
@@ -20,4 +21,7 @@ def app(request):
         ),
         "unread_count": SimpleLazyObject(lambda: notifications.unread_count(employee)),
         "latest_notifications": SimpleLazyObject(lambda: notifications.latest(employee)),
+        "current_photo_url": SimpleLazyObject(
+            lambda: signed_url(employee.photo) if employee.photo else ""
+        ),
     }

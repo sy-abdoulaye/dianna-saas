@@ -15,6 +15,7 @@ bin/
 static/build/
 staticfiles/
 media/
+private_media/
 test-results/
 playwright-report/
 

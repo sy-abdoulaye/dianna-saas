@@ -4,7 +4,14 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.files import private_storage
 from apps.core.tenancy import get_current_company
+
+
+def company_logo_path(instance, filename):
+    from apps.core.files import random_name
+
+    return random_name(f"{instance.pk}/logo", filename)
 
 
 class Timestamped(models.Model):
@@ -43,6 +50,12 @@ class Company(Timestamped):
         _("validation finale RH des congés d'été"), default=True
     )
     timezone = models.CharField(_("fuseau horaire"), max_length=40, default="Europe/Paris")
+    logo = models.ImageField(
+        _("logo"),
+        upload_to=company_logo_path,
+        storage=private_storage,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = _("entreprise")
@@ -65,16 +78,64 @@ class Company(Timestamped):
 
 
 class TenantQuerySet(models.QuerySet):
-    pass
+    """Sans entreprise courante, le queryset est vide par construction (une sous-requête ne
+    renvoie jamais rien) et toute lecture lève NoCurrentCompanyError. Django construit des
+    querysets dès l'import (champs de ModelForm) : ils doivent exister sans être évalués."""
+
+    _missing_company = False
+
+    def _clone(self):
+        clone = super()._clone()
+        clone._missing_company = self._missing_company
+        return clone
+
+    def _guard(self):
+        if self._missing_company:
+            get_current_company()  # lève NoCurrentCompanyError
+
+    def _fetch_all(self):
+        self._guard()
+        super()._fetch_all()
+
+    def iterator(self, *args, **kwargs):
+        self._guard()
+        return super().iterator(*args, **kwargs)
+
+    def count(self):
+        self._guard()
+        return super().count()
+
+    def exists(self):
+        self._guard()
+        return super().exists()
+
+    def aggregate(self, *args, **kwargs):
+        self._guard()
+        return super().aggregate(*args, **kwargs)
+
+    def update(self, **kwargs):
+        self._guard()
+        return super().update(**kwargs)
+
+    def delete(self):
+        self._guard()
+        return super().delete()
 
 
 class TenantManager(models.Manager.from_queryset(TenantQuerySet)):
-    """Filtre automatiquement sur l'entreprise courante ; lève NoCurrentCompanyError sans elle."""
+    """Filtre automatiquement sur l'entreprise courante ; sans elle, rien n'est lisible
+    (NoCurrentCompanyError à l'évaluation)."""
 
     use_in_migrations = False
 
     def get_queryset(self):
-        return super().get_queryset().filter(company=get_current_company())
+        queryset = super().get_queryset()
+        company = get_current_company(required=False)
+        if company is None:
+            queryset = queryset.none()
+            queryset._missing_company = True
+            return queryset
+        return queryset.filter(company=company)
 
 
 class TenantModel(Timestamped):
