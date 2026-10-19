@@ -31,7 +31,7 @@ Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est
 
 ```bash
 make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind
-make up          # PostgreSQL 18 (Docker, port 5433), CSS, migrations, serveur sur :8000
+make up          # PostgreSQL 18 (Docker, port 5434), CSS, migrations, serveur sur :8000
 make css         # dans un second terminal : recompile la feuille de style à chaque modification
 ```
 
