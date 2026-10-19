@@ -106,6 +106,23 @@ Versions vérifiées le 18 octobre 2026.
 | A1-06 | Cookies en production | `__Host-sessionid` et `__Host-csrftoken` : sans Domain, `Path=/`, `Secure` | Validé (19 oct. 2026) |
 | A1-07 | Adresse IP du client | Lue derrière `TRUSTED_PROXY_COUNT` proxys de confiance (journal d'audit, vitrine, allauth) | Validé (19 oct. 2026) |
 
+## Décisions prises pendant le lot 2 (19 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L2-01 | Fichiers privés | Photos et logo sur un stockage disque privé (`PRIVATE_MEDIA_ROOT`, hors des fichiers statiques), noms aléatoires rangés par entreprise, servis par URL signée de 5 minutes liée à l'entreprise. Le stockage objet S3 (T-12) arrive au lot 5 avec les justificatifs | À confirmer |
+| L2-02 | Images | Dépendance **Pillow 12.3** ajoutée : type vérifié côté serveur, image réencodée (métadonnées EXIF, dont la position GPS, supprimées). Photo : JPG ou PNG, 2 Mo, réduite à 512 px. Logo : PNG ou JPG, 1 Mo (pas de SVG, qui peut contenir du script) | À confirmer |
+| L2-03 | Fiche « Parti » | Pour qui ne voit pas les départs, l'URL d'une fiche partie renvoie 404 (le prototype affichait « Accès non autorisé ») : son existence n'est pas révélée | À confirmer |
+| L2-04 | Fiche : éléments des lots suivants | Onglet « Demandes » et raccourcis (fiche de suivi, demandes) masqués jusqu'aux lots 3 et 7 (règle 6) | À confirmer |
+| L2-05 | Archivage | Date de départ modifiable dans la confirmation (aujourd'hui par défaut) ; impossible d'archiver sa propre fiche ou le dernier administrateur actif ; annulation pendant 30 s depuis la notification | À confirmer |
+| L2-06 | Import CSV | Aucune invitation envoyée (envoi depuis « Utilisateurs et profils ») ; dates JJ/MM/AAAA ou AAAA-MM-JJ ; UTF-8 ou Windows-1252 (Excel) ; 1 000 lignes et 1 Mo au plus ; manager présent dans l'annuaire ou dans le fichier ; contrat CDI, CDD, Alternance ou Stage | À confirmer |
+| L2-07 | Utilisateurs et profils | Liste de toutes les fiches en poste avec l'état du compte (actif, invitation envoyée, pas de compte) et l'envoi ou le renvoi de l'invitation | À confirmer |
+| L2-08 | Onglet « Entreprise » | Champs de la fiche administration (nom, quota de télétravail, M-02, M-03, logo) ; pas la campagne d'été du prototype, gérée dans le module Congés | À confirmer |
+| L2-09 | Journal d'activité | Période par défaut : les 30 derniers jours ; export CSV de la période (point-virgule, UTF-8 avec BOM), lui-même journalisé | À confirmer |
+| L2-10 | Tableau de bord initial | Indicateurs Administrateur (4) et RH (effectif en poste, arrivées à venir) seulement ; les autres blocs arrivent avec leurs modules | À confirmer |
+| L2-11 | Changement d'identifiant de connexion | L'action séparée confirmée par e-mail (T-09) n'est pas encore livrée : le formulaire de fiche rappelle que l'identifiant ne suit pas l'e-mail de la fiche. À planifier | À confirmer |
+| L2-12 | Garde-fou d'isolation | Sans entreprise courante, un queryset métier est vide par construction et toute lecture lève une erreur ; il peut être construit sans être lu (champs de `ModelForm` créés à l'import) | Validé (technique) |
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».

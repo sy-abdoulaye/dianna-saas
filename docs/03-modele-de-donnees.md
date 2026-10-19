@@ -11,7 +11,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 | name | char 120 | « Exemple SAS » |
 | slug | slug unique | sous-domaine ; réservés : www, admin, api, static, media, mail, support |
 | status | choix : active, suspended | |
-| logo | fichier, optionnel | |
+| logo | image, optionnel | PNG ou JPG, 1 Mo ; stockage privé, URL signée (L2-01) |
 | telework_max_per_week | small int, défaut 2 | M-01, 0 à 5 |
 | telework_auto_approve | bool, défaut False | M-02 |
 | summer_leave_hr_step | bool, défaut True | M-03 : validation finale RH des congés d'été |
@@ -41,7 +41,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 | first_name, last_name | char | |
 | email | email | contact professionnel, unique par entreprise, insensible à la casse : `UniqueConstraint(Lower("email"), "company")`. Distinct de l'identifiant `User.email` (T-09) |
 | phone, office | char, optionnels | |
-| photo | image, optionnel | ≤ 2 Mo, JPG ou PNG |
+| photo | image, optionnel | ≤ 2 Mo, JPG ou PNG ; stockage privé, réencodée sans EXIF (L2-02) |
 | job_title | char | |
 | service | FK Service, `RESTRICT`, nul permis (premier administrateur) | obligatoire dans le formulaire (lot 2) |
 | site | FK Site, `RESTRICT`, nul permis | obligatoire dans le formulaire (lot 2) |
@@ -56,7 +56,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 
 Index : (company, last_name), (company, service), (company, manager). Le statut `upcoming` passe à `active` à la date d'arrivée (tâche quotidienne).
 
-**EmployeeChange** (T) : historique de la fiche : `employee`, `actor`, `fields` (JSON des noms de champs modifiés, sans valeurs sensibles), `created_at`.
+**EmployeeChange** (T) : historique de la fiche : `employee`, `actor`, `kind` (created, updated, contact, archived, reactivated, role, imported), `fields` (JSON des noms de champs modifiés, jamais les valeurs), `created_at`.
 
 ## Agenda (`agenda`)
 
