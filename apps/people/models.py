@@ -89,6 +89,8 @@ class Employee(TenantModel):
         _("dérogation au quota de télétravail"), null=True, blank=True
     )
 
+    permission_owner_field = "__self__"  # apps.core.permissions.SELF_OWNER
+
     class Meta:
         verbose_name = _("fiche salarié")
         verbose_name_plural = _("fiches salarié")
