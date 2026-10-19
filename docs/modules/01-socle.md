@@ -4,7 +4,7 @@
 
 | Route | Écran |
 |---|---|
-| `dianna.fr` | Page vitrine minimale : « Accéder à mon espace » (saisie de l'e-mail, redirection vers le sous-domaine de l'entreprise, T-08) |
+| `dianna.fr` | Page vitrine minimale : « Accéder à mon espace ». Après saisie de l'e-mail, toujours le même message : « Si cette adresse correspond à un compte Dianna, vous allez recevoir un lien de connexion par e-mail. » Le lien mène au sous-domaine de l'entreprise (T-08, L1-12) |
 | `/connexion/` | E-mail, mot de passe, « Mot de passe oublié ». Logo de l'entreprise si le sous-domaine est connu |
 | `/connexion/2fa/` | Code de double authentification (RH, Admin) |
 | `/invitation/<token>/` | Création du mot de passe à la première connexion ; lien expiré : message et bouton « Demander une nouvelle invitation » (notifie l'administrateur) |

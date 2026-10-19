@@ -11,7 +11,7 @@ Mot de passe commun en développement uniquement : `demo-dianna-2026`. La comman
 | Profil | Personne | E-mail |
 |---|---|---|
 | Salarié | Camille Durand, conseillère support, Lyon | camille.durand@exemple.fr |
-| Manager | Louise Martin, responsable support (équipe de 6) | louise.martin@exemple.fr |
+| Manager | Louise Martin, responsable support (5 collaborateurs directs) | louise.martin@exemple.fr |
 | RH | Hélène Faure, directrice des ressources humaines | helene.faure@exemple.fr |
 | Administrateur | Marc Diallo, administrateur de la plateforme | marc.diallo@exemple.fr |
 | Administrateur d'**Autre SA** | Nadia Berger, directrice générale (pour vérifier l'isolation) | nadia.berger@autre.fr |
@@ -20,7 +20,7 @@ Adresses en développement : vitrine http://localhost:8000, Exemple SAS http://e
 
 ## Contenu
 
-- 24 salariés répartis sur 3 sites (Lyon, Paris, Nantes) et 6 services (Louise Martin a 5 collaborateurs directs dans le prototype, l'« équipe de 6 » ci-dessus l'inclut) ; 4 managers (Louise Martin, Paul Lefèvre, Claire Dubois, Élodie Vidal) ; 1 arrivée prochaine ; 1 départ.
+- 24 salariés répartis sur 3 sites (Lyon, Paris, Nantes) et 6 services ; 4 managers (Louise Martin, Paul Lefèvre, Claire Dubois, Élodie Vidal) ; 1 arrivée prochaine ; 1 départ.
 - Demandes de télétravail sur la semaine courante et la suivante, dont une en attente pour Camille et deux à valider pour Louise.
 - Campagne « Été 2027 » ouverte, avec des vœux qui se chevauchent dans le service Support client (conflit visible).
 - Astreintes et interventions, justificatifs de transport (un refusé, plusieurs en attente).

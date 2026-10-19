@@ -30,7 +30,7 @@ Versions vérifiées le 18 octobre 2026.
 | T-05 | HTMX | **2.x** avec `django-htmx`. La 4.0 (sortie le 28 août 2026) change l'héritage des attributs et les noms d'événements ; on migrera plus tard | 4.0 directement | À confirmer |
 | T-06 | Fragments HTMX | Fragments intégrés à Django 6 (`{% partialdef %}`) pour les résultats de liste d'une page ; fichiers `templates/<app>/partials/` pour les fragments réutilisés (modales, lignes, blocs communs) | `django-template-partials` | Validé (18 oct. 2026) |
 | T-07 | Architecture multi-entreprise | Une base, un schéma, colonne `company_id` sur chaque table métier, gestionnaire filtrant automatiquement, entreprise résolue par le middleware. Défense en profondeur par Row Level Security PostgreSQL au lot 8 | Un schéma par entreprise (`django-tenants`) : isolation plus forte, mais migrations et opérations plus lourdes | À confirmer |
-| T-08 | Accès des entreprises | Sous-domaine par entreprise (`exemple.dianna.fr`). `dianna.fr` : page vitrine minimale avec « Accéder à mon espace » (saisie de l'e-mail, redirection vers le sous-domaine de l'entreprise) | Domaine unique et choix de l'entreprise à la connexion | Validé (18 oct. 2026) |
+| T-08 | Accès des entreprises | Sous-domaine par entreprise (`exemple.dianna.fr`). `dianna.fr` : page vitrine minimale avec « Accéder à mon espace » (saisie de l'e-mail, lien vers le sous-domaine de l'entreprise envoyé par e-mail, L1-12) | Domaine unique et choix de l'entreprise à la connexion | Validé (18 oct. 2026) |
 | T-09 | Comptes | `User` personnalisé, connexion par e-mail. `User.email` est l'identifiant de connexion, `Employee.email` le contact professionnel. À l'invitation, le compte est créé avec l'e-mail de la fiche ; modifier l'e-mail de la fiche ne change pas l'identifiant ; changer d'identifiant est une action séparée confirmée par e-mail. Un compte appartient à une seule entreprise en V1 : inviter une adresse déjà utilisée dans une autre entreprise est refusé (« Cette adresse est déjà utilisée sur Dianna. Utilisez une autre adresse ou contactez le support. ») | — | Validé (18 oct. 2026) |
 | T-10 | Authentification | `django-allauth` 65.19.1 (compatibilité Django 6.1 vérifiée au début du lot 1), monté sous `/connexion/` : e-mail et mot de passe, réinitialisation, TOTP. Double authentification obligatoire pour RH, Administrateur et équipe Dianna, imposée par un **middleware maison** (inscription forcée à la première connexion et quand le profil passe à RH ou Admin) ; désactivable en développement par `DEMO_DISABLE_2FA` (refusé si `DEBUG = False`). SSO Google et Microsoft au lot 8 | Authentification Django native et code maison | Validé (18 oct. 2026) |
 | T-11 | Tâches en arrière-plan | Cadre de tâches de Django 6 (`django.tasks`) avec le moteur base de données du paquet `django-tasks` : pas de Redis à opérer | Celery + Redis si le volume l'exige | À confirmer |
@@ -85,14 +85,31 @@ Versions vérifiées le 18 octobre 2026.
 
 | ID | Sujet | Décision | Statut |
 |---|---|---|---|
-| L1-10 | Routage par hôte | `CompanyMiddleware` choisit les routes selon l'hôte : `config.urls_public` (vitrine), `config.urls_platform` (éditeur), `config.urls` (espace client). En développement : `localhost:8000`, `admin.localhost:8000` et `<slug>.localhost:8000` ; `/editeur/` reste aussi disponible sur `localhost` (L0-13) | À confirmer |
-| L1-11 | Connexion liée à l'hôte | Un compte ne se connecte que sur le sous-domaine de son entreprise (même message qu'un mauvais mot de passe) ; une session présentée sur un autre hôte est fermée. L'équipe Dianna ne se connecte que sur l'hôte éditeur | À confirmer |
-| L1-12 | Vitrine et confidentialité | « Accéder à mon espace » redirige vers l'espace de l'entreprise : la page révèle donc à quelle entreprise appartient une adresse connue. Limité à 10 tentatives par adresse IP et par 10 minutes. Alternative plus discrète : envoyer le lien de connexion par e-mail sans rien afficher | À confirmer |
-| L1-13 | Mot de passe oublié | Le lien n'est envoyé qu'aux comptes de l'espace où la demande est faite ; une adresse inconnue ne reçoit aucun e-mail (`ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False`) ; la réponse est la même dans tous les cas | À confirmer |
-| L1-14 | E-mail d'invitation | Envoyé après la validation de la transaction, de façon synchrone, jusqu'à l'arrivée des tâches en arrière-plan (T-11, lot 3) | À confirmer |
-| L1-15 | Suppression d'un service ou d'un site | Clés étrangères des fiches en `RESTRICT` : un service ou un site utilisé ne peut pas être supprimé, mais la suppression d'une entreprise entière reste possible | À confirmer |
-| L1-16 | Cache | Mémoire en développement, base de données en production (`createcachetable` au déploiement) : la limitation des tentatives est partagée entre les processus | À confirmer |
-| L1-17 | Écrans du lot 1 | Tableau de bord réduit à l'en-tête et à l'état « Tout est à jour » ; recherche globale et « Ma fiche » masquées jusqu'à l'annuaire (lot 2) ; logo de l'entreprise reporté au lot 2 (stockage des fichiers, T-12), son nom est affiché à la connexion ; pas de notification visuelle à la connexion et à la déconnexion | À confirmer |
+| L1-10 | Routage par hôte | `CompanyMiddleware` choisit les routes selon l'hôte : `config.urls_public` (vitrine), `config.urls_platform` (éditeur), `config.urls` (espace client). En développement : `localhost:8000`, `admin.localhost:8000` et `<slug>.localhost:8000` ; `/editeur/` reste aussi disponible sur `localhost` (L0-13) | Validé (19 oct. 2026) |
+| L1-11 | Connexion liée à l'hôte | Un compte ne se connecte que sur le sous-domaine de son entreprise (même message qu'un mauvais mot de passe) ; une session présentée sur un autre hôte est fermée. L'équipe Dianna ne se connecte que sur l'hôte éditeur | Validé (19 oct. 2026) |
+| L1-12 | Vitrine et confidentialité | **Variante discrète** : la page affiche toujours « Si cette adresse correspond à un compte Dianna, vous allez recevoir un lien de connexion par e-mail. » ; le lien vers le sous-domaine de l'entreprise part par e-mail. Plus d'exception CSP. Limite : 10 essais par 10 minutes par adresse IP réelle (X-Forwarded-For selon `TRUSTED_PROXY_COUNT`) et 3 par adresse saisie (empreinte HMAC). Écart de temps de réponse quand un e-mail part : supprimé au lot 3 (envoi en tâche de fond) | Validé (19 oct. 2026) |
+| L1-13 | Mot de passe oublié | Le lien n'est envoyé qu'aux comptes de l'espace où la demande est faite ; une adresse inconnue ne reçoit aucun e-mail (`ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False`) ; la réponse est la même dans tous les cas | Validé (19 oct. 2026) |
+| L1-14 | E-mail d'invitation | Envoyé après la validation de la transaction, de façon synchrone, jusqu'à l'arrivée des tâches en arrière-plan (T-11, lot 3) | Validé (19 oct. 2026) |
+| L1-15 | Suppression d'un service ou d'un site | Clés étrangères des fiches en `RESTRICT` : un service ou un site utilisé ne peut pas être supprimé, mais la suppression d'une entreprise entière reste possible | Validé (19 oct. 2026) |
+| L1-16 | Cache | Mémoire en développement, base de données en production (`createcachetable` au déploiement) : la limitation des tentatives est partagée entre les processus | Validé (19 oct. 2026) |
+| L1-17 | Écrans du lot 1 | Tableau de bord réduit à l'en-tête et à l'état « Tout est à jour » ; recherche globale et « Ma fiche » masquées jusqu'à l'annuaire (lot 2) ; logo de l'entreprise reporté au lot 2 (stockage des fichiers, T-12), son nom est affiché à la connexion ; pas de notification visuelle à la connexion et à la déconnexion | Validé (19 oct. 2026) |
+
+## Audit du lot 1 (19 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| A1-01 | Administration éditeur | Seuls `Company` (avec `CompanyModule` en ligne) et les comptes de l'équipe Dianna sont inscrits ; `mfa.Authenticator`, `account.EmailAddress` et `auth.Group` sont retirés ; un test échoue si un autre modèle est inscrit. Pas de suppression d'entreprise (procédure RGPD au lot 8) | Validé (19 oct. 2026) |
+| A1-02 | Secrets de double authentification | Chiffrés par `MultiFernet` avec `MFA_ENCRYPTION_KEY` (distincte de `SECRET_KEY`, obligatoire en production, plusieurs clés pour en changer) ; dépendance `cryptography` ajoutée | Validé (19 oct. 2026) |
+| A1-03 | Relations entre objets métier | Clés étrangères, relations un-à-un (`save`) et plusieurs-à-plusieurs (`m2m_changed`) vérifiées dans la même entreprise ; pas de `update()` ni de `bulk_create` sur ces relations sans vérification explicite (CLAUDE.md) | Validé (19 oct. 2026) |
+| A1-04 | Propriétaire des objets | Chaque modèle soumis aux permissions déclare `permission_owner_field` ; un propriétaire vide refuse l'accès | Validé (19 oct. 2026) |
+| A1-05 | Réinitialisation du mot de passe | La clé n'est acceptée que sur l'hôte de l'entreprise du compte (ou l'hôte éditeur pour l'équipe Dianna) | Validé (19 oct. 2026) |
+| A1-06 | Cookies en production | `__Host-sessionid` et `__Host-csrftoken` : sans Domain, `Path=/`, `Secure` | Validé (19 oct. 2026) |
+| A1-07 | Adresse IP du client | Lue derrière `TRUSTED_PROXY_COUNT` proxys de confiance (journal d'audit, vitrine, allauth) | Validé (19 oct. 2026) |
+
+## Pour plus tard
+
+- **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
+- **Lot 8 :** le blocage après des échecs de connexion est indexé par adresse et par hôte.
 
 ## Métier : à confirmer
 
