@@ -1,0 +1,37 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <div id="structure" class="grid items-start gap-4 lg:grid-cols-2" hx-get="{% url 'administration:structure' %}" hx-trigger="structureChanged from:body" hx-target="this" hx-disinherit="*">
+    {% partialdef lists inline %}
+      {% for block in blocks %}
+        <section class="card" aria-labelledby="h-{{ block.kind }}">
+          <div class="card-body flex items-center justify-between gap-3">
+            <h2 class="h2" id="h-{{ block.kind }}">{{ block.label }}</h2>
+            {% url "administration:structure_add" block.kind as add_url %}
+            {% button _("Ajouter") size="sm" icon="plus" hx_get=add_url hx_target="#modal-root" %}
+          </div>
+          {% if block.items %}
+            <ul class="rows px-6 pb-5">
+              {% for item in block.items %}
+                <li>
+                  <span>{{ item.name }} <span class="meta">· {% blocktranslate count n=item.usage %}{{ n }} collaborateur{% plural %}{{ n }} collaborateurs{% endblocktranslate %}</span></span>
+                  <span class="flex gap-1">
+                    {% url "administration:structure_rename" block.kind item.pk as rename_url %}
+                    {% url "administration:structure_delete" block.kind item.pk as delete_url %}
+                    {% blocktranslate asvar rename_label with name=item.name %}Renommer {{ name }}{% endblocktranslate %}
+                    {% blocktranslate asvar delete_label with name=item.name %}Supprimer {{ name }}{% endblocktranslate %}
+                    <button class="btn btn-ghost btn-sm" type="button" hx-get="{{ rename_url }}" hx-target="#modal-root" aria-label="{{ rename_label }}">{% translate "Renommer" %}</button>
+                    <button class="btn btn-ghost btn-sm text-err-ink" type="button" hx-get="{{ delete_url }}" hx-target="#modal-root" aria-label="{{ delete_label }}">{% translate "Supprimer" %}</button>
+                  </span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            {% blocktranslate asvar empty_title with label=block.label|lower %}Aucun {{ label }}{% endblocktranslate %}
+            {% include "components/empty_state.html" with icon="set" title=empty_title %}
+          {% endif %}
+        </section>
+      {% endfor %}
+    {% endpartialdef %}
+  </div>
+{% endblock %}

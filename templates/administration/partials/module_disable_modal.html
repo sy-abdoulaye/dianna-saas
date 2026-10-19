@@ -1,0 +1,8 @@
+{% extends "components/confirm.html" %}
+{% load i18n ui %}
+{% block modal_title %}{% blocktranslate %}Désactiver « {{ label }} » ?{% endblocktranslate %}{% endblock %}
+{% block modal_body %}<p class="modal-text">{% translate "Le module disparaîtra du menu de tous les utilisateurs. Les données sont conservées et réapparaîtront à la réactivation." %}</p>{% endblock %}
+{% block modal_footer %}
+  {% button _("Annuler") data_modal_close=True %}
+  <button class="btn btn-danger" type="button" hx-post="{{ action_url }}" hx-vals='{"enabled": "0"}' hx-swap="none" hx-disabled-elt="this">{% translate "Désactiver" %}</button>
+{% endblock %}

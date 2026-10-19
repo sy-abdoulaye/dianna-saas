@@ -1,0 +1,24 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <form class="card card-body stack max-w-3xl" method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    <h2 class="h2">{% translate "Entreprise" %}</h2>
+    {% include "components/form_errors.html" %}
+    <div class="form-grid">
+      {% include "components/field.html" with field=form.name %}
+      {% include "components/field.html" with field=form.telework_max_per_week %}
+      {% include "components/field.html" with field=form.telework_auto_approve full=True %}
+      {% include "components/field.html" with field=form.summer_leave_hr_step full=True %}
+    </div>
+    <p class="meta">{% translate "Les campagnes de congés d'été se gèrent dans le module Congés estivaux (RH)." %}</p>
+    <div class="flex flex-wrap items-center gap-4">
+      {% if logo_url %}<img class="company-logo" src="{{ logo_url }}" alt="{% translate 'Logo actuel' %}">{% else %}{% brand_mark 40 %}{% endif %}
+        <div class="min-w-64 flex-1">
+          {% include "components/file_drop.html" with field=form.logo_upload hint=form.logo_upload.help_text %}
+          {% if logo_url %}<label class="checkbox mt-2"><input type="checkbox" name="remove_logo" value="1"><span>{% translate "Retirer le logo" %}</span></label>{% endif %}
+        </div>
+    </div>
+    <div class="actions justify-end">{% button _("Enregistrer") variant="primary" type="submit" %}</div>
+  </form>
+{% endblock %}

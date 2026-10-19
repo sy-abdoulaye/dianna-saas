@@ -1,0 +1,41 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <div class="card card-body stack">
+    <p class="text-ink-2">{% translate "Activez les modules achetés par l'entreprise. Un module désactivé disparaît du menu de tous les utilisateurs ; ses données sont conservées." %}</p>
+    <ul id="modules" class="rows" hx-get="{% url 'administration:modules' %}" hx-trigger="modalClosed from:body" hx-target="this" hx-disinherit="*">
+      {% partialdef list inline %}
+        {% for module in modules %}
+          <li>
+            <div>
+              <b class="font-medium">{{ module.label }}</b>
+              <div class="meta">{{ module.description }}</div>
+            </div>
+            {% url "administration:toggle_module" module.key as toggle_url %}
+            <label class="checkbox">
+              {% if module.enabled %}
+                <input type="checkbox" checked hx-get="{{ toggle_url }}" hx-trigger="change" hx-target="#modal-root" aria-describedby="state-{{ module.key }}">
+              {% else %}
+                <input type="checkbox" hx-post="{{ toggle_url }}" hx-vals='{"enabled": "1"}' hx-trigger="change" hx-swap="none" aria-describedby="state-{{ module.key }}">
+              {% endif %}
+              <span id="state-{{ module.key }}">{% if module.enabled %}{% translate "Activé" %}{% else %}{% translate "Désactivé" %}{% endif %}</span>
+              <span class="sr-only">{{ module.label }}</span>
+            </label>
+          </li>
+        {% endfor %}
+        <li>
+          <div><b class="font-medium">{% translate "Annuaire" %}</b><div class="meta">{% translate "Fiches et coordonnées des collaborateurs : fait partie du socle" %}</div></div>
+          <span class="pill">{% translate "Toujours activé" %}</span>
+        </li>
+        <li>
+          <div><b class="font-medium">{% translate "Plan de charge" %}</b><div class="meta">{% translate "Version ultérieure" %}</div></div>
+          <span class="pill">{% translate "Non disponible" %}</span>
+        </li>
+        <li>
+          <div><b class="font-medium">{% translate "Recrutement" %}</b><div class="meta">{% translate "Version ultérieure" %}</div></div>
+          <span class="pill">{% translate "Non disponible" %}</span>
+        </li>
+      {% endpartialdef %}
+    </ul>
+  </div>
+{% endblock %}

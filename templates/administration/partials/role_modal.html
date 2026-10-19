@@ -1,0 +1,10 @@
+{% extends "components/confirm.html" %}
+{% load i18n ui %}
+{% block modal_title %}{% blocktranslate with name=person.full_name %}Changer le profil de {{ name }} ?{% endblocktranslate %}{% endblock %}
+{% block modal_body %}
+  <p class="modal-text">{{ person.get_role_display }} → <b>{{ new_role }}</b>. {% translate "Ses droits changent dès sa prochaine page." %}{% if role == "hr" or role == "admin" %} {% translate "La double authentification lui sera demandée." %}{% endif %}</p>
+{% endblock %}
+{% block modal_footer %}
+  {% button _("Annuler") data_modal_close=True %}
+  <button class="btn btn-primary" type="button" hx-post="{{ action_url }}" hx-vals='{"role": "{{ role }}"}' hx-swap="none" hx-disabled-elt="this">{% translate "Changer le profil" %}</button>
+{% endblock %}
