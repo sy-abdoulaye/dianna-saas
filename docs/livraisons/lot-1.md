@@ -1,6 +1,6 @@
 # Note de livraison : lot 1, socle multi-entreprise et comptes
 
-Date : 19 octobre 2026. Branche : `lot-1`.
+Date : 19 octobre 2026, mise à jour après la revue et l'audit du même jour. Branche : `lot-1`.
 
 ## Ce qui est fait
 
@@ -30,7 +30,7 @@ Date : 19 octobre 2026. Branche : `lot-1`.
 - Tableau de bord réduit à l'en-tête.
 
 **Hôtes (T-08, T-22).**
-- Vitrine « Accéder à mon espace ».
+- Vitrine « Accéder à mon espace » en variante discrète (L1-12) : même message pour toute adresse, lien vers l'espace envoyé par e-mail. Limite par adresse IP réelle (`TRUSTED_PROXY_COUNT`) et par adresse saisie hachée.
 - Administration éditeur sur `admin.<domaine>` avec double authentification. Elle crée l'entreprise, active tous ses modules, crée la fiche du premier administrateur et l'invite. Elle affiche les modules de l'entreprise et ne montre que les comptes de l'équipe Dianna.
 
 **Démonstration.**
@@ -38,12 +38,27 @@ Date : 19 octobre 2026. Branche : `lot-1`.
 - `--reset` recharge les données.
 - La commande est refusée si `DEBUG` est faux.
 
+## Corrections de la revue et de l'audit
+
+Chaque correction a ses tests (`apps/core/tests/test_audit_fixes.py`, `apps/core/tests/test_public.py`).
+
+| Point | Correction |
+|---|---|
+| Vitrine | Variante discrète, plus d'exception CSP, adresse IP réelle derrière les proxys de confiance |
+| 5a | Administration éditeur limitée à `Company` (avec `CompanyModule`) et aux comptes de l'équipe ; test qui échoue si un autre modèle est inscrit |
+| 5b | Secrets TOTP chiffrés (`MultiFernet`, `MFA_ENCRYPTION_KEY` obligatoire en production, rotation possible) |
+| 5c | Plus de suppression d'entreprise depuis l'administration éditeur |
+| 5d | Relations un-à-un et plusieurs-à-plusieurs contrôlées dans la même entreprise ; règle sur `update()` et `bulk_create` dans `CLAUDE.md` |
+| 5e | Propriétaire déclaré par chaque modèle (`permission_owner_field`) ; propriétaire vide : accès refusé |
+| 5f | Clé de réinitialisation acceptée seulement sur l'hôte du compte |
+| 5g | Cookies `__Host-sessionid` et `__Host-csrftoken` en production |
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 161 tests ; couverture : `permissions.py` 99 %, `accounts/services.py` 95 %, `core/services.py` 97 %, total 96 % |
+| `make test` | 187 tests |
 | `make e2e` | 25 parcours, dont le parcours 8 (isolation) et les 4 profils |
 | `make check` | aucune alerte, dont `--deploy` |
 
@@ -60,7 +75,8 @@ Date : 19 octobre 2026. Branche : `lot-1`.
 
 ## Écarts et points à relire
 
-- Décisions prises pendant le lot : L1-10 à L1-17 dans `00-decisions.md`, statut « À confirmer ».
-- **Vitrine (L1-12).** La redirection révèle à quelle entreprise appartient une adresse connue. Une variante plus discrète enverrait le lien par e-mail.
-- **Données de démonstration.** Louise Martin a 5 collaborateurs directs dans le prototype ; `07-donnees-de-demo.md` parlait d'une « équipe de 6 ». La fiche est précisée.
+- Décisions L1-10 à L1-17 validées ; décisions de l'audit A1-01 à A1-07 dans `00-decisions.md`.
+- **Vitrine.** Un écart de temps de réponse subsiste quand un e-mail part ; il disparaît au lot 3 avec l'envoi en tâche de fond.
+- **Données de démonstration.** Louise Martin a 5 collaborateurs directs, conforme au prototype.
+- **Mise à jour d'un poste existant.** Recharger les données (`seed_demo --reset`) : les secrets TOTP enregistrés avant le chiffrement ne sont pas migrés.
 - **Écrans d'allauth.** Les écrans principaux (connexion, mot de passe oublié, code, activation) utilisent les composants de Dianna. Les écrans secondaires (codes de secours, sécurité du compte) passent par les éléments d'allauth restylés.
