@@ -31,11 +31,15 @@ def sign_in(page: Page, url: str, email: str, password: str = PASSWORD):
     page.get_by_role("button", name="Se connecter").click()
 
 
-def test_public_page_leads_to_the_company_login(page, urls, company_a):
+def test_public_page_sends_the_link_by_email(page, urls, company_a):
+    from django.core import mail
+
     page.goto(urls("", "/"))
     page.get_by_label("Adresse e-mail professionnelle").fill(company_a.employee.email)
-    page.get_by_role("button", name="Continuer").click()
-    expect(page).to_have_url(urls("exemple", "/connexion/"))
+    page.get_by_role("button", name="Recevoir le lien").click()
+    expect(page.get_by_text("vous allez recevoir un lien de connexion")).to_be_visible()
+    link = next(line for line in mail.outbox[-1].body.splitlines() if "/connexion/" in line)
+    page.goto(link.strip())
     expect(page.get_by_text("Espace Exemple SAS")).to_be_visible()
 
 

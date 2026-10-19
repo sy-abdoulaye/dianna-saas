@@ -4,12 +4,17 @@
 {% block content %}
   <div class="flex flex-col gap-2">
     <h1 class="h1">{% translate "Accéder à mon espace" %}</h1>
-    <p class="meta">{% translate "Saisissez votre adresse e-mail professionnelle : nous vous conduisons vers l'espace de votre entreprise." %}</p>
+    <p class="meta">{% translate "Saisissez votre adresse e-mail professionnelle : nous vous envoyons le lien de l'espace de votre entreprise." %}</p>
   </div>
-  <form class="card card-body flex flex-col gap-4" method="post" novalidate>
-    {% csrf_token %}
-    {% include "components/form_errors.html" %}
-    {% include "components/field.html" with field=form.email %}
-    {% button _("Continuer") variant="primary" icon="right" type="submit" block=True %}
-  </form>
+  {% if sent %}
+    {% translate "Si cette adresse correspond à un compte Dianna, vous allez recevoir un lien de connexion par e-mail." as sent_text %}
+    {% include "components/banner.html" with kind="ok" text=sent_text %}
+  {% else %}
+    <form class="card card-body flex flex-col gap-4" method="post" novalidate>
+      {% csrf_token %}
+      {% include "components/form_errors.html" %}
+      {% include "components/field.html" with field=form.email %}
+      {% button _("Recevoir le lien") variant="primary" icon="send" type="submit" block=True %}
+    </form>
+  {% endif %}
 {% endblock %}

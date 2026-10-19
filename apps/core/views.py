@@ -1,19 +1,17 @@
 """Pages d'erreur du design system, notifications et vitrine."""
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils.csp import CSP
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.core import notifications
-from apps.core.forms import SpaceAccessForm
-from apps.core.hosts import company_url
+from apps.core.forms import SpaceAccessForm, email_digest, send_space_link
+from apps.core.http import client_ip
 from apps.core.models import Notification
 from apps.people.models import Role
 
@@ -78,48 +76,43 @@ def notification_read_all(request):
 
 # ---------- Vitrine (dianna.fr) ----------
 
-ACCESS_RATE = 10  # tentatives par adresse IP et par période
-ACCESS_PERIOD = 10 * 60
+ACCESS_PERIOD = 10 * 60  # secondes
+ACCESS_LIMIT_PER_IP = 10
+ACCESS_LIMIT_PER_ADDRESS = 3
 
 
-def _too_many_attempts(request) -> bool:
-    key = f"space-access:{request.META.get('REMOTE_ADDR', '')}"
-    attempts = cache.get_or_set(key, 0, ACCESS_PERIOD)
-    if attempts >= ACCESS_RATE:
-        return True
+def _over_limit(key: str, limit: int) -> bool:
+    cache.add(key, 0, ACCESS_PERIOD)
     try:
-        cache.incr(key)
-    except ValueError:
+        attempts = cache.incr(key)
+    except ValueError:  # entrée expirée entre add et incr
         cache.set(key, 1, ACCESS_PERIOD)
-    return False
+        attempts = 1
+    return attempts > limit
 
 
-def _space_access_csp(request):
-    """La vitrine redirige le formulaire vers le sous-domaine de l'entreprise : form-action
-    l'autorise pour cette seule page (la CSP s'applique aussi aux redirections)."""
-    default = "443" if request.scheme == "https" else "80"
-    port = "" if request.get_port() == default else f":{request.get_port()}"
-    return {
-        **settings.SECURE_CSP,
-        "form-action": [CSP.SELF, f"{request.scheme}://*.{settings.BASE_DOMAIN}{port}"],
-    }
+def _too_many_attempts(request, email: str) -> bool:
+    """Limite par adresse IP réelle (proxys de confiance) et par adresse saisie, hachée."""
+    by_ip = _over_limit(f"space-access:ip:{client_ip(request)}", ACCESS_LIMIT_PER_IP)
+    by_address = _over_limit(f"space-access:email:{email_digest(email)}", ACCESS_LIMIT_PER_ADDRESS)
+    return by_ip or by_address
 
 
 @login_not_required
 @require_http_methods(["GET", "POST"])
 def public_home(request):
-    response = _public_home(request)
-    response._csp_config = _space_access_csp(request)  # même attribut que csp_override
-    return response
+    """Page vitrine « Accéder à mon espace » (T-08, L1-12 variante discrète).
 
-
-def _public_home(request):
-    """Page vitrine minimale : « Accéder à mon espace » (T-08)."""
+    La réponse est identique que l'adresse corresponde ou non à un compte : le lien vers le
+    sous-domaine de l'entreprise est envoyé par e-mail, jamais affiché."""
     form = SpaceAccessForm(request.POST or None)
-    if request.method == "POST":
-        if _too_many_attempts(request):
+    sent = False
+    if request.method == "POST" and form.is_valid():
+        email = form.cleaned_data["email"]
+        if _too_many_attempts(request, email):
             form.add_error(None, _("Trop de tentatives. Réessayez dans quelques minutes."))
-        elif form.is_valid():
-            return redirect(company_url(form.company, "/connexion/", request))
+        else:
+            send_space_link(email, request)
+            sent = True
     status = 422 if form.errors else 200
-    return render(request, "public/home.html", {"form": form}, status=status)
+    return render(request, "public/home.html", {"form": form, "sent": sent}, status=status)

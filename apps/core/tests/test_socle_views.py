@@ -93,41 +93,7 @@ def test_dashboard_greets_the_user(client_for, company_a):
     assert "Salarié · Exemple SAS" in content
 
 
-# ---------- Vitrine (T-08) ----------
-
-
-def public_client():
-    return Client(HTTP_HOST="localhost")
-
-
-def test_public_page_redirects_to_the_company_space(company_a):
-    response = public_client().post("/", {"email": company_a.employee.email.upper()})
-    assert response.status_code == 302
-    assert response["Location"] == "http://exemple.localhost/connexion/"
-
-
-def test_public_page_unknown_address(company_a):
-    response = public_client().post("/", {"email": "inconnu@ailleurs.fr"})
-    assert response.status_code == 422
-    assert "Aucun espace n&#x27;est associé à cette adresse" in response.content.decode()
-
-
-def test_public_page_limits_attempts(company_a):
-    from django.core.cache import cache
-
-    cache.clear()
-    client = public_client()
-    for _ in range(10):
-        client.post("/", {"email": "inconnu@ailleurs.fr"})
-    response = client.post("/", {"email": company_a.employee.email})
-    assert response.status_code == 422
-    assert "Trop de tentatives" in response.content.decode()
-    cache.clear()
-
-
-def test_public_page_csp_allows_only_company_subdomains_for_the_redirect(db):
-    header = public_client().get("/").headers["Content-Security-Policy"]
-    assert "form-action 'self' http://*.localhost" in header
+# Vitrine : apps/core/tests/test_public.py
 
 
 # ---------- Administration éditeur (T-22) ----------
