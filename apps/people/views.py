@@ -191,11 +191,14 @@ class EmployeeFormView(PermissionRequiredMixin, View):
         return employee
 
     def form(self, request, employee, data=None, files=None):
+        # Son propre profil n'est pas modifiable (docs/modules/04-administration.md) : sur sa
+        # propre fiche, le champ n'existe pas ; update_employee le refuse aussi.
+        is_self = employee.pk is not None and employee.pk == request.employee.pk
         return EmployeeForm(
             data,
             files,
             instance=employee,
-            can_assign_role=permissions.can(request.employee, "people.assign_role"),
+            can_assign_role=permissions.can(request.employee, "people.assign_role") and not is_self,
         )
 
     def render_form(self, request, form, employee, status=200):

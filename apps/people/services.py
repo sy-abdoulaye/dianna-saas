@@ -83,12 +83,19 @@ def ensure_an_admin_remains(employee, *, new_role=None, leaving=False):
 
 @transaction.atomic
 def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
+    """Crée la fiche au profil Salarié ; un autre profil est ensuite attribué par change_role
+    (journalisé people.role_changed, comme tout changement de profil)."""
+    data = dict(data)
+    role = data.pop("role", None) or Role.EMPLOYEE
     employee = Employee(**data)
     employee.status = status_for_arrival(employee.arrival_date)
     if photo is not None:
         employee.photo.save(photo.name, photo, save=False)
     employee.save()
     _record(employee, actor, EmployeeChange.Kind.CREATED, request=request)
+    if role != Role.EMPLOYEE:
+        change_role(employee, role, actor=actor, request=request)
+        employee.refresh_from_db()
     return employee
 
 
@@ -96,7 +103,14 @@ def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
 def update_employee(
     employee: Employee, data: dict, *, actor, photo=None, remove_photo=False, request=None
 ) -> list[str]:
-    """Applique les changements et renvoie la liste des champs modifiés."""
+    """Applique les changements et renvoie la liste des champs modifiés. Le profil d'accès
+    passe par change_role (refus sur sa propre fiche, dernier administrateur protégé,
+    journal people.role_changed)."""
+    data = dict(data)
+    role = data.pop("role", None)
+    role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
+    if role_changed:
+        change_role(employee, role, actor=actor, request=request)
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     changed = []
     for name, value in data.items():
@@ -104,8 +118,6 @@ def update_employee(
         if current != value:
             setattr(employee, name, value)
             changed.append(name)
-    if "role" in changed:
-        ensure_an_admin_remains(Employee.objects.get(pk=employee.pk), new_role=data["role"])
     if "arrival_date" in changed and employee.status != EmployeeStatus.LEFT:
         new_status = status_for_arrival(employee.arrival_date)
         if new_status != employee.status:
@@ -122,7 +134,7 @@ def update_employee(
     if changed:
         employee.save()
         _record(employee, actor, EmployeeChange.Kind.UPDATED, changed, request=request)
-    return changed
+    return ["role", *changed] if role_changed else changed
 
 
 @transaction.atomic

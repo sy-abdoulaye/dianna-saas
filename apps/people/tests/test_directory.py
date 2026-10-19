@@ -13,6 +13,7 @@ from apps.accounts.models import User
 from apps.core.models import AuditLog
 from apps.core.tenancy import tenant_context
 from apps.core.tests.test_files import bomb_png
+from apps.people import services
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 from apps.people.tests.conftest import image_bytes
 from tests.factories import EmployeeFactory
@@ -292,18 +293,80 @@ def test_last_admin_cannot_be_demoted_from_the_record(client_for, company_a):
     response = client_for(second).post(f"/annuaire/{admin.public_id}/modifier/", data)
     assert response.status_code == 302  # il reste « second »
     Employee.all_companies.filter(pk=second.pk).update(role=Role.HR)
+    # Administrateur unique : personne ne peut le rétrograder, même hors requête (service).
     third = EmployeeFactory(company=company_a.company, role=Role.ADMIN)
-    response = client_for(third).post(
-        f"/annuaire/{third.public_id}/modifier/",
-        form_data(
-            company_a,
-            first_name=third.first_name,
-            last_name=third.last_name,
-            email=third.email,
-            role=Role.EMPLOYEE,
-        ),
+    Employee.all_companies.filter(company=company_a.company, role=Role.ADMIN).exclude(
+        pk=third.pk
+    ).update(role=Role.HR)
+    with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
+        services.update_employee(third, {"role": Role.EMPLOYEE}, actor=None)
+    assert "dernier administrateur actif" in str(error.value.message)
+
+
+def own_form_data(company_data, person, **overrides):
+    return form_data(
+        company_data,
+        first_name=person.first_name,
+        last_name=person.last_name,
+        email=person.email,
+        **overrides,
     )
-    assert "dernier administrateur actif" in response.content.decode()
+
+
+def test_own_role_field_is_not_shown_and_cannot_be_forged(client_for, company_a):
+    admin = company_a.admin
+    EmployeeFactory(company=company_a.company, role=Role.ADMIN)  # pas le dernier admin
+    client = client_for(admin)
+    page = client.get(f"/annuaire/{admin.public_id}/modifier/").content.decode()
+    assert 'name="role"' not in page and "Accès à Dianna" not in page
+    other = client.get(f"/annuaire/{company_a.employee.public_id}/modifier/").content.decode()
+    assert 'name="role"' in other  # le champ existe bien pour les autres fiches
+    response = client.post(
+        f"/annuaire/{admin.public_id}/modifier/", own_form_data(company_a, admin, role="employee")
+    )
+    assert response.status_code == 302
+    assert Employee.all_companies.get(pk=admin.pk).role == Role.ADMIN
+
+
+def test_update_employee_refuses_a_change_of_ones_own_role(company_a):
+    admin = company_a.admin
+    EmployeeFactory(company=company_a.company, role=Role.ADMIN)
+    with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
+        services.update_employee(admin, {"role": Role.EMPLOYEE}, actor=admin)
+    assert str(error.value.message) == "Vous ne pouvez pas modifier votre propre profil."
+    assert Employee.all_companies.get(pk=admin.pk).role == Role.ADMIN
+
+
+def role_changes(company_data):
+    with tenant_context(company_data.company):
+        return list(
+            AuditLog.objects.filter(action="people.role_changed").values_list("summary", flat=True)
+        )
+
+
+def test_role_change_from_the_record_goes_through_change_role(client_for, company_a):
+    target = company_a.employee
+    response = client_for(company_a.admin).post(
+        f"/annuaire/{target.public_id}/modifier/", own_form_data(company_a, target, role="hr")
+    )
+    assert response.status_code == 302
+    assert Employee.all_companies.get(pk=target.pk).role == Role.HR
+    assert role_changes(company_a) == [
+        f"Profil de {target.full_name} : Salarié → Ressources humaines"
+    ]
+    with tenant_context(company_a.company):
+        kinds = list(target.changes.values_list("kind", flat=True))
+    assert EmployeeChange.Kind.ROLE in kinds
+
+
+def test_profile_given_at_creation_is_logged_as_a_role_change(client_for, company_a):
+    response = client_for(company_a.admin).post(
+        "/annuaire/nouveau/", form_data(company_a, role="admin", invite="")
+    )
+    assert response.status_code == 302
+    created = Employee.all_companies.get(company=company_a.company, email="ada.lovelace@exemple.fr")
+    assert created.role == Role.ADMIN
+    assert role_changes(company_a) == ["Profil de Ada Lovelace : Salarié → Administrateur"]
 
 
 # ---------- Photo ----------
