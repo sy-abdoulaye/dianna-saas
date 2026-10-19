@@ -62,7 +62,7 @@ class TenantModel(models.Model):
         abstract = True
 ```
 
-- `TenantManager.get_queryset()` filtre sur `current_company`. **S'il n'y a pas d'entreprise courante, il lève une exception** (jamais de requête non filtrée par accident).
+- `TenantManager.get_queryset()` filtre sur `current_company` et **lie le queryset à cette entreprise**. À l'évaluation (lecture, comptage, mise à jour, suppression, sous-requête), il lève `NoCurrentCompanyError` sans entreprise courante et `CompanyMismatchError` si l'entreprise courante n'est pas celle de la construction, ou si le queryset a été construit sans entreprise (jamais de liste vide silencieuse ni de données d'une autre entreprise). En production, les vues et les formulaires sont importés pendant la première requête d'un processus : un queryset de classe serait lié à l'entreprise de cette requête.
 - `save()` renseigne `company` depuis le contexte et refuse une incohérence.
 - Les clés étrangères entre objets métier sont vérifiées par `clean()` (même entreprise).
 - Les contraintes d'unicité incluent `company` (ex. `UniqueConstraint(fields=["company", "email"])`).
