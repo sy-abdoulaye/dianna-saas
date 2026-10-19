@@ -1,0 +1,7 @@
+{% for field in attrs.form %}
+  {% if field.is_hidden %}
+    {{ field }}
+  {% else %}
+    {% include "components/field.html" with field=field %}
+  {% endif %}
+{% endfor %}

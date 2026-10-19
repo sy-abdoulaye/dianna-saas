@@ -15,6 +15,10 @@ Les quatre modules partagent le moteur de validation (`02-architecture.md`) et l
 
 **États vides :** « Rien à valider » (onglet À valider) ; « Aucune demande ne correspond » (filtres) ; « Aucune demande pour le moment » avec bouton de création (Mes demandes).
 
+**Valideur (L1-02, M-12) :** le manager direct du demandeur, quel que soit son profil. Sans manager : les RH et administrateurs autres que le demandeur ; s'il n'y en a aucun, la demande est validée automatiquement et le journal note « validation automatique : aucun valideur disponible ».
+
+**Annulation après envoi (L1-08) :** la demande est supprimée ; le journal d'audit garde « demande envoyée puis retirée ».
+
 **Transitions :** voir `02-architecture.md`. Après envoi, validation ou refus : notification visuelle avec « Annuler » (30 s, L0-03), notification au destinataire, e-mail selon M-16, journal d'audit.
 
 ## Télétravail

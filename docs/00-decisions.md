@@ -30,9 +30,9 @@ Versions vérifiées le 18 octobre 2026.
 | T-05 | HTMX | **2.x** avec `django-htmx`. La 4.0 (sortie le 28 août 2026) change l'héritage des attributs et les noms d'événements ; on migrera plus tard | 4.0 directement | À confirmer |
 | T-06 | Fragments HTMX | Fragments intégrés à Django 6 (`{% partialdef %}`) pour les résultats de liste d'une page ; fichiers `templates/<app>/partials/` pour les fragments réutilisés (modales, lignes, blocs communs) | `django-template-partials` | Validé (18 oct. 2026) |
 | T-07 | Architecture multi-entreprise | Une base, un schéma, colonne `company_id` sur chaque table métier, gestionnaire filtrant automatiquement, entreprise résolue par le middleware. Défense en profondeur par Row Level Security PostgreSQL au lot 8 | Un schéma par entreprise (`django-tenants`) : isolation plus forte, mais migrations et opérations plus lourdes | À confirmer |
-| T-08 | Accès des entreprises | Sous-domaine par entreprise (`exemple.dianna.fr`) | Domaine unique et choix de l'entreprise à la connexion | À confirmer |
-| T-09 | Comptes | `User` personnalisé, connexion par e-mail. Un compte appartient à une seule entreprise en V1 (hypothèse H8 du cahier des charges), mais le modèle `Employee` sépare l'identité de connexion de la fiche RH pour permettre le multi-entreprise plus tard | — | À confirmer |
-| T-10 | Authentification | `django-allauth` : e-mail et mot de passe, réinitialisation, double authentification (TOTP) obligatoire pour RH et Administrateur : inscription imposée à la première connexion et quand un profil passe à RH ou Admin ; désactivable en développement par le réglage `DEMO_DISABLE_2FA` (refusé si `DEBUG = False`). SSO Google et Microsoft au lot 8 | Authentification Django native et code maison | À confirmer |
+| T-08 | Accès des entreprises | Sous-domaine par entreprise (`exemple.dianna.fr`). `dianna.fr` : page vitrine minimale avec « Accéder à mon espace » (saisie de l'e-mail, lien vers le sous-domaine de l'entreprise envoyé par e-mail, L1-12) | Domaine unique et choix de l'entreprise à la connexion | Validé (18 oct. 2026) |
+| T-09 | Comptes | `User` personnalisé, connexion par e-mail. `User.email` est l'identifiant de connexion, `Employee.email` le contact professionnel. À l'invitation, le compte est créé avec l'e-mail de la fiche ; modifier l'e-mail de la fiche ne change pas l'identifiant ; changer d'identifiant est une action séparée confirmée par e-mail. Un compte appartient à une seule entreprise en V1 : inviter une adresse déjà utilisée dans une autre entreprise est refusé (« Cette adresse est déjà utilisée sur Dianna. Utilisez une autre adresse ou contactez le support. ») | — | Validé (18 oct. 2026) |
+| T-10 | Authentification | `django-allauth` 65.19.1 (compatibilité Django 6.1 vérifiée au début du lot 1), monté sous `/connexion/` : e-mail et mot de passe, réinitialisation, TOTP. Double authentification obligatoire pour RH, Administrateur et équipe Dianna, imposée par un **middleware maison** (inscription forcée à la première connexion et quand le profil passe à RH ou Admin) ; désactivable en développement par `DEMO_DISABLE_2FA` (refusé si `DEBUG = False`). SSO Google et Microsoft au lot 8 | Authentification Django native et code maison | Validé (18 oct. 2026) |
 | T-11 | Tâches en arrière-plan | Cadre de tâches de Django 6 (`django.tasks`) avec le moteur base de données du paquet `django-tasks` : pas de Redis à opérer | Celery + Redis si le volume l'exige | À confirmer |
 | T-12 | Fichiers | Stockage objet compatible S3 en France (Scaleway Object Storage ou OVHcloud), `django-storages`, bucket privé, URL signées de 5 minutes | Stockage disque local (déconseillé en production) | À confirmer |
 | T-13 | E-mails | `django-anymail` avec un fournisseur européen (Brevo ou Scaleway Transactional Email) | — | À confirmer |
@@ -44,7 +44,7 @@ Versions vérifiées le 18 octobre 2026.
 | T-19 | Configuration | Variables d'environnement (`django-environ`), réglages séparés `base`, `dev`, `test`, `prod` | — | À confirmer |
 | T-20 | Polices | IBM Plex Sans, IBM Plex Mono et Schibsted Grotesk hébergées dans `static/fonts/` (licence OFL), pas d'appel à Google Fonts en production (RGPD) | — | À confirmer |
 | T-21 | Supervision | Sentry (région UE) et journaux structurés sans données personnelles | Solution auto-hébergée | À confirmer |
-| T-22 | Super-administration éditeur | Interface d'administration Django réservée à l'équipe Dianna (création des entreprises, activation des modules). Aucun accès aux données métier d'une entreprise sans accès support tracé | Back-office dédié plus tard | À confirmer |
+| T-22 | Super-administration éditeur | Administration Django réservée à l'équipe Dianna, servie **uniquement sur `admin.dianna.fr`** en production (`/editeur/` en développement), double authentification obligatoire. Un membre de l'équipe Dianna n'a **aucun droit particulier** sur un sous-domaine client. Aucun accès aux données métier sans accès support tracé (lot 8) | Back-office dédié plus tard | Validé (18 oct. 2026) |
 
 ## Décisions du lot 0
 
@@ -57,15 +57,59 @@ Versions vérifiées le 18 octobre 2026.
 | L0-05 | Branche principale | `main` | Validé (18 oct. 2026) |
 | L0-06 | Dépendances ajoutées | `psycopg` 3 (pilote PostgreSQL), `whitenoise` (fichiers statiques), `gunicorn` (serveur), `django-htmx`, `pytest-cov` (couverture), `pytest-playwright` (parcours de bout en bout sans Node) | Validé (18 oct. 2026) |
 | L0-07 | Ressources front copiées dans le dépôt | HTMX 2.0.11 (`static/vendor/`), icônes `lucide-static` 1.50.0 (sprite généré), polices Fontsource 5.3.0 (sous-ensemble latin, woff2, licence OFL) : aucun appel à un CDN, compatible avec la CSP | Validé (18 oct. 2026) |
-| L0-08 | Port PostgreSQL de développement | **5433** sur l'hôte (un PostgreSQL local occupe souvent 5432), réglable par `DB_PORT` dans `docker-compose.yml` | À confirmer |
-| L0-09 | Envoi des e-mails | Réglage `MAILERS` de Django 6.1 (`EMAIL_BACKEND` est déprécié), variable `MAIL_BACKEND` ; console en développement | À confirmer |
-| L0-10 | Icônes | Icônes Lucide (design system) sous les clés courtes du prototype (`dash`, `users`, `home`…) ; correspondance dans `scripts/vendor_assets.py`. Le prototype dessinait ses propres tracés | À confirmer |
-| L0-11 | Configuration HTMX | `allowEval` désactivé, `historyCacheSize: 0` (aucune copie de page RH dans le `localStorage`), `attributesToSettle` sans `style` (CSP), styles d'indicateur dans `app.css` | À confirmer |
-| L0-12 | Onglets | Liens de navigation (une URL par onglet, `aria-current="page"`), pas de `role="tablist"` : l'onglet est dans l'URL et le bouton Retour fonctionne | À confirmer |
-| L0-13 | Administration de l'éditeur | Montée provisoirement sur `/editeur/` ; l'hôte définitif se décide au lot 1 avec T-08 | À confirmer |
-| L0-14 | Pages d'erreur | Rendues dans la mise en page d'authentification tant qu'il n'y a pas d'utilisateur connecté (lot 1). « Module désactivé » répond 403 | À confirmer |
-| L0-15 | Journal d'accès | Gunicorn journalise méthode, chemin, statut et durée, sans query string ni adresse IP (les recherches contiennent des noms) | À confirmer |
-| L0-16 | Notifications et modales | Pendant qu'une modale est ouverte, la zone des notifications est placée dans la modale pour rester visible et cliquable | À confirmer |
+| L0-08 | Port PostgreSQL de développement | **5434** sur l'hôte (un PostgreSQL local occupe souvent 5432), réglable par `DB_PORT` dans `docker-compose.yml` | Validé (18 oct. 2026) |
+| L0-09 | Envoi des e-mails | Réglage `MAILERS` de Django 6.1 (`EMAIL_BACKEND` est déprécié), variable `MAIL_BACKEND` ; console en développement. **Lot 8 :** vérifier que `django-anymail` fonctionne avec `MAILERS` | Validé (18 oct. 2026) |
+| L0-10 | Icônes | Icônes Lucide (design system) sous les clés courtes du prototype (`dash`, `users`, `home`…) ; correspondance dans `scripts/vendor_assets.py`. Le prototype dessinait ses propres tracés | Validé (18 oct. 2026) |
+| L0-11 | Configuration HTMX | `allowEval` désactivé, `historyCacheSize: 0` (aucune copie de page RH dans le `localStorage`), `attributesToSettle` sans `style` (CSP), styles d'indicateur dans `app.css` | Validé (18 oct. 2026) |
+| L0-12 | Onglets | Liens de navigation (une URL par onglet, `aria-current="page"`), pas de `role="tablist"` : l'onglet est dans l'URL et le bouton Retour fonctionne | Validé (18 oct. 2026) |
+| L0-13 | Administration de l'éditeur | `/editeur/` en développement seulement ; en production, `admin.dianna.fr` (T-22) | Validé (18 oct. 2026) |
+| L0-14 | Pages d'erreur | Rendues dans la mise en page d'authentification tant qu'il n'y a pas d'utilisateur connecté (lot 1). « Module désactivé » répond 403 | Validé (18 oct. 2026) |
+| L0-15 | Journal d'accès | Gunicorn journalise méthode, chemin, statut et durée, sans query string ni adresse IP (les recherches contiennent des noms) | Validé (18 oct. 2026) |
+| L0-16 | Notifications et modales | Pendant qu'une modale est ouverte, la zone des notifications est placée dans la modale pour rester visible et cliquable | Validé (18 oct. 2026) |
+
+## Décisions de préparation du lot 1 (18 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L1-01 | Entrées « Bientôt » du menu | Visibles mais non cliquables, info-bulle « Disponible dans une prochaine version ». Pas de page d'information | Validé (18 oct. 2026) |
+| L1-02 | Valideur et équipe | Le valideur est le **manager direct, quel que soit son profil**. Toute fiche active peut être choisie comme manager. Les droits « Équipe » de `04-permissions.md` découlent du fait d'avoir des collaborateurs directs, **pas du profil** ; le profil « Manager » n'ajoute aucun droit à lui seul | Validé (18 oct. 2026) |
+| L1-03 | Routes | Chemins visibles en français, noms de routes et code en anglais | Validé (18 oct. 2026) |
+| L1-04 | « Arrivée prochaine » | Visible de tous avec son badge, comptée dans le filtre « En poste » | Validé (18 oct. 2026) |
+| L1-05 | Annuaire | Fait partie du socle, non désactivable (retiré des modules activables) | Validé (18 oct. 2026) |
+| L1-06 | Planning d'un manager | Son service, plus les membres de son équipe directe rattachés à d'autres services | Validé (18 oct. 2026) |
+| L1-07 | Astreinte au planning | Elle se cumule avec les autres états : la case montre l'état principal (congé > télétravail > sur site) et un repère « A » | Validé (18 oct. 2026) |
+| L1-08 | Annulation après envoi | La demande est supprimée ; le journal d'audit garde « demande envoyée puis retirée » | Validé (18 oct. 2026) |
+| L1-09 | Anonymat des questionnaires | Risque résiduel accepté pour la V1 (rapprochement possible en base par l'ordre physique des lignes et la date du jour quand les réponses sont peu nombreuses). À documenter dans la fiche et à revoir au lot 8 | Validé (18 oct. 2026) |
+
+## Décisions prises pendant le lot 1 (19 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L1-10 | Routage par hôte | `CompanyMiddleware` choisit les routes selon l'hôte : `config.urls_public` (vitrine), `config.urls_platform` (éditeur), `config.urls` (espace client). En développement : `localhost:8000`, `admin.localhost:8000` et `<slug>.localhost:8000` ; `/editeur/` reste aussi disponible sur `localhost` (L0-13) | Validé (19 oct. 2026) |
+| L1-11 | Connexion liée à l'hôte | Un compte ne se connecte que sur le sous-domaine de son entreprise (même message qu'un mauvais mot de passe) ; une session présentée sur un autre hôte est fermée. L'équipe Dianna ne se connecte que sur l'hôte éditeur | Validé (19 oct. 2026) |
+| L1-12 | Vitrine et confidentialité | **Variante discrète** : la page affiche toujours « Si cette adresse correspond à un compte Dianna, vous allez recevoir un lien de connexion par e-mail. » ; le lien vers le sous-domaine de l'entreprise part par e-mail. Plus d'exception CSP. Limite : 10 essais par 10 minutes par adresse IP réelle (X-Forwarded-For selon `TRUSTED_PROXY_COUNT`) et 3 par adresse saisie (empreinte HMAC). Écart de temps de réponse quand un e-mail part : supprimé au lot 3 (envoi en tâche de fond) | Validé (19 oct. 2026) |
+| L1-13 | Mot de passe oublié | Le lien n'est envoyé qu'aux comptes de l'espace où la demande est faite ; une adresse inconnue ne reçoit aucun e-mail (`ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False`) ; la réponse est la même dans tous les cas | Validé (19 oct. 2026) |
+| L1-14 | E-mail d'invitation | Envoyé après la validation de la transaction, de façon synchrone, jusqu'à l'arrivée des tâches en arrière-plan (T-11, lot 3) | Validé (19 oct. 2026) |
+| L1-15 | Suppression d'un service ou d'un site | Clés étrangères des fiches en `RESTRICT` : un service ou un site utilisé ne peut pas être supprimé, mais la suppression d'une entreprise entière reste possible | Validé (19 oct. 2026) |
+| L1-16 | Cache | Mémoire en développement, base de données en production (`createcachetable` au déploiement) : la limitation des tentatives est partagée entre les processus | Validé (19 oct. 2026) |
+| L1-17 | Écrans du lot 1 | Tableau de bord réduit à l'en-tête et à l'état « Tout est à jour » ; recherche globale et « Ma fiche » masquées jusqu'à l'annuaire (lot 2) ; logo de l'entreprise reporté au lot 2 (stockage des fichiers, T-12), son nom est affiché à la connexion ; pas de notification visuelle à la connexion et à la déconnexion | Validé (19 oct. 2026) |
+
+## Audit du lot 1 (19 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| A1-01 | Administration éditeur | Seuls `Company` (avec `CompanyModule` en ligne) et les comptes de l'équipe Dianna sont inscrits ; `mfa.Authenticator`, `account.EmailAddress` et `auth.Group` sont retirés ; un test échoue si un autre modèle est inscrit. Pas de suppression d'entreprise (procédure RGPD au lot 8) | Validé (19 oct. 2026) |
+| A1-02 | Secrets de double authentification | Chiffrés par `MultiFernet` avec `MFA_ENCRYPTION_KEY` (distincte de `SECRET_KEY`, obligatoire en production, plusieurs clés pour en changer) ; dépendance `cryptography` ajoutée | Validé (19 oct. 2026) |
+| A1-03 | Relations entre objets métier | Clés étrangères, relations un-à-un (`save`) et plusieurs-à-plusieurs (`m2m_changed`) vérifiées dans la même entreprise ; pas de `update()` ni de `bulk_create` sur ces relations sans vérification explicite (CLAUDE.md) | Validé (19 oct. 2026) |
+| A1-04 | Propriétaire des objets | Chaque modèle soumis aux permissions déclare `permission_owner_field` ; un propriétaire vide refuse l'accès | Validé (19 oct. 2026) |
+| A1-05 | Réinitialisation du mot de passe | La clé n'est acceptée que sur l'hôte de l'entreprise du compte (ou l'hôte éditeur pour l'équipe Dianna) | Validé (19 oct. 2026) |
+| A1-06 | Cookies en production | `__Host-sessionid` et `__Host-csrftoken` : sans Domain, `Path=/`, `Secure` | Validé (19 oct. 2026) |
+| A1-07 | Adresse IP du client | Lue derrière `TRUSTED_PROXY_COUNT` proxys de confiance (journal d'audit, vitrine, allauth) | Validé (19 oct. 2026) |
+
+## Pour plus tard
+
+- **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
+- **Lot 8 :** le blocage après des échecs de connexion est indexé par adresse et par hôte.
 
 ## Métier : à confirmer
 
@@ -82,7 +126,7 @@ Versions vérifiées le 18 octobre 2026.
 | M-09 | Signature des entretiens | Signature simple dans l'application (horodatage et identité), pas de signature électronique qualifiée | À confirmer |
 | M-10 | Anonymat des questionnaires | Les réponses sont stockées sans lien avec le répondant ; un reçu séparé empêche de répondre deux fois. Résultats masqués sous 3 réponses | À confirmer |
 | M-11 | Suivi d'intervention | Un compte rendu par intervention et par mois, validé par le manager direct | À confirmer |
-| M-12 | Absence du valideur | Les RH et l'administrateur peuvent agir sur toute demande, tout entretien et tout compte rendu de l'entreprise à la place du manager (bandeau d'avertissement « Vous agissez à la place de {manager} », trace au journal). Leur onglet « À valider » et leurs compteurs ne montrent que les éléments des personnes sans manager. Délégation nominative au lot 8 | À confirmer |
+| M-12 | Absence du valideur | Les RH et l'administrateur peuvent agir sur toute demande, tout entretien et tout compte rendu de l'entreprise à la place du manager (bandeau « Vous agissez à la place de {manager} », trace au journal). Leur onglet « À valider » et leurs compteurs ne montrent que les éléments des personnes sans manager. **Personne sans manager :** ses demandes vont aux RH et administrateurs autres qu'elle-même ; s'il n'y en a aucun, la demande est validée automatiquement, avec la ligne de journal « validation automatique : aucun valideur disponible ». Délégation nominative au lot 8 | Validé (18 oct. 2026) |
 | M-13 | Conservation des données | Justificatifs de transport : 3 ans. Entretiens : durée du contrat + 5 ans. Notes de suivi : idem. Journal d'audit : 1 an. Salarié parti : fiche archivée, données supprimées ou anonymisées à l'échéance | À confirmer (avis juridique) |
 | M-14 | Facturation | Hors V1 : abonnements gérés manuellement. Stripe en V2 | À confirmer |
 | M-15 | Import des salariés | Import CSV par l'administrateur, avec aperçu et rapport d'erreurs | À confirmer |

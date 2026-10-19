@@ -31,11 +31,23 @@ Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est
 
 ```bash
 make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind
-make up          # PostgreSQL 18 (Docker, port 5433), CSS, migrations, serveur sur :8000
+make up          # PostgreSQL 18 (Docker, port 5434), CSS, migrations, serveur sur :8000
 make css         # dans un second terminal : recompile la feuille de style à chaque modification
 ```
 
-Le guide de style des composants est sur http://localhost:8000/dev/styleguide/ (développement uniquement).
+Adresses (les sous-domaines de `localhost` fonctionnent sans configuration dans Chrome et Firefox) :
+
+| Adresse | Contenu |
+|---|---|
+| http://localhost:8000 | Vitrine « Accéder à mon espace » |
+| http://exemple.localhost:8000 | Espace Exemple SAS (`make seed`, mot de passe `demo-dianna-2026`) |
+| http://autre.localhost:8000 | Espace Autre SA (isolation) |
+| http://admin.localhost:8000 | Administration éditeur (`uv run python manage.py createsuperuser`) |
+| http://localhost:8000/dev/styleguide/ | Guide de style (développement uniquement) |
+
+En développement, `DEMO_DISABLE_2FA=True` dispense les comptes RH et Admin de démonstration de la double authentification. Pour la tester : `DEMO_DISABLE_2FA=false make up`.
+
+Déploiement : `python manage.py migrate` puis `python manage.py createcachetable` (cache partagé de la limitation des tentatives).
 Contrôles : `make lint`, `make test`, `make e2e`, `make check`. Liste complète : `make help`.
 
 ## À faire hors code avant la commercialisation

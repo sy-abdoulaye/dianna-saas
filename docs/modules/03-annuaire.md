@@ -18,6 +18,9 @@
 ## Règles
 
 - E-mail obligatoire, valide, unique dans l'entreprise. Message : « Cette adresse est déjà utilisée par {nom}. »
+- L'e-mail de la fiche est le contact professionnel ; l'identifiant de connexion (`User.email`) est créé avec cette adresse à l'invitation, puis ne change plus quand la fiche change. Changer d'identifiant est une action séparée, confirmée par e-mail (T-09). Inviter une adresse déjà utilisée dans une autre entreprise est refusé : « Cette adresse est déjà utilisée sur Dianna. Utilisez une autre adresse ou contactez le support. »
+- « Arrivée prochaine » : visible de tous avec son badge, comptée dans le filtre « En poste » (L1-04).
+- Manager : toute fiche active peut être choisie (L1-02).
 - Champs obligatoires : prénom, nom, e-mail, poste, service, site, date d'arrivée.
 - Date d'arrivée future : statut « Arrivée prochaine ».
 - Photo : JPG ou PNG, 2 Mo maximum ; sans photo, initiales.

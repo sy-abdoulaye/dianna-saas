@@ -1,10 +1,14 @@
-{% extends "layouts/auth.html" %}
+{% extends base_template|default:"layouts/auth.html" %}
 {% load i18n %}
 {% block title %}{% translate "Accès non autorisé" %} · Dianna{% endblock %}
 {% block content %}
   <div class="card">
     {% translate "Accès non autorisé" as title %}
-    {% translate "Votre profil ne permet pas d'ouvrir cette page. Si vous pensez que c'est une erreur, contactez un administrateur." as text %}
+    {% if role_label %}
+      {% blocktranslate asvar text %}Votre profil ({{ role_label }}) ne permet pas d'ouvrir cette page. Si vous pensez que c'est une erreur, contactez un administrateur.{% endblocktranslate %}
+    {% else %}
+      {% translate "Votre profil ne permet pas d'ouvrir cette page. Si vous pensez que c'est une erreur, contactez un administrateur." as text %}
+    {% endif %}
     {% translate "Retour au tableau de bord" as action %}
     {% include "components/empty_state.html" with heading="h1" icon="lock" title=title text=text action_label=action action_url="/" %}
   </div>

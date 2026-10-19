@@ -9,7 +9,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 | Champ | Type | Notes |
 |---|---|---|
 | name | char 120 | « Exemple SAS » |
-| slug | slug unique | sous-domaine |
+| slug | slug unique | sous-domaine ; réservés : www, admin, api, static, media, mail, support |
 | status | choix : active, suspended | |
 | logo | fichier, optionnel | |
 | telework_max_per_week | small int, défaut 2 | M-01, 0 à 5 |
@@ -17,7 +17,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 | summer_leave_hr_step | bool, défaut True | M-03 : validation finale RH des congés d'été |
 | timezone | char, défaut Europe/Paris | |
 
-**CompanyModule** (T) : `module` (choix : people, planning, telework, summer_leave, on_call, transport, equipment, announcements, surveys, careers, interventions), `enabled` (bool). Unique (company, module). Le socle et l'administration ne sont pas désactivables.
+**CompanyModule** (T) : `module` (choix : planning, telework, summer_leave, on_call, transport, equipment, announcements, surveys, careers, interventions), `enabled` (bool). Unique (company, module). Le socle, l'annuaire (L1-05) et l'administration ne sont pas désactivables.
 
 **Site** (T) : `name`, `address` optionnel. Unique (company, `Lower(name)`).
 **Service** (T) : `name`. Unique (company, `Lower(name)`).
@@ -25,7 +25,7 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 
 **User** (pas de company ; `AbstractBaseUser` + `PermissionsMixin`, créé au lot 0, L0-01) : `email` unique sans tenir compte de la casse (stocké en minuscules), `is_active`, `is_staff` (équipe Dianna : super-administrateur éditeur, accès à l'administration Django ; propriété `is_platform_staff`), `is_superuser`, groupes et permissions Django, `theme` (system, light, dark), `last_login`. Connexion par e-mail.
 
-**Invitation** (T) : `employee`, `token` (haché), `expires_at` (7 jours), `accepted_at`, `sent_by`.
+**Invitation** (T) : `employee`, `token_hash` (SHA-256 du jeton, le jeton n'est jamais stocké), `expires_at` (7 jours), `accepted_at`, `revoked_at` (remplacée par une nouvelle invitation), `renewal_requested_at` (lien expiré : administrateurs prévenus une seule fois), `sent_by`.
 
 **AuditLog** (T) : `actor` (Employee, nul pour la plateforme), `action` (char), `target_type`, `target_id`, `summary` (texte sans donnée sensible), `ip`, `created_at`. Index (company, created_at).
 
@@ -39,13 +39,13 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 |---|---|---|
 | user | OneToOne User, nul | nul tant que l'invitation n'est pas acceptée |
 | first_name, last_name | char | |
-| email | email | unique par entreprise, insensible à la casse : `UniqueConstraint(Lower("email"), "company")` |
+| email | email | contact professionnel, unique par entreprise, insensible à la casse : `UniqueConstraint(Lower("email"), "company")`. Distinct de l'identifiant `User.email` (T-09) |
 | phone, office | char, optionnels | |
 | photo | image, optionnel | ≤ 2 Mo, JPG ou PNG |
 | job_title | char | |
-| service | FK Service | |
-| site | FK Site | |
-| manager | FK self, nul | définit l'équipe |
+| service | FK Service, `RESTRICT`, nul permis (premier administrateur) | obligatoire dans le formulaire (lot 2) |
+| site | FK Site, `RESTRICT`, nul permis | obligatoire dans le formulaire (lot 2) |
+| manager | FK self, nul | définit l'équipe ; toute fiche active (L1-02) |
 | role | choix : employee, manager, hr, admin | profil d'accès |
 | status | choix : active, upcoming, left | « Actif », « Arrivée prochaine », « Parti » |
 | arrival_date, departure_date | date | departure nul si en poste |

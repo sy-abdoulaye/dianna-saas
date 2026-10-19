@@ -1,0 +1,21 @@
+{% extends base_template|default:"layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Activer la double authentification" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="flex flex-col gap-2">
+    <h1 class="h1">{% translate "Activer la double authentification" %}</h1>
+    <p class="meta">{% translate "Votre profil donne accès à des données sensibles : un code est demandé à chaque connexion. Scannez le QR code avec une application d'authentification (par exemple FreeOTP ou Microsoft Authenticator), puis saisissez le code affiché." %}</p>
+  </div>
+  <form class="card card-body flex flex-col gap-4" method="post" action="{% url 'mfa_activate_totp' %}" novalidate>
+    {% csrf_token %}
+    {% include "components/form_errors.html" %}
+    <img class="qr" src="{{ totp_svg_data_uri }}" alt="{% translate 'QR code à scanner avec votre application' %}">
+    <div class="field">
+      <label class="label" for="authenticator_secret">{% translate "Clé à saisir si vous ne pouvez pas scanner" %}</label>
+      <input class="input mono" id="authenticator_secret" type="text" value="{{ form.secret }}" readonly aria-describedby="authenticator_secret-hint">
+      <span class="hint" id="authenticator_secret-hint">{% translate "Conservez cette clé : elle permet de réinstaller l'application plus tard." %}</span>
+    </div>
+    {% include "components/field.html" with field=form.code %}
+    {% button _("Activer") variant="primary" icon="lock" type="submit" block=True %}
+  </form>
+{% endblock %}

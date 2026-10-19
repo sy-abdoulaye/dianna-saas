@@ -1,0 +1,39 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Notifications" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Notifications" %}</h1>
+      <p class="sub">
+        {% if unread_count %}{% blocktranslate count n=unread_count %}{{ n }} notification non lue{% plural %}{{ n }} notifications non lues{% endblocktranslate %}{% else %}{% translate "Vous avez tout lu" %}{% endif %}
+      </p>
+    </div>
+    {% if unread_count %}
+      <form class="actions" method="post" action="{% url 'core:notifications_read_all' %}">
+        {% csrf_token %}
+        {% button _("Tout marquer comme lu") variant="secondary" icon="check" type="submit" %}
+      </form>
+    {% endif %}
+  </div>
+  <div class="card">
+    {% if page_obj.object_list %}
+      <ul class="notif-list">
+        {% for notification in page_obj.object_list %}
+          <li {% if notification.is_unread %}class="is-unread"{% endif %}>
+            <a href="{% url 'core:notification_open' notification.pk %}">
+              {% if notification.is_unread %}<span class="sr-only">{% translate "Non lue :" %}</span>{% endif %}
+              <span>{{ notification.text }}</span>
+              <span class="hint">{{ notification.created_at|date:"j F Y à H:i" }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+      {% pagination page_obj "#content" %}
+    {% else %}
+      {% translate "Aucune notification" as empty_title %}
+      {% translate "Les demandes et validations apparaîtront ici." as empty_text %}
+      {% include "components/empty_state.html" with icon="bell" title=empty_title text=empty_text %}
+    {% endif %}
+  </div>
+{% endblock %}

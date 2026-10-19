@@ -7,6 +7,7 @@ renvoie 404 si DEBUG est faux. Les données affichées sont fictives (personnes 
 from dataclasses import dataclass
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -105,6 +106,7 @@ def _filtered_people(params):
     return form, page_obj
 
 
+@login_not_required
 @require_GET
 def styleguide(request):
     _guard()
@@ -168,6 +170,7 @@ def styleguide(request):
     return render(request, TEMPLATE, context)
 
 
+@login_not_required
 @require_http_methods(["GET", "POST"])
 def demo_modal(request):
     """Modale de demande : 422 avec erreurs, ou succès avec notification et « Annuler »."""
@@ -192,6 +195,7 @@ def demo_modal(request):
     )
 
 
+@login_not_required
 @require_http_methods(["GET", "POST"])
 def demo_confirm(request):
     _guard()
@@ -222,6 +226,7 @@ def demo_confirm(request):
     return render(request, "components/confirm.html", context)
 
 
+@login_not_required
 @require_POST
 def demo_undo(request, token):
     _guard()
@@ -234,6 +239,7 @@ def demo_undo(request, token):
     )
 
 
+@login_not_required
 @require_POST
 def demo_toast(request):
     _guard()
@@ -250,6 +256,7 @@ def demo_toast(request):
     )
 
 
+@login_not_required
 @require_POST
 def demo_server_error(request):
     """Simule une erreur 500 pour montrer le bandeau « Le serveur n'a pas répondu »."""
@@ -257,6 +264,7 @@ def demo_server_error(request):
     return HttpResponse(status=500)
 
 
+@login_not_required
 @require_GET
 def demo_page(request, slug):
     _guard()

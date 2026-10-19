@@ -1,12 +1,28 @@
-"""Pages d'erreur du design system : 403, 404, 500 et « Module désactivé »."""
+"""Pages d'erreur du design system, notifications et vitrine."""
 
-from django.shortcuts import render
+from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
+from django.core.cache import cache
+from django.core.paginator import Paginator
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext as _
 from django.views.decorators.csrf import requires_csrf_token
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
+
+from apps.core import notifications
+from apps.core.forms import SpaceAccessForm, email_digest, send_space_link
+from apps.core.http import client_ip
+from apps.core.models import Notification
+from apps.people.models import Role
+
+ROLE_LABELS = dict(Role.choices)
 
 
 @requires_csrf_token
 def permission_denied(request, exception=None):
-    return render(request, "pages/403.html", status=403)
+    employee = getattr(request, "employee", None)
+    context = {"role_label": ROLE_LABELS.get(employee.role) if employee else ""}
+    return render(request, "pages/403.html", context, status=403)
 
 
 @requires_csrf_token
@@ -16,9 +32,87 @@ def page_not_found(request, exception=None):
 
 @requires_csrf_token
 def server_error(request):
-    return render(request, "pages/500.html", status=500)
+    # Pas de contexte de mise en page : la base peut être indisponible.
+    return render(request, "pages/500.html", {"base_template": "layouts/auth.html"}, status=500)
 
 
 def module_disabled(request, module_label: str = ""):
-    """Utilisé par le décorateur module_required (lot 1)."""
-    return render(request, "pages/module_disabled.html", {"module_label": module_label}, status=403)
+    employee = getattr(request, "employee", None)
+    context = {
+        "module_label": module_label,
+        "is_admin": bool(employee and employee.role == Role.ADMIN),
+        "admin_url": "",
+    }
+    return render(request, "pages/module_disabled.html", context, status=403)
+
+
+# ---------- Notifications ----------
+
+
+@require_GET
+def notification_list(request):
+    page = Paginator(notifications.for_employee(request.employee), 20).get_page(
+        request.GET.get("page")
+    )
+    return render(request, "core/notifications.html", {"page_obj": page})
+
+
+@require_GET
+def notification_open(request, pk):
+    """Un clic marque la notification comme lue et ouvre l'objet (fiche socle)."""
+    notification = get_object_or_404(Notification, pk=pk, recipient=request.employee)
+    notifications.mark_read(notification)
+    return redirect(notifications.safe_target(notification))
+
+
+@require_POST
+def notification_read_all(request):
+    notifications.mark_all_read(request.employee)
+    if request.htmx:
+        return render(request, "core/partials/bell.html")
+    messages.success(request, _("Toutes les notifications sont lues."))
+    return redirect("core:notifications")
+
+
+# ---------- Vitrine (dianna.fr) ----------
+
+ACCESS_PERIOD = 10 * 60  # secondes
+ACCESS_LIMIT_PER_IP = 10
+ACCESS_LIMIT_PER_ADDRESS = 3
+
+
+def _over_limit(key: str, limit: int) -> bool:
+    cache.add(key, 0, ACCESS_PERIOD)
+    try:
+        attempts = cache.incr(key)
+    except ValueError:  # entrée expirée entre add et incr
+        cache.set(key, 1, ACCESS_PERIOD)
+        attempts = 1
+    return attempts > limit
+
+
+def _too_many_attempts(request, email: str) -> bool:
+    """Limite par adresse IP réelle (proxys de confiance) et par adresse saisie, hachée."""
+    by_ip = _over_limit(f"space-access:ip:{client_ip(request)}", ACCESS_LIMIT_PER_IP)
+    by_address = _over_limit(f"space-access:email:{email_digest(email)}", ACCESS_LIMIT_PER_ADDRESS)
+    return by_ip or by_address
+
+
+@login_not_required
+@require_http_methods(["GET", "POST"])
+def public_home(request):
+    """Page vitrine « Accéder à mon espace » (T-08, L1-12 variante discrète).
+
+    La réponse est identique que l'adresse corresponde ou non à un compte : le lien vers le
+    sous-domaine de l'entreprise est envoyé par e-mail, jamais affiché."""
+    form = SpaceAccessForm(request.POST or None)
+    sent = False
+    if request.method == "POST" and form.is_valid():
+        email = form.cleaned_data["email"]
+        if _too_many_attempts(request, email):
+            form.add_error(None, _("Trop de tentatives. Réessayez dans quelques minutes."))
+        else:
+            send_space_link(email, request)
+            sent = True
+    status = 422 if form.errors else 200
+    return render(request, "public/home.html", {"form": form, "sent": sent}, status=status)

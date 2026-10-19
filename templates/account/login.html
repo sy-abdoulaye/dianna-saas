@@ -1,0 +1,18 @@
+{% extends "layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Connexion" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="flex flex-col gap-2">
+    <h1 class="h1">{% translate "Connexion" %}</h1>
+    {% if request.company %}<p class="meta">{% blocktranslate with company=request.company.name %}Espace {{ company }}{% endblocktranslate %}</p>{% endif %}
+  </div>
+  <form class="card card-body flex flex-col gap-4" method="post" action="{% url 'account_login' %}" novalidate>
+    {% csrf_token %}
+    {% include "components/form_errors.html" %}
+    {% include "components/field.html" with field=form.login %}
+    {% include "components/field.html" with field=form.password %}
+    {{ redirect_field }}
+    {% button _("Se connecter") variant="primary" type="submit" block=True %}
+    <a class="self-center" href="{% url 'account_reset_password' %}">{% translate "Mot de passe oublié ?" %}</a>
+  </form>
+{% endblock %}

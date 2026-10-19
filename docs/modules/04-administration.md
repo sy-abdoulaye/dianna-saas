@@ -8,7 +8,7 @@ Route : `/administration/`, profil Administrateur uniquement. Onglets :
 | Compétences (lot 7) | Liste ordonnée des compétences évaluées en entretien individuel : ajouter, renommer, réordonner, désactiver |
 | Utilisateurs et profils | Recherche, filtre par profil, tableau Utilisateur / E-mail / Profil d'accès (liste déroulante, confirmation à chaque changement ; son propre profil n'est pas modifiable), bouton « Inviter un utilisateur » (ouvre la création de fiche), renvoi d'invitation |
 | Services et sites | Deux listes avec nombre de collaborateurs, Ajouter, Renommer, Supprimer |
-| Modules | Interrupteur par module avec description ; Plan de charge et Recrutement « Non disponible » |
+| Modules | Interrupteur par module avec description ; Plan de charge et Recrutement « Non disponible ». L'annuaire fait partie du socle et n'est pas désactivable (L1-05) |
 | Journal d'activité | Recherche, liste horodatée (qui, quoi), export CSV de la période |
 
 ## Règles

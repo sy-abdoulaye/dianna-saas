@@ -1,0 +1,11 @@
+{% load i18n %}{% autoescape off %}{% blocktranslate with first_name=employee.first_name company=company.name %}Bonjour {{ first_name }},
+
+Vous êtes invité à rejoindre l'espace {{ company }} sur Dianna.
+Créez votre mot de passe en ouvrant ce lien :{% endblocktranslate %}
+
+{{ url }}
+
+{% blocktranslate %}Ce lien est valable {{ days }} jours. Si vous n'attendiez pas cette invitation, ignorez ce message.{% endblocktranslate %}
+
+Dianna
+{% endautoescape %}

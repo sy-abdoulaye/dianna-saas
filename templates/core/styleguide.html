@@ -5,7 +5,7 @@
 {% block side_footer %}
   <div class="side-me">
     {% include "components/avatar.html" with person=me %}
-    <div class="min-w-0"><b>{{ me.full_name }}</b><span>Salarié · {{ me.service }}</span></div>
+    <div class="min-w-0"><b>{{ me.full_name }}</b><span class="side-me-meta">Salarié · {{ me.service }}</span></div>
   </div>
 {% endblock %}
 

@@ -11,9 +11,12 @@ Mot de passe commun en développement uniquement : `demo-dianna-2026`. La comman
 | Profil | Personne | E-mail |
 |---|---|---|
 | Salarié | Camille Durand, conseillère support, Lyon | camille.durand@exemple.fr |
-| Manager | Louise Martin, responsable support (équipe de 6) | louise.martin@exemple.fr |
+| Manager | Louise Martin, responsable support (5 collaborateurs directs) | louise.martin@exemple.fr |
 | RH | Hélène Faure, directrice des ressources humaines | helene.faure@exemple.fr |
 | Administrateur | Marc Diallo, administrateur de la plateforme | marc.diallo@exemple.fr |
+| Administrateur d'**Autre SA** | Nadia Berger, directrice générale (pour vérifier l'isolation) | nadia.berger@autre.fr |
+
+Adresses en développement : vitrine http://localhost:8000, Exemple SAS http://exemple.localhost:8000, Autre SA http://autre.localhost:8000, administration éditeur http://admin.localhost:8000 (compte créé par `python manage.py createsuperuser`). Les autres salariés ont une fiche sans compte.
 
 ## Contenu
 

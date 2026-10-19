@@ -1,0 +1,22 @@
+{% extends "layouts/auth.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Lien d'invitation expiré" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Lien d'invitation expiré" as title %}
+    {% translate "Ce lien n'est plus valable. Demandez une nouvelle invitation : l'administrateur de votre espace sera prévenu." as text %}
+    {% include "components/empty_state.html" with heading="h1" icon="mail" title=title text=text %}
+    <div class="card-body pt-0 flex flex-col gap-4">
+      {% if requested %}
+        {% translate "Demande transmise." as banner_title %}
+        {% translate "L'administrateur de votre espace a été prévenu. Vous recevrez un nouveau lien par e-mail." as banner_text %}
+        {% include "components/banner.html" with kind="ok" title=banner_title text=banner_text %}
+      {% else %}
+        <form method="post" action="{% url 'accounts:invitation_renew' token %}">
+          {% csrf_token %}
+          {% button _("Demander une nouvelle invitation") variant="primary" icon="send" type="submit" block=True %}
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
