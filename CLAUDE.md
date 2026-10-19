@@ -16,7 +16,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 
 ## Règles non négociables
 
-1. **Isolation des entreprises.** Tout modèle métier hérite de `TenantModel` (champ `company`) et passe par `TenantManager`. Aucune requête métier ne doit pouvoir renvoyer les données d'une autre entreprise. Chaque nouvelle vue a un test d'isolation (voir `docs/02-architecture.md`, section Tests).
+1. **Isolation des entreprises.** Tout modèle métier hérite de `TenantModel` (champ `company`) et passe par `TenantManager`. Aucune requête métier ne doit pouvoir renvoyer les données d'une autre entreprise. Chaque nouvelle vue a un test d'isolation (voir `docs/02-architecture.md`, section Tests). `save()` et le signal `m2m_changed` vérifient que les relations vers un objet métier restent dans la même entreprise ; `QuerySet.update()` et `bulk_create` les contournent : ne les utilise jamais sur une relation vers un objet métier sans vérification explicite de l'entreprise.
 2. **Permissions côté serveur.** Chaque vue et chaque action vérifie le profil et le périmètre (soi, équipe, entreprise) avec les fonctions de `apps/core/permissions.py`. Masquer un bouton dans le template ne suffit jamais. La matrice fait foi : `docs/04-permissions.md`.
 3. **Design system.** Utilise uniquement les jetons et les composants définis dans `docs/05-design-system.md`. Pas de couleur en dur, pas de nouveau composant si un composant existant convient. Le prototype `docs/reference/prototype-dianna.html` est la référence visuelle et comportementale : ouvre-le dans un navigateur pour vérifier un écran.
 4. **Accessibilité.** WCAG 2.2 AA : libellé lié à chaque champ, erreurs annoncées, focus visible, navigation clavier, contrastes des jetons respectés.
