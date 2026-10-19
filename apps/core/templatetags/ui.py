@@ -183,6 +183,14 @@ def control(bound_field, **kwargs):
 
 
 @register.filter
+def private_url(field_file) -> str:
+    """URL signée d'un fichier privé (logo sur la page de connexion, photo déjà autorisée)."""
+    from apps.core.files import signed_url
+
+    return signed_url(field_file) if field_file else ""
+
+
+@register.filter
 def initials(person) -> str:
     """Initiales d'une personne (objet avec first_name et last_name, ou chaîne « Prénom Nom »)."""
     if not person:

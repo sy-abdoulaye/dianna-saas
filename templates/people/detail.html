@@ -1,0 +1,150 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{{ person.full_name }} · Dianna{% endblock %}
+{% block content %}
+  <div id="person" class="flex flex-col gap-6" hx-get="{{ request.get_full_path }}" hx-trigger="peopleChanged from:body" hx-select="#person" hx-swap="outerHTML" hx-disinherit="*">
+    <div class="page-head">
+      <div>
+        <div class="crumbs"><a href="{% url 'people:list' %}">{% translate "Annuaire" %}</a> › {{ person.full_name }}</div>
+        <h1 class="h1">{{ person.full_name }}</h1>
+        <p class="sub">{{ person.job_title }}{% if person.service %} · {{ person.service }}{% endif %}{% if person.site %} · {{ person.site }}{% endif %}</p>
+      </div>
+      <div class="actions">
+        {% if is_hr %}
+          {% url "people:edit" person.public_id as edit_url %}
+          {% button _("Modifier") variant="primary" icon="edit" href=edit_url %}
+          {% if person.status == "left" %}
+            {% url "people:reactivate" person.public_id as reactivate_url %}
+            {% button _("Réactiver") hx_post=reactivate_url hx_swap="none" %}
+          {% elif can_archive %}
+            {% url "people:archive" person.public_id as archive_url %}
+            {% button _("Archiver") hx_get=archive_url hx_target="#modal-root" %}
+          {% endif %}
+        {% elif is_self %}
+          {% url "people:edit_contact" as contact_url %}
+          {% button _("Modifier mes coordonnées") icon="edit" hx_get=contact_url hx_target="#modal-root" %}
+        {% endif %}
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-4">
+      {% include "components/avatar.html" with size="l" %}
+      <div class="flex flex-wrap items-center gap-3">
+        {% status_badge "employee" person.status %}
+        {% if person.manager %}<span class="pill">{% translate "Manager :" %} {{ person.manager.full_name }}</span>{% endif %}
+        {% if is_self %}<span class="pill">{% translate "C'est vous" %}</span>{% endif %}
+      </div>
+    </div>
+    {% include "components/tabs.html" with label=_("Fiche") %}
+    {% if tab == "informations" %}
+      <div class="split">
+        <div class="stack">
+          <section class="card card-body stack">
+            <h2 class="h2">{% translate "Coordonnées professionnelles" %}</h2>
+            <dl class="dl">
+              <dt>{% translate "E-mail" %}</dt><dd>{{ person.email }}</dd>
+              <dt>{% translate "Téléphone" %}</dt><dd>{{ person.phone|default:"—" }}</dd>
+              <dt>{% translate "Site" %}</dt><dd>{{ person.site|default:"—" }}</dd>
+              <dt>{% translate "Bureau" %}</dt><dd>{{ person.office|default:"—" }}</dd>
+            </dl>
+          </section>
+          <section class="card card-body stack">
+            <h2 class="h2">{% translate "Organisation" %}</h2>
+            <dl class="dl">
+              <dt>{% translate "Service" %}</dt><dd>{{ person.service|default:"—" }}</dd>
+              <dt>{% translate "Manager" %}</dt>
+              <dd>{% if person.manager %}<a href="{% url 'people:detail' person.manager.public_id %}">{{ person.manager.full_name }}</a>{% else %}<span class="text-ink-3">{% translate "Aucun" %}</span>{% endif %}</dd>
+              <dt>{% translate "Arrivée dans l'entreprise" %}</dt><dd>{{ person.arrival_date|date:"j F Y"|default:"—" }}</dd>
+              {% if person.departure_date and is_hr %}<dt>{% translate "Départ" %}</dt><dd>{{ person.departure_date|date:"j F Y" }}</dd>{% endif %}
+            </dl>
+          </section>
+          {% if can_view_hr %}
+            <section class="card card-body stack">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="h2">{% translate "Informations RH" %}</h2>
+                <span class="pill">{% icon "lock" 16 %}{% if is_hr %}{% translate "Réservé aux RH" %}{% else %}{% translate "Visible par vous et les RH" %}{% endif %}</span>
+              </div>
+              <dl class="dl">
+                <dt>{% translate "Matricule" %}</dt><dd class="mono">{{ person.registration_number|default:"—" }}</dd>
+                <dt>{% translate "Type de contrat" %}</dt><dd>{{ person.get_contract_type_display|default:"—" }}</dd>
+                <dt>{% translate "Temps de travail" %}</dt><dd>{{ person.get_work_time_display|default:"—" }}</dd>
+                {% if is_hr %}<dt>{% translate "Profil d'accès" %}</dt><dd>{{ person.get_role_display }}</dd>{% endif %}
+              </dl>
+            </section>
+          {% endif %}
+        </div>
+        <aside class="stack">
+          <div class="card card-body stack">
+            <h3 class="h3">{% translate "Contacter" %}</h3>
+            <ul class="rows">
+              <li>
+                <span class="icon-line">{% icon "mail" %}<span>{{ person.email }}</span></span>
+                {% blocktranslate asvar copy_mail with value=person.email %}Copier {{ value }}{% endblocktranslate %}
+                <button class="btn btn-ghost btn-sm" type="button" data-copy="{{ person.email }}" aria-label="{{ copy_mail }}">{% translate "Copier" %}</button>
+              </li>
+              {% if person.phone %}
+                <li>
+                  <span class="icon-line">{% icon "phone" %}<span>{{ person.phone }}</span></span>
+                  {% blocktranslate asvar copy_phone with value=person.phone %}Copier {{ value }}{% endblocktranslate %}
+                  <button class="btn btn-ghost btn-sm" type="button" data-copy="{{ person.phone }}" aria-label="{{ copy_phone }}">{% translate "Copier" %}</button>
+                </li>
+              {% endif %}
+            </ul>
+          </div>
+        </aside>
+      </div>
+    {% elif tab == "equipe" %}
+      <div class="card">
+        {% if reports %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{% translate "Équipe" %}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{% translate "Membre de l'équipe" %}</th>
+                  <th scope="col">{% translate "Site" %}</th>
+                  <th scope="col">{% translate "E-mail" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for member in reports %}
+                  <tr>
+                    <td>
+                      <div class="who">
+                        {% include "components/avatar.html" with person=member photo_url=member.photo_url %}
+                        <span class="who-text"><b><a class="row-link" href="{% url 'people:detail' member.public_id %}">{{ member.full_name }}</a></b><span class="who-sub">{{ member.job_title }}</span></span>
+                      </div>
+                    </td>
+                    <td>{{ member.site|default:"—" }}</td>
+                    <td class="text-ink-2">{{ member.email }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% translate "Pas d'équipe rattachée" as empty_title %}
+          {% if person.manager %}
+            {% blocktranslate asvar empty_text with name=person.full_name manager=person.manager.full_name %}{{ name }} n'a aucun collaborateur directement rattaché. Voyez l'équipe de {{ manager }} pour ses collègues.{% endblocktranslate %}
+          {% else %}
+            {% blocktranslate asvar empty_text with name=person.full_name %}{{ name }} n'a aucun collaborateur directement rattaché.{% endblocktranslate %}
+          {% endif %}
+          {% include "components/empty_state.html" with icon="users" title=empty_title text=empty_text %}
+        {% endif %}
+      </div>
+    {% elif tab == "historique" %}
+      <div class="card card-body">
+        <ul class="rows">
+          {% for change in changes %}
+            <li>
+              <span>{{ change.get_kind_display }}{% if change.actor %} · {{ change.actor.full_name }}{% endif %}</span>
+              <span class="meta whitespace-nowrap">{{ change.created_at|date:"j F Y à H:i" }}</span>
+            </li>
+          {% endfor %}
+          {% if person.arrival_date %}
+            <li><span>{% translate "Arrivée dans l'entreprise" %}</span><span class="meta">{{ person.arrival_date|date:"j F Y" }}</span></li>
+          {% endif %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

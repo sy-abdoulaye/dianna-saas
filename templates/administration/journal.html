@@ -1,0 +1,38 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <div class="card">
+    <form class="filters" method="get" action="{{ results_url }}" role="search" hx-get="{{ results_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
+      <div class="field grow">
+        <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
+        <div class="search-input">{% icon "search" %}{% control filter_form.q %}</div>
+      </div>
+      {% include "components/field.html" with field=filter_form.du %}
+      {% include "components/field.html" with field=filter_form.au %}
+      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
+    </form>
+    <div id="results" aria-live="polite">
+      {% partialdef results inline %}
+        <div class="filters justify-between">
+          <span class="meta">{% blocktranslate with start=start|date:"j F Y" end=end|date:"j F Y" %}Du {{ start }} au {{ end }}{% endblocktranslate %}</span>
+          {% button _("Exporter en CSV") size="sm" icon="dl" href=export_url %}
+        </div>
+        {% if page_obj.paginator.count %}
+          <ul class="rows px-6 py-4">
+            {% for entry in page_obj.object_list %}
+              <li>
+                <span><b class="font-medium">{% if entry.actor %}{{ entry.actor.full_name }}{% else %}{% translate "Dianna" %}{% endif %}</b> · {{ entry.summary }}</span>
+                <span class="meta whitespace-nowrap">{{ entry.created_at|date:"j M Y à H:i" }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+          {% pagination page_obj "#results" %}
+        {% else %}
+          {% translate "Aucun événement" as empty_title %}
+          {% translate "Aucune action ne correspond." as empty_text %}
+          {% include "components/empty_state.html" with icon="search" title=empty_title text=empty_text %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}

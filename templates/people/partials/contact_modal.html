@@ -1,0 +1,20 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "edit" %}{% endblock %}
+{% block modal_title %}{% translate "Modifier mes coordonnées" %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{% url 'people:edit_contact' %}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        <p class="meta">{% translate "Vous pouvez modifier votre téléphone et votre bureau. Les autres informations sont gérées par les RH." %}</p>
+        {% include "components/field.html" with field=form.phone %}
+        {% include "components/field.html" with field=form.office %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Enregistrer") variant="primary" icon="check" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

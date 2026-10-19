@@ -1,0 +1,18 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "set" %}{% endblock %}
+{% block modal_title %}{{ title }}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        {% include "components/field.html" with field=form.name %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% if is_rename %}{% button _("Renommer") variant="primary" type="submit" %}{% else %}{% button _("Ajouter") variant="primary" icon="plus" type="submit" %}{% endif %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

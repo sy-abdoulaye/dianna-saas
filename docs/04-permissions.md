@@ -20,6 +20,7 @@ Règles générales :
 | Voir les informations RH (contrat, matricule, temps de travail) | Soi | Soi | Oui | Oui |
 | Modifier son téléphone et son bureau | Soi | Soi | Oui | Oui |
 | Créer, modifier, archiver, réactiver une fiche | Non | Non | Oui | Oui |
+| Archiver une fiche de profil Administrateur (« Seul un administrateur peut archiver un administrateur. ») | Non | Non | Non | Oui |
 | Attribuer un profil d'accès | Non | Non | Non | Oui |
 | Importer des salariés (CSV) | Non | Non | Non | Oui |
 

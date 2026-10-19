@@ -1,0 +1,8 @@
+{% extends "components/confirm.html" %}
+{% load i18n ui %}
+{% block modal_title %}{% blocktranslate with name=item.name %}Supprimer « {{ name }} » ?{% endblocktranslate %}{% endblock %}
+{% block modal_body %}<p class="modal-text">{% translate "Aucun collaborateur n'y est rattaché." %}</p>{% endblock %}
+{% block modal_footer %}
+  {% button _("Annuler") data_modal_close=True %}
+  {% button _("Supprimer") variant="danger" icon="trash" hx_post=action_url hx_swap="none" %}
+{% endblock %}

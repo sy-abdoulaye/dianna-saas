@@ -1,0 +1,13 @@
+{% extends "layouts/app.html" %}
+{% load i18n %}
+{% block title %}{% translate "Administration" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Administration" %}</h1>
+      <p class="sub">{{ company.name }} · {% translate "espace client isolé" %}</p>
+    </div>
+  </div>
+  {% include "components/tabs.html" with tabs=admin_tabs label=_("Administration") %}
+  {% block admin_content %}{% endblock %}
+{% endblock %}

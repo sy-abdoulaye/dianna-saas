@@ -99,7 +99,7 @@ NAV: tuple[NavGroup, ...] = (
                 "administration",
                 _("Administration"),
                 "set",
-                "administration:home",
+                "administration:company",
                 roles=("admin",),
             ),
         ),

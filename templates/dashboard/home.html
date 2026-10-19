@@ -1,5 +1,5 @@
 {% extends "layouts/app.html" %}
-{% load i18n %}
+{% load i18n ui %}
 {% block title %}{% translate "Tableau de bord" %} · Dianna{% endblock %}
 {% block content %}
   <div class="page-head">
@@ -7,10 +7,31 @@
       <h1 class="h1">{% blocktranslate with name=current_employee.first_name %}Bonjour {{ name }}{% endblocktranslate %}</h1>
       <p class="sub">{{ today|date:"l j F Y"|capfirst }} · {{ current_employee.get_role_display }} · {{ current_company.name }}</p>
     </div>
+    {% if is_admin %}
+      <div class="actions">
+        {% url "administration:company" as admin_url %}
+        {% button _("Administration") variant="primary" icon="set" href=admin_url %}
+      </div>
+    {% endif %}
   </div>
-  <div class="card">
-    {% translate "Tout est à jour" as empty_title %}
-    {% translate "Les éléments à traiter apparaîtront ici." as empty_text %}
-    {% include "components/empty_state.html" with icon="check" title=empty_title text=empty_text %}
+  {% if kpis %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {% for label, value in kpis %}{% include "components/kpi.html" %}{% endfor %}
+    </div>
+  {% endif %}
+  <div class="split">
+    <section class="card card-body stack">
+      <h2 class="h2">{% translate "À traiter" %}</h2>
+      {% translate "Tout est à jour" as empty_title %}
+      {% translate "Aucune demande ni aucun entretien n'attend votre action." as empty_text %}
+      {% include "components/empty_state.html" with icon="check" title=empty_title text=empty_text %}
+    </section>
+    <aside class="stack">
+      <section class="card card-body stack">
+        <h2 class="h2">{% translate "Raccourcis" %}</h2>
+        {% url "people:list" as people_url %}
+        {% button _("Annuaire") icon="users" href=people_url block=True %}
+      </section>
+    </aside>
   </div>
 {% endblock %}

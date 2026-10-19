@@ -46,6 +46,37 @@ def module_disabled(request, module_label: str = ""):
     return render(request, "pages/module_disabled.html", context, status=403)
 
 
+# ---------- Fichiers privés ----------
+
+
+@login_not_required
+@require_GET
+def private_file(request, token):
+    """Sert un fichier privé d'après une URL signée (5 minutes), seulement sur l'hôte de
+    l'entreprise propriétaire du fichier. La signature prouve que la vue qui l'a générée a
+    vérifié la permission ; la page de connexion l'utilise pour le logo."""
+    from django.core import signing
+    from django.http import FileResponse, Http404
+
+    from apps.core.files import private_storage, read_token
+
+    try:
+        data = read_token(token)
+    except signing.BadSignature as exc:
+        raise Http404 from exc
+    company = getattr(request, "company", None)
+    if company is None or data.get("c") != str(company.pk):
+        raise Http404
+    name = data["n"]
+    if not name.startswith(f"{company.pk}/") or ".." in name or not private_storage.exists(name):
+        raise Http404
+    content_type = "image/png" if name.endswith(".png") else "image/jpeg"
+    response = FileResponse(private_storage.open(name, "rb"), content_type=content_type)
+    response["Cache-Control"] = "private, max-age=300"
+    response["Content-Disposition"] = "inline"
+    return response
+
+
 # ---------- Notifications ----------
 
 

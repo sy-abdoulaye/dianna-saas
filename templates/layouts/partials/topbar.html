@@ -1,14 +1,33 @@
 {% load i18n ui %}
-{# La recherche globale arrive avec l'annuaire (lot 2) : elle n'est pas affichée avant. #}
+<form class="global-search" method="get" action="{% url 'people:list' %}" role="search" data-global-search>
+  <div class="search-input">
+    {% icon "search" %}
+    <input class="input"
+           id="global-search"
+           type="search"
+           name="q"
+           placeholder="{% translate 'Rechercher un collaborateur' %}"
+           aria-label="{% translate 'Recherche globale' %}"
+           autocomplete="off"
+           aria-controls="search-suggestions"
+           hx-get="{% url 'people:suggestions' %}"
+           hx-trigger="input changed delay:150ms"
+           hx-target="#search-suggestions"
+           hx-sync="this:replace">
+  </div>
+  <div class="suggestions" id="search-suggestions" aria-live="polite"></div>
+</form>
 <div class="spacer"></div>
 {% include "core/partials/bell.html" %}
 <div class="dropdown" data-dropdown>
   <button class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="menu-user" data-dropdown-toggle>
-    {% include "components/avatar.html" with person=current_employee %}
+    {% include "components/avatar.html" with person=current_employee photo_url=current_photo_url %}
     <span class="meta hidden sm:inline">{{ current_employee.full_name }}</span>
     {% icon "chev" 16 %}
   </button>
   <div class="menu" id="menu-user" hidden>
+    <a href="{% url 'people:detail' current_employee.public_id %}">{% icon "users" 16 %}{% translate "Ma fiche" %}</a>
+    <div class="menu-sep"></div>
     <div class="menu-label caps">{% translate "Thème" %}</div>
     {% url "accounts:theme" as theme_url %}
     {% theme_switch theme_url %}

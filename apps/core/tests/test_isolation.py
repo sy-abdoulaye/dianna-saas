@@ -1,5 +1,7 @@
 """Batterie d'isolation entre entreprises (docs/02-architecture.md, section Tests)."""
 
+import importlib
+
 import pytest
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -17,8 +19,13 @@ from apps.core.models import (
     TenantManager,
     TenantModel,
 )
-from apps.core.tenancy import NoCurrentCompanyError, current_company, tenant_context
-from apps.people.models import Employee
+from apps.core.tenancy import (
+    CompanyMismatchError,
+    NoCurrentCompanyError,
+    current_company,
+    tenant_context,
+)
+from apps.people.models import Employee, EmployeeChange
 from tests.factories import PASSWORD, EmployeeFactory
 from tests.isolation import ISOLATION_CASES, NOT_TENANT_OBJECTS
 
@@ -50,6 +57,101 @@ def test_tenant_models_filter_by_default_and_refuse_queries_without_company(mode
     assert not isinstance(model._base_manager, TenantManager)
     with pytest.raises(NoCurrentCompanyError):
         list(model.objects.all())
+    for operation in ("count", "exists", "first", "delete"):
+        with pytest.raises(NoCurrentCompanyError):
+            getattr(model.objects.all(), operation)()
+    with pytest.raises(NoCurrentCompanyError):
+        model.objects.update(updated_at=None)
+    # Construire un queryset sans l'évaluer reste permis (champs de ModelForm à l'import).
+    model.objects.filter(pk__gt=0)
+
+
+QUERYSET_EVALUATIONS = {
+    "list": lambda qs: list(qs),
+    "count": lambda qs: qs.count(),
+    "exists": lambda qs: qs.exists(),
+    "first": lambda qs: qs.first(),
+    "update": lambda qs: qs.update(updated_at=None),
+    "subquery": lambda qs: list(Employee.objects.filter(pk__in=qs.values("pk"))),
+}
+
+
+@pytest.mark.parametrize("evaluate", QUERYSET_EVALUATIONS.values(), ids=QUERYSET_EVALUATIONS)
+def test_queryset_built_in_a_and_evaluated_in_b_is_refused(evaluate, company_a, company_b):
+    with tenant_context(company_a.company):
+        built_in_a = Employee.objects.all()
+    with tenant_context(company_b.company), pytest.raises(CompanyMismatchError):
+        evaluate(built_in_a)
+
+
+@pytest.mark.parametrize("evaluate", QUERYSET_EVALUATIONS.values(), ids=QUERYSET_EVALUATIONS)
+def test_queryset_built_without_company_and_evaluated_in_a_is_refused(evaluate, company_a):
+    built_without_company = Employee.objects.all()
+    with tenant_context(company_a.company), pytest.raises(CompanyMismatchError):
+        evaluate(built_without_company)
+
+
+def test_queryset_clones_keep_their_company(company_a, company_b):
+    with tenant_context(company_a.company):
+        built_in_a = Employee.objects.filter(pk__gt=0)
+        assert built_in_a.order_by("pk").all().exists()  # même entreprise : permis
+    with tenant_context(company_b.company), pytest.raises(CompanyMismatchError):
+        list(built_in_a.order_by("pk").all())
+
+
+def model_form_class():
+    from django import forms
+
+    class ManagerForm(forms.ModelForm):
+        class Meta:
+            model = Employee
+            fields = ["manager", "service"]
+
+    return ManagerForm
+
+
+def test_model_form_declared_outside_a_request_cannot_list_choices(company_a):
+    form_class = model_form_class()  # comme à l'import : aucune entreprise courante
+    with tenant_context(company_a.company):
+        form = form_class()
+        for name in ("manager", "service"):
+            with pytest.raises(CompanyMismatchError):
+                list(form.fields[name].queryset)
+
+
+def test_model_form_declared_in_a_cannot_list_choices_in_b(company_a, company_b):
+    with tenant_context(company_a.company):
+        form_class = model_form_class()  # import pendant la première requête, entreprise A
+    with tenant_context(company_b.company):
+        form = form_class()
+        with pytest.raises(CompanyMismatchError):
+            list(form.fields["manager"].queryset)
+
+
+def test_project_forms_list_the_current_company_only(company_a, company_b, client_for):
+    with tenant_context(company_a.company):
+        # Import pendant une requête de A (Gunicorn sans --preload).
+        forms_module = importlib.reload(importlib.import_module("apps.people.forms"))
+    with tenant_context(company_b.company):
+        employee_form = forms_module.EmployeeForm()
+        filter_form = forms_module.DirectoryFilterForm()
+        for queryset in (
+            employee_form.fields["manager"].queryset,
+            employee_form.fields["service"].queryset,
+            employee_form.fields["site"].queryset,
+            filter_form.fields["service"].queryset,
+            filter_form.fields["site"].queryset,
+        ):
+            assert {obj.company_id for obj in queryset} == {company_b.company.pk}
+    # Et dans une vraie requête sur l'hôte de B : le formulaire ne propose que B.
+    page = client_for(company_b.hr).get("/annuaire/nouveau/").content.decode()
+    assert company_b.manager.last_name in page
+    assert company_a.manager.last_name not in page
+
+
+def test_project_imports_without_a_current_company():
+    for module in ("apps.people.forms", "apps.administration.forms", "config.urls"):
+        importlib.reload(importlib.import_module(module))
 
 
 # ---------- Données : deux entreprises équivalentes ----------
@@ -61,6 +163,7 @@ TENANT_ROWS = {
     Notification: lambda d: d.notification,
     AuditLog: lambda d: d.audit,
     Invitation: lambda d: d.invitation,
+    EmployeeChange: lambda d: d.change,
     CompanyModule: lambda d: CompanyModule.all_companies.filter(company=d.company).first(),
 }
 

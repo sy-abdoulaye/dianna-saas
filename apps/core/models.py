@@ -4,7 +4,14 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.tenancy import get_current_company
+from apps.core.files import private_storage
+from apps.core.tenancy import CompanyMismatchError, get_current_company
+
+
+def company_logo_path(instance, filename):
+    from apps.core.files import random_name
+
+    return random_name(f"{instance.pk}/logo", filename)
 
 
 class Timestamped(models.Model):
@@ -43,6 +50,12 @@ class Company(Timestamped):
         _("validation finale RH des congés d'été"), default=True
     )
     timezone = models.CharField(_("fuseau horaire"), max_length=40, default="Europe/Paris")
+    logo = models.ImageField(
+        _("logo"),
+        upload_to=company_logo_path,
+        storage=private_storage,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = _("entreprise")
@@ -65,16 +78,93 @@ class Company(Timestamped):
 
 
 class TenantQuerySet(models.QuerySet):
-    pass
+    """Queryset lié à l'entreprise courante au moment de sa construction.
+
+    Le filtre `company=` est posé à la construction (TenantManager.get_queryset) et
+    l'entreprise est mémorisée. À l'évaluation (lecture, comptage, mise à jour, suppression,
+    emploi en sous-requête), l'entreprise courante doit être présente et identique :
+    - aucune entreprise courante → NoCurrentCompanyError ;
+    - autre entreprise, ou queryset construit sans entreprise → CompanyMismatchError.
+    Django construit des querysets dès l'import (champs de ModelForm) : ils peuvent exister,
+    mais jamais être lus dans une requête. D'où la règle de CLAUDE.md : pas de queryset métier
+    au niveau d'une classe, toujours dans get_queryset ou __init__."""
+
+    _bound_company_id = None
+    _built_without_company = False
+
+    def _clone(self):
+        clone = super()._clone()
+        clone._bound_company_id = self._bound_company_id
+        clone._built_without_company = self._built_without_company
+        return clone
+
+    def _guard(self):
+        current = get_current_company()  # lève NoCurrentCompanyError
+        if self._built_without_company:
+            raise CompanyMismatchError(
+                f"Queryset {self.model.__name__} construit sans entreprise courante puis évalué "
+                "dans une requête : construisez-le dans get_queryset ou __init__."
+            )
+        if self._bound_company_id is not None and self._bound_company_id != current.pk:
+            raise CompanyMismatchError(
+                f"Queryset {self.model.__name__} construit pour une autre entreprise que "
+                "l'entreprise courante."
+            )
+
+    def resolve_expression(self, *args, **kwargs):
+        # Sous-requête (filter(pk__in=queryset), Subquery…) : même contrôle qu'une lecture.
+        self._guard()
+        return super().resolve_expression(*args, **kwargs)
+
+    def aiterator(self, *args, **kwargs):
+        self._guard()
+        return super().aiterator(*args, **kwargs)
+
+    def _fetch_all(self):
+        self._guard()
+        super()._fetch_all()
+
+    def iterator(self, *args, **kwargs):
+        self._guard()
+        return super().iterator(*args, **kwargs)
+
+    def count(self):
+        self._guard()
+        return super().count()
+
+    def exists(self):
+        self._guard()
+        return super().exists()
+
+    def aggregate(self, *args, **kwargs):
+        self._guard()
+        return super().aggregate(*args, **kwargs)
+
+    def update(self, **kwargs):
+        self._guard()
+        return super().update(**kwargs)
+
+    def delete(self):
+        self._guard()
+        return super().delete()
 
 
 class TenantManager(models.Manager.from_queryset(TenantQuerySet)):
-    """Filtre automatiquement sur l'entreprise courante ; lève NoCurrentCompanyError sans elle."""
+    """Filtre sur l'entreprise courante et lie le queryset à cette entreprise (voir
+    TenantQuerySet). Sans entreprise, le queryset est vide et illisible."""
 
     use_in_migrations = False
 
     def get_queryset(self):
-        return super().get_queryset().filter(company=get_current_company())
+        queryset = super().get_queryset()
+        company = get_current_company(required=False)
+        if company is None:
+            queryset = queryset.none()
+            queryset._built_without_company = True
+            return queryset
+        queryset = queryset.filter(company=company)
+        queryset._bound_company_id = company.pk
+        return queryset
 
 
 class TenantModel(Timestamped):

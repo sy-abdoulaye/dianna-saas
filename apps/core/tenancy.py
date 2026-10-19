@@ -2,8 +2,10 @@
 
 L'entreprise de la requête est posée par CompanyMiddleware dans une ContextVar, remise à
 zéro à la fin de chaque requête. Les tâches et les commandes ouvrent le contexte avec
-`with tenant_context(company):`. Sans entreprise courante, TenantManager lève
-NoCurrentCompanyError : aucune requête métier ne peut partir sans filtre par accident.
+`with tenant_context(company):`. Un queryset de TenantManager est lié à l'entreprise courante
+au moment de sa construction ; à l'évaluation, il lève NoCurrentCompanyError sans entreprise
+courante et CompanyMismatchError si l'entreprise a changé (ou s'il a été construit sans
+entreprise) : aucune requête métier ne peut partir sans le bon filtre par accident.
 """
 
 from contextlib import contextmanager
@@ -14,6 +16,12 @@ current_company: ContextVar = ContextVar("current_company", default=None)
 
 class NoCurrentCompanyError(RuntimeError):
     """Requête métier sans entreprise courante : erreur de programmation."""
+
+
+class CompanyMismatchError(RuntimeError):
+    """Queryset évalué dans une autre entreprise que celle de sa construction (ou construit
+    sans entreprise courante) : erreur de programmation, par exemple un queryset déclaré au
+    niveau d'une classe."""
 
 
 def get_current_company(required: bool = True):

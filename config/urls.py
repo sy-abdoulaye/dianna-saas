@@ -10,6 +10,8 @@ urlpatterns = [
     path("", include("apps.accounts.urls")),
     path("", include("apps.core.urls")),
     path("", include("apps.dashboard.urls")),
+    path("", include("apps.people.urls")),
+    path("", include("apps.administration.urls")),
 ]
 
 # Guide de style : jamais monté en production (STYLEGUIDE_ENABLED = False dans prod.py) ;

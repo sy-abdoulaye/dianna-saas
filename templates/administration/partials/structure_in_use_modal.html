@@ -1,0 +1,14 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon_class %} is-danger{% endblock %}
+{% block modal_icon %}{% icon "alert" %}{% endblock %}
+{% block modal_title %}{% translate "Suppression impossible" %}{% endblock %}
+{% block modal_body %}
+  {% blocktranslate asvar title count n=count with name=item.name %}« {{ name }} » est utilisé par {{ n }} collaborateur.{% plural %}« {{ name }} » est utilisé par {{ n }} collaborateurs.{% endblocktranslate %}
+  {% blocktranslate asvar text with kind=kind_label %}Rattachez-les à un autre {{ kind }} depuis l'annuaire, puis réessayez.{% endblocktranslate %}
+  {% include "components/banner.html" with kind="err" title=title text=text %}
+{% endblock %}
+{% block modal_footer %}
+  {% button _("Fermer") data_modal_close=True %}
+  {% button _("Ouvrir l'annuaire") variant="primary" href=directory_url %}
+{% endblock %}

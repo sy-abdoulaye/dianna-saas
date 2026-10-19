@@ -10,6 +10,31 @@ Chaque cas : nom de route → (méthode, fonction qui construit l'URL depuis les
 from django.urls import reverse
 
 ISOLATION_CASES = {
+    # Annuaire (lot 2)
+    "people:detail": ("get", lambda b: reverse("people:detail", args=[b.employee.public_id])),
+    "people:edit": ("get", lambda b: reverse("people:edit", args=[b.employee.public_id])),
+    "people:archive": ("get", lambda b: reverse("people:archive", args=[b.employee.public_id])),
+    "people:reactivate": (
+        "post",
+        lambda b: reverse("people:reactivate", args=[b.employee.public_id]),
+    ),
+    # Administration (lot 2)
+    "administration:change_role": (
+        "get",
+        lambda b: reverse("administration:change_role", args=[b.employee.public_id]) + "?role=hr",
+    ),
+    "administration:send_invitation": (
+        "post",
+        lambda b: reverse("administration:send_invitation", args=[b.pending.public_id]),
+    ),
+    "administration:structure_rename": (
+        "get",
+        lambda b: reverse("administration:structure_rename", args=["services", b.service.pk]),
+    ),
+    "administration:structure_delete": (
+        "get",
+        lambda b: reverse("administration:structure_delete", args=["sites", b.site.pk]),
+    ),
     "core:notification_open": (
         "get",
         lambda b: reverse("core:notification_open", args=[b.notification.pk]),
@@ -33,4 +58,14 @@ NOT_TENANT_OBJECTS = {
     # Guide de style (développement, données fictives).
     "dev:undo",
     "dev:page",
+    # Fichiers privés : le jeton signé porte l'entreprise, refusé sur un autre hôte
+    # (test : test_private_file_is_refused_on_another_company_host).
+    "core:private_file",
+    # Annulation d'archivage : jeton signé lié à l'auteur ; la fiche est relue dans
+    # l'entreprise courante (test : test_undo_archive_of_another_company_is_refused).
+    "people:undo",
+    # Ajout d'un service ou d'un site : le paramètre est le type (« services », « sites »).
+    "administration:structure_add",
+    # Modules : le paramètre est le code du module, pas un objet d'une entreprise.
+    "administration:toggle_module",
 }

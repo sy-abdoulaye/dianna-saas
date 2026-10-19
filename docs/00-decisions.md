@@ -106,10 +106,42 @@ Versions vérifiées le 18 octobre 2026.
 | A1-06 | Cookies en production | `__Host-sessionid` et `__Host-csrftoken` : sans Domain, `Path=/`, `Secure` | Validé (19 oct. 2026) |
 | A1-07 | Adresse IP du client | Lue derrière `TRUSTED_PROXY_COUNT` proxys de confiance (journal d'audit, vitrine, allauth) | Validé (19 oct. 2026) |
 
+## Décisions prises pendant le lot 2 (19 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L2-01 | Fichiers privés | Photos et logo sur un stockage disque privé (`PRIVATE_MEDIA_ROOT`, hors des fichiers statiques), noms aléatoires rangés par entreprise, servis par URL signée de 5 minutes liée à l'entreprise. Le stockage objet S3 (T-12) arrive au lot 5 avec les justificatifs | À confirmer |
+| L2-02 | Images | Dépendance **Pillow 12.3** ajoutée : type vérifié côté serveur, 40 millions de pixels au plus (lus sur l'en-tête, avant décodage), image reconstruite à partir de ses seuls pixels et réencodée : aucune métadonnée conservée (EXIF dont la position GPS, commentaire JPEG, XMP, profil ICC, textes PNG). Photo : JPG ou PNG, 2 Mo, réduite à 512 px. Logo : PNG ou JPG, 1 Mo (pas de SVG, qui peut contenir du script) | À confirmer |
+| L2-03 | Fiche « Parti » | Pour qui ne voit pas les départs, l'URL d'une fiche partie renvoie 404 (le prototype affichait « Accès non autorisé ») : son existence n'est pas révélée | À confirmer |
+| L2-04 | Fiche : éléments des lots suivants | Onglet « Demandes » et raccourcis (fiche de suivi, demandes) masqués jusqu'aux lots 3 et 7 (règle 6) | À confirmer |
+| L2-05 | Archivage | Date de départ modifiable dans la confirmation (aujourd'hui par défaut) ; impossible d'archiver sa propre fiche ou le dernier administrateur actif ; seul un administrateur archive une fiche de profil Administrateur (A2-06) ; annulation pendant 30 s depuis la notification | À confirmer |
+| L2-06 | Import CSV | Aucune invitation envoyée (envoi depuis « Utilisateurs et profils ») ; dates JJ/MM/AAAA ou AAAA-MM-JJ ; UTF-8 ou Windows-1252 (Excel) ; 1 000 lignes et 1 Mo au plus ; manager présent dans l'annuaire ou dans le fichier ; contrat CDI, CDD, Alternance ou Stage ; longueurs contrôlées d'après les modèles ; fichier malformé (octet nul, encodage, champ trop long) refusé avec un message, jamais d'erreur 500 ; confirmation sans aperçu en session : « L'import a expiré. Recommencez. » | À confirmer |
+| L2-07 | Utilisateurs et profils | Liste de toutes les fiches en poste avec l'état du compte (actif, invitation envoyée, pas de compte) et l'envoi ou le renvoi de l'invitation | À confirmer |
+| L2-08 | Onglet « Entreprise » | Champs de la fiche administration (nom, quota de télétravail, M-02, M-03, logo) ; pas la campagne d'été du prototype, gérée dans le module Congés | À confirmer |
+| L2-09 | Journal d'activité | Période par défaut : les 30 derniers jours ; export CSV de la période (point-virgule, UTF-8 avec BOM), lui-même journalisé | À confirmer |
+| L2-10 | Tableau de bord initial | Indicateurs Administrateur (4) et RH (effectif en poste, arrivées à venir) seulement ; les autres blocs arrivent avec leurs modules | À confirmer |
+| L2-11 | Changement d'identifiant de connexion | L'action séparée confirmée par e-mail (T-09) n'est pas encore livrée : le formulaire de fiche rappelle que l'identifiant ne suit pas l'e-mail de la fiche. Prévu au lot 8 (voir « Pour plus tard ») | À confirmer |
+| L2-12 | Garde-fou d'isolation | Un queryset métier est lié à l'entreprise courante à sa construction ; à l'évaluation, erreur sans entreprise courante, avec une autre entreprise ou s'il a été construit sans entreprise (A2-01). Il peut être construit sans être lu (champs de `ModelForm` créés à l'import) | Validé (technique) |
+
+## Audit du lot 2 (20 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| A2-01 | Querysets métier | Liés à l'entreprise de leur construction : `NoCurrentCompanyError` sans entreprise courante, `CompanyMismatchError` si elle diffère ou si le queryset a été construit sans entreprise. Pas de queryset métier au niveau d'une classe (CLAUDE.md) : en production, vues et formulaires sont importés pendant la première requête d'un processus | Validé (20 oct. 2026) |
+| A2-02 | Images trop grandes | 40 millions de pixels au plus (`MAX_IMAGE_PIXELS` dans `apps/core/files.py`), lus sur l'en-tête avant décodage ; `DecompressionBombWarning` de Pillow transformé en erreur ; message « Image trop grande. » | Validé (20 oct. 2026) |
+| A2-03 | Exports CSV | Fonction commune `apps/core/csv_export.py` : toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot est préfixée d'une apostrophe (injection de formules) ; règle dans CLAUDE.md | Validé (20 oct. 2026) |
+| A2-04 | Profil d'accès | Tout changement de profil passe par `change_role` (fiche, création, administration) : son propre profil n'est pas modifiable, dernier administrateur protégé, journal `people.role_changed` ; sur sa propre fiche, le champ Profil n'est pas affiché | Validé (20 oct. 2026) |
+| A2-05 | Photo à la création | L'entreprise est affectée avant l'enregistrement du fichier ; le chemin d'une photo lève une erreur sans entreprise (jamais de dossier `None/`) | Validé (20 oct. 2026) |
+| A2-06 | Archivage d'un administrateur | Réservé aux administrateurs (`people.archive_admin`, docs/04-permissions.md) : « Seul un administrateur peut archiver un administrateur. » | Validé (20 oct. 2026) |
+| A2-07 | Photos et logos : liens signés | Un lien signé de 5 minutes, utilisable sans connexion sur l'hôte de l'entreprise, est accepté pour les photos et les logos (le logo est affiché sur la page de connexion) | Validé (20 oct. 2026) |
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
+- **Lot 5 :** les justificatifs de transport sont servis seulement à un utilisateur connecté qui a la permission de les voir (contrôle à chaque téléchargement), pas par simple lien signé comme les photos et logos (A2-07).
 - **Lot 8 :** le blocage après des échecs de connexion est indexé par adresse et par hôte.
+- **Lot 8 :** limite de taille des envois au niveau du proxy (`client_max_body_size` ou équivalent) : Django ne limite pas la taille des fichiers reçus avant de les écrire sur disque.
+- **Lot 8 :** changement d'identifiant de connexion (T-09, L2-11), en revoyant le message « Cette adresse est déjà utilisée sur Dianna », qui indique à un administrateur qu'une adresse a un compte dans une autre entreprise.
 
 ## Métier : à confirmer
 

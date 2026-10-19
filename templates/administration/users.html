@@ -1,0 +1,82 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <div class="card">
+    <form class="filters" method="get" action="{{ results_url }}" role="search" hx-get="{{ results_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
+      <div class="field grow">
+        <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
+        <div class="search-input">{% icon "search" %}{% control filter_form.q %}</div>
+      </div>
+      <div class="field">
+        <label class="label" for="{{ filter_form.profil.id_for_label }}">{{ filter_form.profil.label }}</label>
+        {% control filter_form.profil %}
+      </div>
+      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
+      {% button _("Réinitialiser") variant="ghost" href=results_url hx_get=results_url hx_target="#results" hx_push_url="true" data_filters_reset=True %}
+      <div class="ml-auto self-end">
+        {% url "people:create" as invite_url %}
+        {% button _("Inviter un utilisateur") variant="primary" icon="plus" href=invite_url %}
+      </div>
+    </form>
+    <div id="results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="usersChanged from:body, modalClosed from:body" hx-target="this" hx-disinherit="*">
+      {% partialdef results inline %}
+        {% if page_obj.paginator.count %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{% translate "Utilisateurs et profils" %}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{% translate "Utilisateur" %}</th>
+                  <th scope="col">{% translate "E-mail" %}</th>
+                  <th scope="col">{% translate "Profil d'accès" %}</th>
+                  <th scope="col">{% translate "Compte" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for person in page_obj.object_list %}
+                  <tr>
+                    <td>
+                      <div class="who">
+                        {% include "components/avatar.html" %}
+                        <span class="who-text"><b><a class="row-link" href="{% url 'people:detail' person.public_id %}">{{ person.full_name }}</a></b><span class="who-sub">{{ person.job_title }}</span></span>
+                      </div>
+                    </td>
+                    <td class="text-ink-2">{{ person.email }}</td>
+                    <td class="min-w-52">
+                      <label class="sr-only" for="role-{{ person.public_id }}">{% blocktranslate with name=person.full_name %}Profil de {{ name }}{% endblocktranslate %}</label>
+                      <span class="select-wrap">
+                        <select class="select" id="role-{{ person.public_id }}" name="role"
+                                {% if person.pk == current_employee.pk %}disabled title="{% translate 'Vous ne pouvez pas modifier votre propre profil' %}"{% endif %}
+                                hx-get="{% url 'administration:change_role' person.public_id %}" hx-trigger="change" hx-target="#modal-root">
+                          {% for value, label in roles %}<option value="{{ value }}" {% if value == person.role %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                        </select>
+                      </span>
+                    </td>
+                    <td>
+                      {% if person.user_id %}
+                        <span class="badge {% if person.user.is_active %}badge-ok{% else %}badge-off{% endif %}">{% if person.user.is_active %}{% translate "Actif" %}{% else %}{% translate "Désactivé" %}{% endif %}</span>
+                      {% else %}
+                        {% url "administration:send_invitation" person.public_id as invite_url %}
+                        <div class="flex flex-wrap items-center gap-2">
+                          {% if person.invitation_pending %}<span class="badge badge-wait">{% translate "Invitation envoyée" %}</span>{% else %}<span class="badge badge-off">{% translate "Pas de compte" %}</span>{% endif %}
+                          {% if person.invitation_pending %}{% translate "Renvoyer l'invitation" as invite_label %}{% else %}{% translate "Envoyer l'invitation" as invite_label %}{% endif %}
+                          {% button invite_label variant="ghost" size="sm" icon="send" hx_post=invite_url hx_swap="none" %}
+                        </div>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% pagination page_obj "#results" %}
+        {% else %}
+          {% translate "Aucun utilisateur" as empty_title %}
+          {% translate "Aucun utilisateur ne correspond." as empty_text %}
+          {% translate "Réinitialiser" as reset_label %}
+          {% include "components/empty_state.html" with icon="search" title=empty_title text=empty_text action_label=reset_label action_url=results_url action_variant="secondary" %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}

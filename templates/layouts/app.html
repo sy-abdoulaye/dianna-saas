@@ -34,7 +34,7 @@
       {% block side_footer %}
         {% if current_employee %}
           <div class="side-me">
-            {% include "components/avatar.html" with person=current_employee %}
+            {% include "components/avatar.html" with person=current_employee photo_url=current_photo_url %}
             <div class="min-w-0">
               <b>{{ current_employee.full_name }}</b>
               <span class="side-me-meta">{{ current_employee.get_role_display }}{% if current_employee.service %} · {{ current_employee.service }}{% endif %}</span>
