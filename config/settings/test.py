@@ -8,7 +8,9 @@ BASE_DOMAIN = "localhost"
 SITE_SCHEME = "http"
 SITE_PORT = ""
 DEMO_DISABLE_2FA = False
+MFA_ENCRYPTION_KEY = "CZGF9uAXDxvSbghSqXd1tBeIvUFIZXJaqhEVJcXmBXE="
 STYLEGUIDE_ENABLED = True
+INSTALLED_APPS = [*INSTALLED_APPS, "tests.tenancy_app"]  # noqa: F405
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}}
 WHITENOISE_USE_FINDERS = True

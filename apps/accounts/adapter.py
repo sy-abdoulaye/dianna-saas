@@ -1,5 +1,5 @@
 from allauth.account.adapter import DefaultAccountAdapter
-from allauth.account.forms import LoginForm, ResetPasswordForm
+from allauth.account.forms import LoginForm, ResetPasswordForm, UserTokenForm
 from allauth.core import context
 from django.utils.translation import gettext_lazy as _
 
@@ -44,3 +44,15 @@ class DiannaLoginForm(LoginForm):
         self.fields["login"].widget.attrs["autocomplete"] = "email"
         # allauth place un lien « Mot de passe oublié » dans l'aide : il est déjà sous le bouton.
         self.fields["password"].help_text = ""
+
+
+class TenantUserTokenForm(UserTokenForm):
+    """Clé de réinitialisation : acceptée seulement sur l'hôte où le compte peut se connecter
+    (espace de son entreprise, ou hôte éditeur pour l'équipe Dianna). Ailleurs, la clé est
+    traitée comme invalide."""
+
+    def _get_user(self, uidb36):
+        user = super()._get_user(uidb36)
+        if user is not None and not user_can_use_host(user, context.request):
+            return None
+        return user
