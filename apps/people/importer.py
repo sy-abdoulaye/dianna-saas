@@ -77,13 +77,35 @@ class ImportPreview:
         return [asdict(row) for row in self.rows]
 
 
+UNREADABLE = _("Le fichier n'est pas lisible. Enregistrez-le en CSV UTF-8.")
+
+
+def max_lengths() -> dict[str, int]:
+    """Longueur maximale de chaque colonne, lue sur les modèles (fiche, service, site)."""
+    employee = Employee._meta
+    return {
+        "prenom": employee.get_field("first_name").max_length,
+        "nom": employee.get_field("last_name").max_length,
+        "email": employee.get_field("email").max_length,
+        "poste": employee.get_field("job_title").max_length,
+        "service": Service._meta.get_field("name").max_length,
+        "site": Site._meta.get_field("name").max_length,
+        "manager_email": employee.get_field("email").max_length,
+        "date_arrivee": 10,
+        "contrat": 20,
+    }
+
+
 def _decode(raw: bytes) -> str:
+    if b"\x00" in raw:
+        # Fichier binaire (tableur .xlsx, UTF-16…) : PostgreSQL refuserait l'octet nul.
+        raise ImportFileError(UNREADABLE)
     for encoding in ("utf-8-sig", "cp1252"):
         try:
             return raw.decode(encoding)
         except UnicodeDecodeError:
             continue
-    raise ImportFileError(_("Le fichier n'est pas lisible. Enregistrez-le en CSV UTF-8."))
+    raise ImportFileError(UNREADABLE)
 
 
 def parse_date(value: str) -> date | None:
@@ -100,22 +122,29 @@ def read(uploaded) -> list[ImportRow]:
         raise ImportFileError(_("Le fichier dépasse 1 Mo."))
     text = _decode(uploaded.read())
     reader = csv.DictReader(io.StringIO(text), delimiter=";")
-    header = [name.strip().lower() for name in (reader.fieldnames or [])]
-    missing = [name for name in COLUMNS if name not in header]
-    if missing:
+    try:
+        header = [(name or "").strip().lower() for name in (reader.fieldnames or [])]
+        missing = [name for name in COLUMNS if name not in header]
+        if missing:
+            raise ImportFileError(
+                _("Colonnes manquantes : %(cols)s. Attendu : %(all)s.")
+                % {"cols": ", ".join(missing), "all": ";".join(COLUMNS)}
+            )
+        reader.fieldnames = header
+        rows = []
+        for raw in reader:
+            values = {name: (raw.get(name) or "").strip() for name in COLUMNS}
+            if not any(values.values()):
+                continue
+            rows.append(ImportRow(line=reader.line_num, values=values))
+            if len(rows) > MAX_ROWS:
+                raise ImportFileError(_("Le fichier dépasse 1 000 lignes."))
+    except csv.Error as exc:
+        # Champ de plus de 128 Ko, guillemets impossibles à lire… : jamais d'erreur 500.
         raise ImportFileError(
-            _("Colonnes manquantes : %(cols)s. Attendu : %(all)s.")
-            % {"cols": ", ".join(missing), "all": ";".join(COLUMNS)}
-        )
-    reader.fieldnames = header
-    rows = []
-    for index, raw in enumerate(reader, start=2):
-        values = {name: (raw.get(name) or "").strip() for name in COLUMNS}
-        if not any(values.values()):
-            continue
-        rows.append(ImportRow(line=index, values=values))
-        if len(rows) > MAX_ROWS:
-            raise ImportFileError(_("Le fichier dépasse 1 000 lignes."))
+            _("Ligne %(line)s : le fichier n'est pas un CSV valide (champ trop long ou mal formé).")
+            % {"line": reader.line_num + 1}  # line_num : dernière ligne lue sans erreur
+        ) from exc
     if not rows:
         raise ImportFileError(_("Le fichier ne contient aucune ligne."))
     return rows
@@ -135,11 +164,18 @@ def check(rows: list[ImportRow]) -> ImportPreview:
     services = {s.lower() for s in Service.objects.values_list("name", flat=True)}
     sites = {s.lower() for s in Site.objects.values_list("name", flat=True)}
     new_services, new_sites = {}, {}
+    limits = max_lengths()
     for row in rows:
         values = row.values
         for name in REQUIRED:
             if not values[name]:
                 row.errors.append(_("« %(col)s » est obligatoire.") % {"col": name})
+        for name, limit in limits.items():
+            if len(values[name]) > limit:
+                row.errors.append(
+                    _("Ligne %(line)s : « %(col)s » dépasse %(max)s caractères.")
+                    % {"line": row.line, "col": name, "max": limit}
+                )
         email = values["email"].lower()
         if email:
             try:

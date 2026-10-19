@@ -5,6 +5,7 @@ import uuid
 
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db import DatabaseError
 from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -384,8 +385,11 @@ def import_people(request):
     step = request.POST.get("step", "upload") if request.method == "POST" else "upload"
     if step == "confirm":
         stored = request.session.get(IMPORT_SESSION_KEY) or {}
-        if stored.get("token") != request.POST.get("token"):
-            messages.error(request, _("Cet aperçu a expiré. Déposez à nouveau le fichier."))
+        token = request.POST.get("token") or ""
+        if not token or stored.get("token") != token or not stored.get("rows"):
+            # Aucun aperçu en session, jeton absent ou différent : retour à l'étape 1.
+            request.session.pop(IMPORT_SESSION_KEY, None)
+            messages.error(request, _("L'import a expiré. Recommencez."))
             return redirect("people:import")
         try:
             count = importer.run(
@@ -395,6 +399,10 @@ def import_people(request):
             )
         except importer.ImportFileError as error:
             messages.error(request, str(error.message))
+            return redirect("people:import")
+        except DatabaseError:
+            # Conflit apparu entre l'aperçu et la confirmation : rien n'est importé.
+            messages.error(request, _("L'import n'a pas pu être enregistré. Recommencez."))
             return redirect("people:import")
         request.session.pop(IMPORT_SESSION_KEY, None)
         messages.success(request, _("%(n)s fiches importées") % {"n": count})

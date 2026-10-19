@@ -6,7 +6,6 @@ from datetime import timedelta
 import pytest
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -651,9 +650,96 @@ def test_import_accepts_excel_encoding_and_checks_columns(client_for, company_a)
     assert "Colonnes manquantes" in bad.content.decode()
 
 
-def test_import_token_must_match_the_preview(client_for, company_a):
-    response = Client(HTTP_HOST="exemple.localhost")
+@pytest.mark.parametrize(
+    "data",
+    [{"step": "confirm", "token": "faux"}, {"step": "confirm"}, {"step": "confirm", "token": ""}],
+    ids=["mauvais-jeton", "sans-jeton", "jeton-vide"],
+)
+def test_import_confirmation_without_a_matching_preview_restarts(client_for, company_a, data):
     client = client_for(company_a.admin)
-    done = client.post("/annuaire/import/", {"step": "confirm", "token": "faux"})
+    done = client.post("/annuaire/import/", data)
     assert done.status_code == 302 and done["Location"] == "/annuaire/import/"
-    del response
+    page = client.get(done["Location"]).content.decode()
+    assert "L&#x27;import a expiré. Recommencez." in page
+
+
+def test_import_confirmation_with_an_emptied_session_restarts(client_for, company_a):
+    client = client_for(company_a.admin)
+    text = HEADER + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"
+    content = client.post("/annuaire/import/", {"step": "upload", "file": upload(text)})
+    token = content.content.decode().split('name="token" value="')[1].split('"')[0]
+    session = client.session
+    session["people_import"] = {"token": token}  # aperçu incomplet
+    session.save()
+    done = client.post("/annuaire/import/", {"step": "confirm", "token": token})
+    assert done.status_code == 302 and done["Location"] == "/annuaire/import/"
+    assert not Employee.all_companies.filter(email="jean.neuf@exemple.fr").exists()
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        (
+            (HEADER + "Jean;" + "x" * 140_000 + ";a@exemple.fr;P;S;L;;03/11/2025;\n").encode(),
+            "Ligne 2 : le fichier n&#x27;est pas un CSV valide",
+        ),
+        (
+            (HEADER + "Je\x00an;Neuf;a@exemple.fr;P;S;L;;03/11/2025;\n").encode(),
+            "Le fichier n&#x27;est pas lisible. Enregistrez-le en CSV UTF-8.",
+        ),
+        (
+            HEADER.encode() + b"Jean;N\x81\x8d;a@exemple.fr;P;S;L;;03/11/2025;\n",
+            "Le fichier n&#x27;est pas lisible. Enregistrez-le en CSV UTF-8.",
+        ),
+        (
+            "prenom;nom\n".encode("utf-16"),
+            "Le fichier n&#x27;est pas lisible. Enregistrez-le en CSV UTF-8.",
+        ),
+    ],
+    ids=["champ-trop-long-pour-csv", "octet-nul", "mauvais-encodage", "utf-16"],
+)
+def test_malformed_import_files_give_a_clear_message(client_for, company_a, raw, message):
+    file = SimpleUploadedFile("salaries.csv", raw, content_type="text/csv")
+    response = client_for(company_a.admin).post(
+        "/annuaire/import/", {"step": "upload", "file": file}
+    )
+    assert response.status_code == 422
+    assert message in response.content.decode()
+
+
+def test_import_checks_field_lengths_with_the_line_number(client_for, company_a):
+    text = (
+        HEADER
+        + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"
+        + f"{'P' * 61};Long;long@exemple.fr;{'Q' * 121};{'S' * 81};Lyon;;03/11/2025;CDI\n"
+    )
+    client = client_for(company_a.admin)
+    content = client.post(
+        "/annuaire/import/", {"step": "upload", "file": upload(text)}
+    ).content.decode()
+    assert "Ligne 3 : « prenom » dépasse 60 caractères." in content
+    assert "Ligne 3 : « poste » dépasse 120 caractères." in content
+    assert "Ligne 3 : « service » dépasse 80 caractères." in content
+    assert 'name="token"' not in content
+
+
+def test_import_database_conflict_at_confirmation_is_not_a_server_error(
+    client_for, company_a, monkeypatch
+):
+    from django.db import IntegrityError
+
+    from apps.people import importer
+
+    client = client_for(company_a.admin)
+    text = HEADER + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"
+    preview = client.post("/annuaire/import/", {"step": "upload", "file": upload(text)})
+    token = preview.content.decode().split('name="token" value="')[1].split('"')[0]
+
+    def conflict(*args, **kwargs):
+        raise IntegrityError("doublon apparu entre l'aperçu et la confirmation")
+
+    monkeypatch.setattr(importer, "run", conflict)
+    done = client.post("/annuaire/import/", {"step": "confirm", "token": token})
+    assert done.status_code == 302 and done["Location"] == "/annuaire/import/"
+    page = client.get(done["Location"]).content.decode()
+    assert "L&#x27;import n&#x27;a pas pu être enregistré. Recommencez." in page
