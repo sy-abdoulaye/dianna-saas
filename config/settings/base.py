@@ -76,7 +76,7 @@ TEMPLATES = [
 ]
 
 DATABASES = {
-    "default": env.db("DATABASE_URL", default="postgres://dianna:dianna@localhost:5433/dianna"),
+    "default": env.db("DATABASE_URL", default="postgres://dianna:dianna@localhost:5434/dianna"),
 }
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
