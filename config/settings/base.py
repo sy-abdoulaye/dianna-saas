@@ -89,6 +89,11 @@ SITE_SCHEME = env("SITE_SCHEME", default="https")
 SITE_PORT = env("SITE_PORT", default="")
 DEV_COMPANY_SLUG = env("DEV_COMPANY_SLUG", default="")
 
+# Proxys de confiance devant l'application (répartiteur de l'hébergeur) : l'adresse IP du
+# client est lue dans X-Forwarded-For en conséquence (apps.core.http.client_ip, allauth).
+TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
+ALLAUTH_TRUSTED_PROXY_COUNT = TRUSTED_PROXY_COUNT
+
 # Comptes (L0-01, T-09, T-10)
 AUTH_USER_MODEL = "accounts.User"
 AUTHENTICATION_BACKENDS = ["apps.accounts.auth.HostAwareBackend"]
@@ -98,6 +103,7 @@ ACCOUNT_ADAPTER = "apps.accounts.adapter.AccountAdapter"
 ACCOUNT_FORMS = {
     "login": "apps.accounts.adapter.DiannaLoginForm",
     "reset_password": "apps.accounts.adapter.TenantResetPasswordForm",
+    "user_token": "apps.accounts.adapter.TenantUserTokenForm",
 }
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
@@ -113,6 +119,10 @@ ACCOUNT_LOGIN_ON_PASSWORD_RESET = False
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
 MFA_TOTP_ISSUER = "Dianna"
 MFA_TRUST_ENABLED = False
+# Secrets TOTP et codes de secours chiffrés (Fernet). Clé distincte de SECRET_KEY ; plusieurs
+# clés séparées par des virgules pour en changer : la première chiffre, toutes déchiffrent.
+MFA_ADAPTER = "apps.accounts.mfa.EncryptingMFAAdapter"
+MFA_ENCRYPTION_KEY = env("MFA_ENCRYPTION_KEY", default="")
 # Double authentification des comptes de démonstration RH et Admin : développement seulement.
 DEMO_DISABLE_2FA = env.bool("DEMO_DISABLE_2FA", default=False)
 

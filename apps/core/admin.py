@@ -76,6 +76,10 @@ class CompanyAdmin(admin.ModelAdmin):
             ]
         return [(None, {"fields": self.fields})]
 
+    def has_delete_permission(self, request, obj=None):
+        # La suppression d'une entreprise sera une procédure RGPD (lot 8).
+        return False
+
     def get_inlines(self, request, obj):
         return [CompanyModuleInline] if obj is not None else []
 
@@ -113,6 +117,19 @@ class CompanyAdmin(admin.ModelAdmin):
                 row = inline_form.instance
                 services.set_module(form.instance, row.module, row.enabled, request=request)
 
+
+# Seuls Company (avec CompanyModule en ligne) et les comptes de l'équipe Dianna sont inscrits :
+# aucun modèle portant des données de clients (authentificateurs, adresses, groupes…).
+def _unregister(model_label: str):
+    from django.apps import apps
+
+    model = apps.get_model(model_label)
+    if admin.site.is_registered(model):
+        admin.site.unregister(model)
+
+
+for _label in ("mfa.Authenticator", "account.EmailAddress", "auth.Group"):
+    _unregister(_label)
 
 admin.site.site_header = _("Dianna · administration éditeur")
 admin.site.site_title = _("Dianna éditeur")

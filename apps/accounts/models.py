@@ -98,6 +98,7 @@ class Invitation(TenantModel):
         verbose_name=_("fiche"),
     )
     token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    permission_owner_field = "employee"
     expires_at = models.DateTimeField(_("expire le"))
     accepted_at = models.DateTimeField(_("acceptée le"), null=True, blank=True)
     revoked_at = models.DateTimeField(_("remplacée le"), null=True, blank=True)
