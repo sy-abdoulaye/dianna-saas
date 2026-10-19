@@ -1,15 +1,13 @@
 """Administration de l'entreprise (docs/modules/04-administration.md). Toutes les actions
 de l'onglet sont journalisées."""
 
-import csv
-import io
-
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from apps.core import audit
+from apps.core.csv_export import csv_content
 from apps.core.models import AuditLog, Company, Service, Site
 from apps.people.models import Employee, EmployeeStatus
 
@@ -121,24 +119,22 @@ def journal(queryset, *, q="", start=None, end=None):
 
 
 def export_journal_csv(*, q, start, end, actor, request=None) -> str:
-    """CSV de la période (séparateur point-virgule, UTF-8 avec BOM pour Excel, T-15).
+    """CSV de la période (apps.core.csv_export : point-virgule, BOM, cellules neutralisées).
     L'export lui-même est journalisé."""
-    entries = journal(AuditLog.objects.all(), q=q, start=start, end=end)
-    buffer = io.StringIO()
-    buffer.write("﻿")
-    writer = csv.writer(buffer, delimiter=";")
-    writer.writerow([_("Date"), _("Heure"), _("Personne"), _("Action"), _("Résumé")])
-    for entry in entries.order_by("created_at"):
-        moment = timezone.localtime(entry.created_at)
-        writer.writerow(
-            [
+    entries = journal(AuditLog.objects.all(), q=q, start=start, end=end).order_by("created_at")
+
+    def rows():
+        for entry in entries:
+            moment = timezone.localtime(entry.created_at)
+            yield [
                 moment.strftime("%d/%m/%Y"),
                 moment.strftime("%H:%M"),
                 entry.actor.full_name if entry.actor else _("Dianna"),
                 entry.action,
                 entry.summary,
             ]
-        )
+
+    content = csv_content([_("Date"), _("Heure"), _("Personne"), _("Action"), _("Résumé")], rows())
     audit.log(
         "audit.exported",
         _("Journal exporté du %(start)s au %(end)s")
@@ -146,4 +142,4 @@ def export_journal_csv(*, q, start, end, actor, request=None) -> str:
         actor=actor,
         request=request,
     )
-    return buffer.getvalue()
+    return content

@@ -31,6 +31,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Changements d'état (valider, refuser, envoyer, signer) : une fonction de service par transition, qui vérifie l'état de départ, écrit l'historique, crée la notification et l'entrée du journal d'audit.
 - Templates : `templates/<app>/` pour les pages, `templates/<app>/partials/` pour les fragments HTMX, `templates/components/` pour les composants communs.
 - Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français.
+- Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes
