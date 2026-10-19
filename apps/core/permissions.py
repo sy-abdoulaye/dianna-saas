@@ -9,6 +9,7 @@ Chaque action a une portée par colonne : Salarié, Manager, RH, Administrateur.
 Les fonctions sont pures (pas d'accès à la requête) et testées unitairement.
 """
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q, QuerySet
 
 ALL, TEAM, SELF, SERVICE, NONE = "all", "team", "self", "service", None
@@ -78,7 +79,10 @@ SELF_FORBIDDEN = frozenset(
     }
 )
 
-OWNER_FIELDS = ("requester", "employee", "recipient", "author", "reported_by")
+# Chaque modèle soumis aux permissions déclare son propriétaire :
+#   permission_owner_field = "requester"   (chemin vers la fiche Employee)
+#   permission_owner_field = SELF_OWNER     (l'objet est la fiche elle-même)
+SELF_OWNER = "__self__"
 
 
 def column(employee) -> int:
@@ -104,16 +108,22 @@ def scope(employee, action: str):
     return rule[column(employee)]
 
 
-def owner_of(obj):
-    """Personne à qui appartient l'objet (fiche, demande, entretien…)."""
-    from apps.people.models import Employee
+def owner_field(model) -> str:
+    """Champ propriétaire déclaré par le modèle ; une absence est une erreur de programmation."""
+    try:
+        return model.permission_owner_field
+    except AttributeError as exc:
+        raise ImproperlyConfigured(
+            f"{model.__name__} doit déclarer permission_owner_field."
+        ) from exc
 
-    if isinstance(obj, Employee):
+
+def owner_of(obj):
+    """Fiche propriétaire de l'objet, selon la déclaration explicite du modèle (None si vide)."""
+    field = owner_field(type(obj))
+    if field == SELF_OWNER:
         return obj
-    for name in OWNER_FIELDS:
-        if hasattr(obj, name):
-            return getattr(obj, name)
-    raise TypeError(f"Propriétaire introuvable pour {type(obj).__name__}")
+    return getattr(obj, field)
 
 
 def _in_scope(employee, owner, reach) -> bool:
@@ -139,14 +149,22 @@ def can(employee, action: str, obj=None) -> bool:
     if getattr(obj, "company_id", employee.company_id) != employee.company_id:
         return False
     owner = owner_of(obj)
+    if owner is None:
+        return False  # propriétaire vide : refus, jamais d'erreur 500
     if action in SELF_FORBIDDEN and owner.pk == employee.pk:
         return False
     return _in_scope(employee, owner, reach)
 
 
-def scope_queryset(employee, queryset: QuerySet, action: str, owner_field: str = "") -> QuerySet:
-    """Restreint un queryset à la portée de l'action. `owner_field` : chemin vers la fiche
-    propriétaire (« requester », « employee »…) ; vide si le queryset porte sur Employee."""
+def scope_queryset(employee, queryset: QuerySet, action: str) -> QuerySet:
+    """Restreint un queryset à la portée de l'action, d'après le propriétaire déclaré par le
+    modèle (permission_owner_field)."""
+    declared = owner_field(queryset.model)
+    owner_field_ = "" if declared == SELF_OWNER else declared
+    return _scope_queryset(employee, queryset, action, owner_field_)
+
+
+def _scope_queryset(employee, queryset: QuerySet, action: str, owner_field: str) -> QuerySet:
     reach = scope(employee, action)
     prefix = f"{owner_field}__" if owner_field else ""
     me = Q(**{f"{owner_field or 'pk'}": employee.pk}) if owner_field else Q(pk=employee.pk)

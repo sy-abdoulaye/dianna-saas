@@ -26,7 +26,9 @@ ISOLATION_CASES = {
 
 # Routes à paramètre qui ne désignent pas un objet métier d'une entreprise.
 NOT_TENANT_OBJECTS = {
-    # Clé de réinitialisation d'allauth : liée au compte, refusée sur un autre hôte.
+    # Clé de réinitialisation d'allauth : elle désigne un compte, pas un objet d'entreprise.
+    # Elle n'est acceptée que sur l'hôte où ce compte peut se connecter (TenantUserTokenForm) ;
+    # test : test_reset_key_is_refused_on_another_host.
     "account_reset_password_from_key",
     # Guide de style (développement, données fictives).
     "dev:undo",

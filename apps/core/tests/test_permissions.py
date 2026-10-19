@@ -89,13 +89,17 @@ def test_service_scope_includes_team_members_of_other_services(company_a):
     assert can(company_a.employee, "planning.view", company_a.manager)  # même service
 
 
-def test_owner_of_supports_common_fields(company_a):
+def test_owner_of_uses_the_declared_field(company_a):
+    from django.core.exceptions import ImproperlyConfigured
+
     class Request:
+        permission_owner_field = "requester"
         requester = company_a.employee
         company_id = company_a.company.pk
 
     assert permissions.owner_of(Request()) == company_a.employee
-    with pytest.raises(TypeError):
+    assert permissions.owner_of(company_a.employee) == company_a.employee
+    with pytest.raises(ImproperlyConfigured):
         permissions.owner_of(object())
 
 
@@ -120,7 +124,5 @@ def test_scope_queryset_with_owner_field(company_a):
     from apps.core.models import Notification
 
     with tenant_context(company_a.company):
-        rows = scope_queryset(
-            company_a.manager, Notification.objects.all(), "requests.view", "recipient"
-        )
+        rows = scope_queryset(company_a.manager, Notification.objects.all(), "requests.view")
         assert list(rows) == [company_a.notification]  # notification de Camille, son équipe

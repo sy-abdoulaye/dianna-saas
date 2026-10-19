@@ -104,10 +104,12 @@ class TenantModel(Timestamped):
         base_manager_name = "all_companies"
 
     def _tenant_foreign_keys(self):
+        """Clés étrangères et relations un-à-un vers un objet métier (les relations
+        plusieurs-à-plusieurs sont contrôlées par le signal m2m_changed)."""
         for field in self._meta.concrete_fields:
             if (
                 field.is_relation
-                and field.many_to_one
+                and (field.many_to_one or field.one_to_one)
                 and field.name != "company"
                 and issubclass(field.related_model, TenantModel)
             ):
@@ -259,6 +261,7 @@ class Notification(TenantModel):
         related_name="notifications",
         verbose_name=_("destinataire"),
     )
+    permission_owner_field = "recipient"
     text = models.CharField(_("texte"), max_length=255)
     url = models.CharField(_("lien"), max_length=255, blank=True)
     kind = models.CharField(_("type"), max_length=10, choices=Kind, default=Kind.INFO)
@@ -277,3 +280,14 @@ class Notification(TenantModel):
     @property
     def is_unread(self) -> bool:
         return self.read_at is None
+
+
+def check_m2m_same_company(sender, instance, action, reverse, model, pk_set, **kwargs):
+    """Relations plusieurs-à-plusieurs : refuse d'ajouter un objet d'une autre entreprise."""
+    if action != "pre_add" or not pk_set:
+        return
+    if not isinstance(instance, TenantModel) or not issubclass(model, TenantModel):
+        return
+    foreign = model.all_companies.filter(pk__in=pk_set).exclude(company_id=instance.company_id)
+    if foreign.exists():
+        raise ValidationError(_("Cet élément n'appartient pas à la même entreprise."))
