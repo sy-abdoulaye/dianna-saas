@@ -1,6 +1,6 @@
 # Note de livraison : lot 2, annuaire et administration
 
-Date : 19 octobre 2026. Branche : `lot-2`.
+Date : 19 octobre 2026, corrections de l'audit le 20 octobre 2026. Branche : `lot-2`.
 
 ## Ce qui est fait
 
@@ -23,14 +23,24 @@ Date : 19 octobre 2026. Branche : `lot-2`.
 
 **Tableau de bord, version initiale.** Indicateurs Administrateur et RH déjà calculables, « À traiter » (Tout est à jour), raccourci Annuaire, bouton Administration pour l'administrateur.
 
-**Socle.** Fichiers privés servis par URL signée de 5 minutes liée à l'entreprise ; `TenantManager` constructible à l'import mais illisible sans entreprise (L2-12).
+**Socle.** Fichiers privés servis par URL signée de 5 minutes liée à l'entreprise ; querysets métier liés à l'entreprise de leur construction (L2-12, A2-01).
+
+## Corrections de l'audit du lot 2 (A2-01 à A2-07)
+
+- **Isolation :** un queryset métier mémorise l'entreprise de sa construction ; évalué sans entreprise, dans une autre entreprise ou après avoir été construit sans entreprise, il lève une erreur au lieu de renvoyer une liste vide ou les données d'une autre entreprise. Règle ajoutée à CLAUDE.md : pas de queryset métier au niveau d'une classe.
+- **Images :** 40 millions de pixels au plus, vérifiés avant décodage (« Image trop grande. ») ; image reconstruite à partir de ses seuls pixels : plus aucune métadonnée, commentaire JPEG compris.
+- **Exports CSV :** fonction commune qui neutralise les formules (=, +, -, @, tabulation, retour chariot) ; règle ajoutée à CLAUDE.md.
+- **Profil d'accès :** tout changement passe par `change_role` (journal `people.role_changed`) ; son propre profil n'est ni affiché ni modifiable depuis sa fiche.
+- **Photo à la création :** rangée dans le dossier de l'entreprise et affichée sur la fiche.
+- **Archivage :** seul un administrateur archive un administrateur.
+- **Import CSV :** fichiers malformés et longueurs trop grandes signalés avec le numéro de ligne ; confirmation expirée renvoyée à l'étape 1.
 
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 279 tests ; couverture 95 % au total, de 90 à 99 % sur chaque `services.py`, `permissions.py` et l'import |
+| `make test` | 338 tests ; couverture 95 % au total, de 92 à 99 % sur chaque `services.py`, `permissions.py` et l'import |
 | `make e2e` | 30 parcours, dont le parcours 4 (RH) et le parcours 5 (Administrateur) |
 | `make check` | aucune alerte, dont `--deploy` |
 
@@ -53,6 +63,6 @@ Date : 19 octobre 2026. Branche : `lot-2`.
 
 ## Écarts et points à relire
 
-- Décisions L2-01 à L2-11 dans `00-decisions.md`, statut « À confirmer » ; dépendance ajoutée : Pillow 12.3.
-- Changement d'identifiant de connexion (T-09) : non livré, à planifier (L2-11).
+- Décisions L2-01 à L2-11 dans `00-decisions.md`, statut « À confirmer » ; décisions de l'audit A2-01 à A2-07 ; dépendance ajoutée : Pillow 12.3.
+- Changement d'identifiant de connexion (T-09) : non livré, prévu au lot 8 (L2-11, « Pour plus tard »).
 - Écarts au prototype : fiche partie en 404 (L2-03) ; onglet Entreprise selon la fiche (L2-08) ; photo et logo par la zone de fichier du design system.
