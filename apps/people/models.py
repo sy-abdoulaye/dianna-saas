@@ -5,6 +5,7 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.files import private_storage, random_name
 from apps.core.models import TenantModel
 
 
@@ -37,6 +38,10 @@ class WorkTime(models.TextChoices):
     DAYS_PACKAGE = "days_package", _("Forfait jours")
 
 
+def employee_photo_path(instance, filename):
+    return random_name(f"{instance.company_id}/photos", filename)
+
+
 # Statuts « en poste » : l'arrivée prochaine est comptée avec les actifs (L1-04).
 IN_POST_STATUSES = (EmployeeStatus.ACTIVE, EmployeeStatus.UPCOMING)
 
@@ -57,6 +62,12 @@ class Employee(TenantModel):
     first_name = models.CharField(_("prénom"), max_length=60)
     last_name = models.CharField(_("nom"), max_length=60)
     email = models.EmailField(_("e-mail professionnel"))
+    photo = models.ImageField(
+        _("photo"),
+        upload_to=employee_photo_path,
+        storage=private_storage,
+        blank=True,
+    )
     phone = models.CharField(_("téléphone"), max_length=30, blank=True)
     office = models.CharField(_("bureau"), max_length=60, blank=True)
     job_title = models.CharField(_("poste"), max_length=120, blank=True)
@@ -145,3 +156,39 @@ class Employee(TenantModel):
     def save(self, *args, **kwargs):
         self.email = (self.email or "").strip()
         super().save(*args, **kwargs)
+
+
+class EmployeeChange(TenantModel):
+    """Historique d'une fiche : qui a modifié quels champs, sans les valeurs (données RH)."""
+
+    class Kind(models.TextChoices):
+        CREATED = "created", _("Fiche créée")
+        UPDATED = "updated", _("Fiche modifiée")
+        CONTACT = "contact", _("Coordonnées modifiées par l'intéressé(e)")
+        ARCHIVED = "archived", _("Fiche archivée")
+        REACTIVATED = "reactivated", _("Fiche réactivée")
+        ROLE = "role", _("Profil d'accès modifié")
+        IMPORTED = "imported", _("Fiche importée")
+
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name="changes", verbose_name=_("fiche")
+    )
+    actor = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("auteur"),
+    )
+    kind = models.CharField(_("type"), max_length=12, choices=Kind, default=Kind.UPDATED)
+    fields = models.JSONField(_("champs modifiés"), default=list, blank=True)
+    permission_owner_field = "employee"
+
+    class Meta:
+        verbose_name = _("modification de fiche")
+        verbose_name_plural = _("historique des fiches")
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return self.get_kind_display()

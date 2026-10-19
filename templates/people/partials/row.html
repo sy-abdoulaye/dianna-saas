@@ -1,0 +1,34 @@
+{% load i18n ui %}
+<tr>
+  <td>
+    <div class="who">
+      {% include "components/avatar.html" with photo_url=person.photo_url %}
+      <span class="who-text">
+        <b><a class="row-link" href="{% url 'people:detail' person.public_id %}">{{ person.full_name }}</a></b>
+        <span class="who-sub">{{ person.job_title }}</span>
+        {% if not is_hr and person.status == "upcoming" %}<span class="mt-1 block">{% status_badge "employee" person.status %}</span>{% endif %}
+      </span>
+    </div>
+  </td>
+  <td>{{ person.service|default:"—" }}</td>
+  <td>{{ person.site|default:"—" }}</td>
+  <td>{% if person.manager %}{{ person.manager.full_name }}{% else %}<span class="text-ink-3">—</span>{% endif %}</td>
+  <td class="text-ink-2">{{ person.email }}</td>
+  {% if is_hr %}
+    <td>{% status_badge "employee" person.status %}</td>
+    <td class="end whitespace-nowrap">
+      {% url "people:edit" person.public_id as edit_url %}
+      {% blocktranslate asvar edit_label with name=person.full_name %}Modifier {{ name }}{% endblocktranslate %}
+      {% button edit_label variant="ghost" icon="edit" icon_only=True size="sm" href=edit_url %}
+      {% if person.status == "left" %}
+        {% url "people:reactivate" person.public_id as reactivate_url %}
+        {% blocktranslate asvar reactivate_label with name=person.full_name %}Réactiver {{ name }}{% endblocktranslate %}
+        {% button reactivate_label variant="ghost" icon="plus" icon_only=True size="sm" hx_post=reactivate_url hx_swap="none" %}
+      {% else %}
+        {% url "people:archive" person.public_id as archive_url %}
+        {% blocktranslate asvar archive_label with name=person.full_name %}Archiver {{ name }}{% endblocktranslate %}
+        {% button archive_label variant="ghost" icon="trash" icon_only=True size="sm" hx_get=archive_url hx_target="#modal-root" %}
+      {% endif %}
+    </td>
+  {% endif %}
+</tr>

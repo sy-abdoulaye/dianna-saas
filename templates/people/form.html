@@ -1,0 +1,94 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% if person %}{% blocktranslate with name=person.full_name %}Modifier {{ name }}{% endblocktranslate %}{% else %}{% translate "Nouveau collaborateur" %}{% endif %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs">
+        <a href="{% url 'people:list' %}">{% translate "Annuaire" %}</a> ›
+        {% if person %}<a href="{% url 'people:detail' person.public_id %}">{{ person.full_name }}</a> › {% translate "Modifier" %}{% else %}{% translate "Nouveau collaborateur" %}{% endif %}
+      </div>
+      <h1 class="h1">{% if person %}{% blocktranslate with name=person.full_name %}Modifier {{ name }}{% endblocktranslate %}{% else %}{% translate "Nouveau collaborateur" %}{% endif %}</h1>
+      <p class="sub">{% translate "Les champs marqués d'une étoile sont obligatoires." %}</p>
+    </div>
+  </div>
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    <div class="split">
+      <div class="stack">
+        {% include "components/form_errors.html" %}
+        <section class="card card-body stack">
+          <h2 class="h2">{% translate "Identité et contact" %}</h2>
+          <div class="flex flex-wrap items-center gap-4">
+            {% include "components/avatar.html" with size="l" person=person|default:"+" %}
+            <div class="min-w-64 flex-1">
+              {% include "components/file_drop.html" with field=form.photo_upload hint=form.photo_upload.help_text %}
+              {% if form.remove_photo %}{% include "components/field.html" with field=form.remove_photo %}{% endif %}
+            </div>
+          </div>
+          <div class="form-grid">
+            {% include "components/field.html" with field=form.first_name %}
+            {% include "components/field.html" with field=form.last_name %}
+            {% include "components/field.html" with field=form.email %}
+            {% include "components/field.html" with field=form.phone %}
+            {% include "components/field.html" with field=form.office %}
+          </div>
+          {% if person.user_id %}
+            {% blocktranslate asvar login_note with login=person.user.email %}L'identifiant de connexion ({{ login }}) ne change pas quand l'e-mail de la fiche change.{% endblocktranslate %}
+            {% include "components/banner.html" with kind="info" text=login_note %}
+          {% endif %}
+        </section>
+        <section class="card card-body stack">
+          <h2 class="h2">{% translate "Poste et organisation" %}</h2>
+          <div class="form-grid">
+            {% include "components/field.html" with field=form.job_title %}
+            {% include "components/field.html" with field=form.service %}
+            {% include "components/field.html" with field=form.site %}
+            {% include "components/field.html" with field=form.manager %}
+            {% include "components/field.html" with field=form.arrival_date %}
+          </div>
+        </section>
+        <section class="card card-body stack">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="h2">{% translate "Informations RH" %}</h2>
+            <span class="pill">{% icon "lock" 16 %}{% translate "Réservé aux RH" %}</span>
+          </div>
+          <div class="form-grid">
+            {% include "components/field.html" with field=form.contract_type %}
+            {% include "components/field.html" with field=form.work_time %}
+            {% include "components/field.html" with field=form.registration_number %}
+          </div>
+        </section>
+        {% if form.role %}
+          <section class="card card-body stack">
+            <h2 class="h2">{% translate "Accès à Dianna" %}</h2>
+            <div class="form-grid">
+              {% include "components/field.html" with field=form.role %}
+              {% if form.invite %}
+                <div class="field">
+                  <span class="label">{% translate "Invitation" %}</span>
+                  {% include "components/field.html" with field=form.invite %}
+                </div>
+              {% endif %}
+            </div>
+          </section>
+        {% endif %}
+      </div>
+      <aside class="stack sticky-aside">
+        <div class="card card-body stack">
+          <h3 class="h3">{% translate "Enregistrer" %}</h3>
+          {% if person %}
+            {% button _("Enregistrer les modifications") variant="primary" type="submit" block=True %}
+            {% url "people:detail" person.public_id as cancel_url %}
+          {% else %}
+            {% button _("Créer la fiche") variant="primary" type="submit" block=True %}
+            {% url "people:list" as cancel_url %}
+          {% endif %}
+          {% button _("Annuler") variant="ghost" href=cancel_url block=True %}
+        </div>
+        {% translate "Seuls les RH et les administrateurs créent et modifient les fiches. Chaque modification est tracée dans le journal." as trace_note %}
+        {% include "components/banner.html" with kind="info" text=trace_note %}
+      </aside>
+    </div>
+  </form>
+{% endblock %}

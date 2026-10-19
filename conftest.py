@@ -34,6 +34,7 @@ class CompanyData:
     invitation_token: str
     notification: object
     audit: object
+    change: object
 
 
 def build_company(slug: str, name: str) -> CompanyData:
@@ -52,6 +53,10 @@ def build_company(slug: str, name: str) -> CompanyData:
     pending = EmployeeFactory(**common, first_name="Sofia", last_name=f"Nouvelle{slug}", user=None)
     invitation, token = invitation_for(pending)
     notification = NotificationFactory(company=company, recipient=employee)
+    with tenant_context(company):
+        from apps.people.models import EmployeeChange
+
+        change = EmployeeChange.objects.create(employee=employee, actor=admin)
     audit = AuditLogFactory(company=company, actor=admin)
     return CompanyData(
         company,
@@ -66,6 +71,7 @@ def build_company(slug: str, name: str) -> CompanyData:
         token,
         notification,
         audit,
+        change,
     )
 
 

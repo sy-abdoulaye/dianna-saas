@@ -425,7 +425,10 @@ class Command(BaseCommand):
                     else None,
                     contract_type=ContractType.CDD if contract == "CDD" else ContractType.CDI,
                     work_time=WorkTime.FULL_35,
-                    registration_number=f"EX-{index:04d}",
+                    # Comme le prototype : téléphone, bureau, matricule.
+                    phone=f"04 72 00 00 {9 + index:02d}",
+                    office=f"Étage {1 + (index - 1) % 4}, B-{9 + index}",
+                    registration_number=f"{210 + (index - 1) * 7:05d}",
                     user=self._user(email) if key in DEMO_ACCOUNTS else None,
                 )
             for index, row in enumerate(PEOPLE, start=1):
@@ -434,6 +437,15 @@ class Command(BaseCommand):
                     employee = people[f"p{index}"]
                     employee.manager = people[manager_key]
                     employee.save(update_fields=["manager", "updated_at"])
+            # Historique et journal : création des fiches et une modification par les RH.
+            from apps.people.models import EmployeeChange
+
+            helene = people["p9"]
+            for employee in people.values():
+                EmployeeChange.objects.create(employee=employee, actor=helene, kind="created")
+            EmployeeChange.objects.create(
+                employee=people["p1"], actor=helene, kind="updated", fields=["office", "phone"]
+            )
             audit.log("platform.demo_loaded", "Données de démonstration chargées")
 
     def _seed_autre(self):

@@ -1,0 +1,12 @@
+{% load i18n %}
+{% if query %}
+  {% for person in people %}
+    <a href="{% url 'people:detail' person.public_id %}">
+      {% include "components/avatar.html" with photo_url=person.photo_url %}
+      <span><b class="font-medium">{{ person.full_name }}</b><br><span class="meta">{{ person.job_title }}</span></span>
+    </a>
+  {% empty %}
+    <p class="meta p-2.5">{% translate "Aucun collaborateur ne correspond." %}</p>
+  {% endfor %}
+  <a href="{% url 'people:list' %}?q={{ query|urlencode }}">{% translate "Voir tous les résultats dans l'annuaire" %}</a>
+{% endif %}

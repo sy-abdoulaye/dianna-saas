@@ -143,6 +143,9 @@ function openModal(dialog, opener) {
   dialog.addEventListener("close", () => {
     if (toasts) document.body.append(toasts);
     dialog.remove();
+    // Les listes qui ont ouvert une confirmation (profil, module) se rechargent pour
+    // retrouver l'état réel si la confirmation a été annulée.
+    document.body.dispatchEvent(new CustomEvent("modalClosed", { bubbles: true }));
     if (modalOpener && document.body.contains(modalOpener)) modalOpener.focus();
     modalOpener = null;
   });
@@ -335,6 +338,37 @@ document.addEventListener("change", (event) => {
     if (zone) zone.classList.remove("is-dragover");
   }),
 );
+
+/* ---------- Copier (fiche annuaire) ---------- */
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy]");
+  if (!button) return;
+  const value = button.dataset.copy;
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast({ kind: "ok", title: "Copié", message: value });
+  } catch {
+    showToast({
+      kind: "warn",
+      title: "Copie impossible ici",
+      message: "Sélectionnez le texte puis copiez-le manuellement.",
+    });
+  }
+});
+
+/* ---------- Recherche globale ---------- */
+document.addEventListener("click", (event) => {
+  const box = document.getElementById("search-suggestions");
+  if (box && !event.target.closest("[data-global-search]")) box.replaceChildren();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const box = document.getElementById("search-suggestions");
+  if (box && box.childElementCount && event.target.closest("[data-global-search]")) {
+    box.replaceChildren();
+    event.stopPropagation();
+  }
+});
 
 /* ---------- Initialisation ---------- */
 applyTheme(storedTheme());

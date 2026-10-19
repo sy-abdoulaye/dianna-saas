@@ -1,0 +1,84 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Importer des collaborateurs" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{% url 'people:list' %}">{% translate "Annuaire" %}</a> › {% translate "Import" %}</div>
+      <h1 class="h1">{% translate "Importer des collaborateurs" %}</h1>
+      <p class="sub">{% translate "1. Fichier · 2. Aperçu et erreurs · 3. Confirmation" %}</p>
+    </div>
+  </div>
+  {% if preview %}
+    <section class="card card-body stack">
+      <h2 class="h2">{% translate "Aperçu" %}</h2>
+      {% if preview.is_valid %}
+        {% blocktranslate asvar ok_text count n=preview.rows|length %}{{ n }} fiche prête à être importée. Aucune invitation n'est envoyée : vous les enverrez depuis « Utilisateurs et profils ».{% plural %}{{ n }} fiches prêtes à être importées. Aucune invitation n'est envoyée : vous les enverrez depuis « Utilisateurs et profils ».{% endblocktranslate %}
+        {% include "components/banner.html" with kind="ok" text=ok_text %}
+      {% else %}
+        {% blocktranslate asvar err_text count n=preview.error_count %}{{ n }} ligne contient des erreurs bloquantes. Aucune ligne ne sera importée : corrigez le fichier puis déposez-le à nouveau.{% plural %}{{ n }} lignes contiennent des erreurs bloquantes. Aucune ligne ne sera importée : corrigez le fichier puis déposez-le à nouveau.{% endblocktranslate %}
+        {% include "components/banner.html" with kind="err" text=err_text %}
+      {% endif %}
+      {% if preview.new_services or preview.new_sites %}
+        {% blocktranslate asvar new_text with services=preview.new_services|join:", "|default:"—" sites=preview.new_sites|join:", "|default:"—" %}Créés à la confirmation : services {{ services }} ; sites {{ sites }}.{% endblocktranslate %}
+        {% include "components/banner.html" with kind="warn" text=new_text %}
+      {% endif %}
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">{% translate "Lignes du fichier" %}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="num">{% translate "Ligne" %}</th>
+              <th scope="col">{% translate "Collaborateur" %}</th>
+              <th scope="col">{% translate "Poste" %}</th>
+              <th scope="col">{% translate "Service" %}</th>
+              <th scope="col">{% translate "Site" %}</th>
+              <th scope="col">{% translate "Contrôle" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in preview.rows %}
+              <tr>
+                <td class="num">{{ row.line }}</td>
+                <td><b class="font-medium">{{ row.values.prenom }} {{ row.values.nom }}</b><br><span class="meta">{{ row.values.email }}</span></td>
+                <td>{{ row.values.poste }}</td>
+                <td>{{ row.values.service }}</td>
+                <td>{{ row.values.site }}</td>
+                <td>
+                  {% if row.errors %}
+                    <ul class="text-err-ink">{% for error in row.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                  {% else %}
+                    <span class="badge badge-ok">{% translate "Prête" %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="actions justify-end">
+        {% url "people:import" as import_url %}
+        {% button _("Déposer un autre fichier") variant="secondary" href=import_url %}
+        {% if preview.is_valid %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="step" value="confirm">
+            <input type="hidden" name="token" value="{{ token }}">
+            {% blocktranslate asvar confirm_label count n=preview.rows|length %}Importer {{ n }} fiche{% plural %}Importer {{ n }} fiches{% endblocktranslate %}
+            {% button confirm_label variant="primary" icon="upload" type="submit" %}
+          </form>
+        {% endif %}
+      </div>
+    </section>
+  {% else %}
+    <form class="card card-body stack" method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="step" value="upload">
+      {% include "components/form_errors.html" %}
+      {% include "components/file_drop.html" with field=form.file hint=form.file.help_text %}
+      <div class="actions justify-end">
+        {% button _("Vérifier le fichier") variant="primary" icon="right" type="submit" %}
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

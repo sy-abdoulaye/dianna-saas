@@ -1,0 +1,17 @@
+{% load i18n ui %}
+<a class="card person-card" href="{% url 'people:detail' person.public_id %}">
+  <div class="person-card-photo" aria-hidden="true">
+    {% if person.photo_url %}<img src="{{ person.photo_url }}" alt="">{% else %}{{ person|initials }}{% endif %}
+  </div>
+  <div class="person-card-body">
+    <div>
+      <span class="person-card-name">{{ person.full_name }}</span>
+      <div class="meta">{{ person.job_title }}</div>
+    </div>
+    {% if person.status != "active" %}<div>{% status_badge "employee" person.status %}</div>{% endif %}
+    <div class="meta flex flex-col gap-1">
+      <span class="icon-line">{% icon "pin" 16 %}<span>{{ person.site|default:"—" }} · {{ person.service|default:"—" }}</span></span>
+      <span class="icon-line">{% icon "mail" 16 %}<span>{{ person.email }}</span></span>
+    </div>
+  </div>
+</a>

@@ -1,0 +1,115 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Annuaire" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Annuaire" %}</h1>
+      <p class="sub">
+        {% blocktranslate count n=counts.people %}{{ n }} collaborateur{% plural %}{{ n }} collaborateurs{% endblocktranslate %} ·
+        {% blocktranslate count n=counts.sites %}{{ n }} site{% plural %}{{ n }} sites{% endblocktranslate %} ·
+        {% blocktranslate count n=counts.services %}{{ n }} service{% plural %}{{ n }} services{% endblocktranslate %}
+      </p>
+    </div>
+    {% if is_hr %}
+      <div class="actions">
+        {% if can_import %}
+          {% url "people:import" as import_url %}
+          {% button _("Importer un fichier CSV") variant="secondary" icon="upload" href=import_url %}
+        {% endif %}
+        {% url "people:create" as create_url %}
+        {% button _("Ajouter un collaborateur") variant="primary" icon="plus" href=create_url %}
+      </div>
+    {% endif %}
+  </div>
+  {% if not is_hr %}
+    {% translate "Vous voyez les coordonnées professionnelles de tous les collaborateurs. Les informations RH (contrat, matricule) ne sont pas affichées." as hr_note %}
+    {% include "components/banner.html" with kind="info" text=hr_note %}
+  {% endif %}
+  <div class="card">
+    <form class="filters"
+          method="get"
+          action="{{ list_url }}"
+          role="search"
+          hx-get="{{ list_url }}"
+          hx-target="#results"
+          hx-push-url="true"
+          hx-trigger="input changed delay:300ms, change, submit"
+          hx-sync="this:replace">
+      <div class="field grow">
+        <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
+        <div class="search-input">{% icon "search" %}{% control filter_form.q %}</div>
+      </div>
+      <div class="field">
+        <label class="label" for="{{ filter_form.service.id_for_label }}">{{ filter_form.service.label }}</label>
+        {% control filter_form.service %}
+      </div>
+      <div class="field">
+        <label class="label" for="{{ filter_form.site.id_for_label }}">{{ filter_form.site.label }}</label>
+        {% control filter_form.site %}
+      </div>
+      {% if filter_form.statut %}
+        <div class="field">
+          <label class="label" for="{{ filter_form.statut.id_for_label }}">{{ filter_form.statut.label }}</label>
+          {% control filter_form.statut %}
+        </div>
+      {% endif %}
+      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
+      {% button _("Réinitialiser") variant="ghost" href=list_url hx_get=list_url hx_target="#results" hx_push_url="true" data_filters_reset=True %}
+      <div class="ml-auto self-end">
+        {% include "components/segmented.html" with name="vue" legend=_("Affichage") options=view_options selected=view %}
+      </div>
+    </form>
+    <div id="results"
+         aria-live="polite"
+         hx-get="{{ request.get_full_path }}"
+         hx-trigger="peopleChanged from:body"
+         hx-target="this" hx-disinherit="*">
+      {% partialdef results inline %}
+        {% if page_obj.paginator.count %}
+          {% if view == "cartes" %}
+            <ul class="person-cards">
+              {% for person in page_obj.object_list %}
+                <li>{% include "people/partials/card.html" %}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="table-wrap">
+              <table class="table">
+                <caption class="sr-only">{% translate "Liste des collaborateurs" %}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{% translate "Collaborateur" %}</th>
+                    <th scope="col">{% translate "Service" %}</th>
+                    <th scope="col">{% translate "Site" %}</th>
+                    <th scope="col">{% translate "Manager" %}</th>
+                    <th scope="col">{% translate "E-mail" %}</th>
+                    {% if is_hr %}
+                      <th scope="col">{% translate "Statut" %}</th>
+                      <th scope="col"><span class="sr-only">{% translate "Actions" %}</span></th>
+                    {% endif %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for person in page_obj.object_list %}
+                    {% include "people/partials/row.html" %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+          {% pagination page_obj "#results" %}
+        {% else %}
+          {% translate "Aucun collaborateur trouvé" as empty_title %}
+          {% if query %}
+            {% blocktranslate asvar empty_text %}Aucune fiche ne correspond à « {{ query }} ». Modifiez la recherche ou réinitialisez les filtres.{% endblocktranslate %}
+          {% else %}
+            {% translate "Aucune fiche ne correspond à vos filtres. Modifiez la recherche ou réinitialisez les filtres." as empty_text %}
+          {% endif %}
+          {% translate "Réinitialiser les filtres" as reset_label %}
+          {% include "components/empty_state.html" with icon="search" title=empty_title text=empty_text action_label=reset_label action_url=list_url action_variant="secondary" %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}
