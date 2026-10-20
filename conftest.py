@@ -35,6 +35,64 @@ class CompanyData:
     notification: object
     audit: object
     change: object
+    requests: dict
+
+
+def build_requests(employee) -> dict:
+    """Une demande de chaque type, avec son historique et son événement de calendrier,
+    créées sans le moteur (données de la batterie d'isolation)."""
+    from datetime import date, timedelta
+
+    from django.utils import timezone
+
+    from apps.agenda.models import CalendarEvent
+    from apps.approvals.models import (
+        LeaveRequest,
+        OnCallDeclaration,
+        RequestEvent,
+        SummerCampaign,
+        TeleworkRequest,
+    )
+
+    monday = timezone.localdate() + timedelta(days=7 - timezone.localdate().weekday())
+    now = timezone.now()
+    campaign = SummerCampaign.objects.create(
+        label="Été 2027",
+        period_start=date(2027, 6, 1),
+        period_end=date(2027, 9, 30),
+        deadline=date(2027, 2, 28),
+        status=SummerCampaign.Status.OPEN,
+    )
+    telework = TeleworkRequest.objects.create(requester=employee, date=monday, submitted_at=now)
+    leave = LeaveRequest.objects.create(
+        requester=employee,
+        campaign=campaign,
+        start=date(2027, 7, 5),
+        end=date(2027, 7, 16),
+        submitted_at=now,
+    )
+    on_call = OnCallDeclaration.objects.create(
+        requester=employee, start=monday, end=monday + timedelta(days=6), submitted_at=now
+    )
+    event = RequestEvent.objects.create(
+        request_type="telework", request_id=telework.pk, actor=employee, action="submitted"
+    )
+    calendar = CalendarEvent.objects.create(
+        employee=employee,
+        kind="telework",
+        start=monday,
+        end=monday,
+        source_type="telework",
+        source_id=telework.pk,
+    )
+    return {
+        "telework": telework,
+        "leave": leave,
+        "on_call": on_call,
+        "campaign": campaign,
+        "event": event,
+        "calendar": calendar,
+    }
 
 
 def build_company(slug: str, name: str) -> CompanyData:
@@ -57,6 +115,7 @@ def build_company(slug: str, name: str) -> CompanyData:
         from apps.people.models import EmployeeChange
 
         change = EmployeeChange.objects.create(employee=employee, actor=admin)
+        requests = build_requests(employee)
     audit = AuditLogFactory(company=company, actor=admin)
     return CompanyData(
         company,
@@ -72,6 +131,7 @@ def build_company(slug: str, name: str) -> CompanyData:
         notification,
         audit,
         change,
+        requests,
     )
 
 

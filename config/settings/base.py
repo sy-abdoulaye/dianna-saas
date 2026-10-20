@@ -33,6 +33,8 @@ INSTALLED_APPS = [
     "apps.core",
     "apps.accounts",
     "apps.people",
+    "apps.agenda",
+    "apps.approvals",
     "apps.dashboard",
     "apps.administration",
 ]
