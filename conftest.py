@@ -139,3 +139,29 @@ def anonymous_client():
         return Client(HTTP_HOST=host_for(company))
 
     return _client
+
+
+@pytest.fixture
+def run_tasks():
+    """Exécute les tâches en attente avec le vrai travailleur (`db_worker --batch`).
+    `after_seconds` simule le temps écoulé (e-mails différés de 45 s). Dans un test, la
+    connexion porte la transaction du test : le travailleur ne doit pas la fermer."""
+    from datetime import timedelta
+
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    def _run(*, after_seconds: int = 0):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                "django_tasks_db.management.commands.db_worker.close_old_connections",
+                lambda: None,
+            )
+            if after_seconds:
+                real_now = timezone.now
+                patch.setattr(
+                    timezone, "now", lambda: real_now() + timedelta(seconds=after_seconds)
+                )
+            call_command("db_worker", "--batch", "--no-startup-delay", verbosity=0)
+
+    return _run

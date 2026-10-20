@@ -7,7 +7,6 @@ import hashlib
 import secrets
 from datetime import timedelta
 
-from django.core.mail import send_mail
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -17,6 +16,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import Invitation, User, normalize_email
 from apps.core import audit, notifications
 from apps.core.hosts import company_url
+from apps.core.mail import queue_email
 from apps.people.models import Employee, EmployeeStatus, Role
 
 EMAIL_TAKEN = _(
@@ -78,9 +78,7 @@ def invite(employee: Employee, *, sent_by: Employee | None = None, request=None)
     }
     subject = render_to_string("accounts/email/invitation_subject.txt", context).strip()
     body = render_to_string("accounts/email/invitation_message.txt", context)
-    transaction.on_commit(
-        lambda: send_mail(subject, body, None, [employee.email], fail_silently=False)
-    )
+    queue_email(subject, body, [employee.email])  # tâche sans délai (L1-14)
     audit.log(
         "account.invitation_sent",
         _("Invitation envoyée à %(name)s") % {"name": employee.full_name},

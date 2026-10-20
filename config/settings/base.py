@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "config.apps.StaticFilesConfig",
     "django_htmx",
+    "django_tasks_db",
     "allauth",
     "allauth.account",
     "allauth.mfa",
@@ -208,6 +209,9 @@ MESSAGE_TAGS = {
     messages.WARNING: "warn",
     messages.ERROR: "err",
 }
+
+# Tâches en arrière-plan (T-11, L3-01) : travailleur `python manage.py db_worker`.
+TASKS = {"default": {"BACKEND": "django_tasks_db.DatabaseBackend"}}
 
 # Annulation immédiate (L0-03) : fenêtre côté serveur et délai des e-mails annulables
 UNDO_WINDOW_SECONDS = 30

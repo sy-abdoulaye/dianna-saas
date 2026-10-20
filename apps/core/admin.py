@@ -128,7 +128,13 @@ def _unregister(model_label: str):
         admin.site.unregister(model)
 
 
-for _label in ("mfa.Authenticator", "account.EmailAddress", "auth.Group"):
+# Les tâches en attente contiennent des e-mails destinés aux clients : non inscrites.
+for _label in (
+    "mfa.Authenticator",
+    "account.EmailAddress",
+    "auth.Group",
+    "django_tasks_database.DBTaskResult",
+):
     _unregister(_label)
 
 admin.site.site_header = _("Dianna · administration éditeur")

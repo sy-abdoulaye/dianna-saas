@@ -127,14 +127,14 @@ def test_demoting_the_last_admin_is_refused(client_for, company_a):
     assert Employee.all_companies.get(pk=company_a.admin.pk).role == Role.ADMIN
 
 
-def test_invitation_can_be_sent_again(client_for, company_a, django_capture_on_commit_callbacks):
+def test_invitation_can_be_sent_again(client_for, company_a, run_tasks):
     from django.core import mail
 
-    with django_capture_on_commit_callbacks(execute=True):
-        response = client_for(company_a.admin).post(
-            f"/administration/utilisateurs/{company_a.pending.public_id}/invitation/"
-        )
+    response = client_for(company_a.admin).post(
+        f"/administration/utilisateurs/{company_a.pending.public_id}/invitation/"
+    )
     assert json.loads(response["HX-Trigger"])["toast"]["title"] == "Invitation envoyée"
+    run_tasks()
     assert mail.outbox[-1].to == [company_a.pending.email]
 
 

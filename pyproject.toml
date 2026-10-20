@@ -10,6 +10,7 @@ dependencies = [
     "django-allauth[mfa]==65.19.1",
     "django-environ>=0.14.0",
     "django-htmx>=1.29.0",
+    "django-tasks-db==0.13.0",
     "gunicorn>=26.2.0",
     "pillow>=12.3,<13",
     "psycopg[binary]>=3.2",

@@ -22,7 +22,7 @@ TAILWIND := bin/tailwindcss-$(TAILWIND_VERSION)-$(TW_PLATFORM)
 CSS_IN := static/css/app.css
 CSS_OUT := static/build/app.css
 
-.PHONY: help install up down db css css-build migrate test cov e2e lint format seed shell check
+.PHONY: help install up down db css css-build migrate test cov e2e lint format seed shell check worker
 
 help: ## Affiche cette aide
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
@@ -45,6 +45,9 @@ db: ## Démarre PostgreSQL 18 (Docker) et attend qu'il soit prêt
 
 up: db css-build migrate ## Démarre PostgreSQL et le serveur de développement (http://localhost:8000)
 	$(MANAGE) runserver 0.0.0.0:8000
+
+worker: ## Travailleur des tâches en arrière-plan (e-mails), dans un second terminal
+	$(MANAGE) db_worker
 
 down: ## Arrête PostgreSQL
 	docker compose down

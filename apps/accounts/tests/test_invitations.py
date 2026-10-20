@@ -15,10 +15,12 @@ pytestmark = pytest.mark.django_db
 STRONG = "Une-phrase-de-passe-solide-2026"
 
 
-def test_invitation_mail_points_to_the_company_space(company_a, django_capture_on_commit_callbacks):
-    with tenant_context(company_a.company), django_capture_on_commit_callbacks(execute=True):
+def test_invitation_mail_points_to_the_company_space(company_a, run_tasks):
+    with tenant_context(company_a.company):
         newcomer = EmployeeFactory(company=company_a.company, user=None)
         invitation, token = services.invite(newcomer, sent_by=company_a.admin)
+    assert mail.outbox == []  # envoyée par le travailleur de tâches (L1-14)
+    run_tasks()
     assert len(mail.outbox) == 1
     message = mail.outbox[0]
     assert message.to == [newcomer.email]

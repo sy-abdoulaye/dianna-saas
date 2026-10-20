@@ -3,12 +3,12 @@ import hmac
 
 from django import forms
 from django.conf import settings
-from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
 
 from apps.accounts.models import User, normalize_email
 from apps.core.hosts import company_url
+from apps.core.mail import queue_email
 from apps.people.models import Employee
 
 
@@ -53,5 +53,5 @@ def send_space_link(email: str, request=None) -> bool:
     }
     subject = render_to_string("public/email/space_link_subject.txt", context).strip()
     body = render_to_string("public/email/space_link_message.txt", context)
-    send_mail(subject, body, None, [employee.user.email])
+    queue_email(subject, body, [employee.user.email])
     return True

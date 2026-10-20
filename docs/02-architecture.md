@@ -164,7 +164,8 @@ Le jeton CSRF est transmis globalement : `<body hx-headers='{"X-CSRFToken": "{{ 
 
 ## Déploiement
 
-- Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image.
+- Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image : `python manage.py db_worker` (django-tasks-db, L3-01), et purge quotidienne `prune_db_task_results`.
+- E-mails : toujours par une tâche (`apps/core/mail.py`) ; ceux d'une action annulable partent après 45 s et seulement si la notification existe encore.
 - Environnements : développement local, recette, production.
 - Migrations lancées au déploiement. Sauvegarde PostgreSQL quotidienne avec test de restauration mensuel.
 - Intégration continue : lint, tests, construction de l'image, à chaque demande de fusion.

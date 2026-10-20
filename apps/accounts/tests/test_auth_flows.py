@@ -49,12 +49,16 @@ def test_left_employee_cannot_sign_in(anonymous_client, company_a):
     assert "_auth_user_id" not in client.session
 
 
-def test_password_reset_only_mails_accounts_of_this_space(anonymous_client, company_a, company_b):
+def test_password_reset_only_mails_accounts_of_this_space(
+    anonymous_client, company_a, company_b, run_tasks
+):
     client = anonymous_client(company_a.company)
     response = client.post("/connexion/mot-de-passe/", {"email": company_b.employee.email})
     assert response.status_code == 302
+    run_tasks()
     assert len(mail.outbox) == 0  # compte d'une autre entreprise : rien n'est envoyé
     client.post("/connexion/mot-de-passe/", {"email": company_a.employee.email})
+    run_tasks()  # e-mails d'allauth par une tâche (L3-11)
     assert len(mail.outbox) == 1
     assert "exemple.localhost" in mail.outbox[0].body
     assert "/connexion/mot-de-passe/cle/" in mail.outbox[0].body
