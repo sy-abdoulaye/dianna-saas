@@ -189,6 +189,13 @@ def test_seed_demo_loads_both_companies(settings, db):
         "marc.diallo@exemple.fr",
         "nadia.berger@autre.fr",
     }
+    # Notifications des demandes : liées à leur demande (retrait quand elles deviennent fausses).
+    from apps.core.models import Notification
+
+    to_validate = Notification.all_companies.filter(company=exemple, kind="request")
+    assert to_validate.exists()
+    assert not to_validate.filter(source_id__isnull=True).exists()
+    assert not to_validate.filter(source_type="").exists()
     with pytest.raises(CommandError):
         call_command("seed_demo")
     call_command("seed_demo", "--reset")

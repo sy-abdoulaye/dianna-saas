@@ -454,6 +454,7 @@ class Command(BaseCommand):
         par rapport au lundi de la semaine du chargement. Écrites sans e-mail."""
         from apps.approvals import workflow
         from apps.approvals.models import (
+            ACTIVE_STATUSES,
             LeaveRequest,
             OnCallDeclaration,
             RequestEvent,
@@ -479,9 +480,15 @@ class Command(BaseCommand):
             counter["n"] += 1
             submitted = timezone.now() - timedelta(days=2 + counter["n"] % 9)
             requester = people[key]
-            request = model.objects.create(
-                requester=requester, submitted_at=submitted, status=status, **data
-            )
+            request = model(requester=requester, submitted_at=submitted, status=status, **data)
+            # Contrôles métier du service (A3-02), sauf pour une demande déjà passée : ses
+            # dates sont antérieures à aujourd'hui (seule exception, CLAUDE.md).
+            last_day = getattr(request, "end", None) or request.date
+            if status in ACTIVE_STATUSES and last_day >= today:
+                errors = workflow.check_request(request, campaign=data.get("campaign"))
+                if errors:
+                    raise CommandError(f"Demande de démonstration invalide : {errors}")
+            request.save()
             RequestEvent.objects.create(
                 request_type=model.request_type,
                 request_id=request.pk,
@@ -508,6 +515,7 @@ class Command(BaseCommand):
                         f"{requester.full_name} : {request._meta.verbose_name} à valider",
                         url=workflow._module_url(request, "a-valider"),
                         kind=Notification.Kind.REQUEST,
+                        source=request,
                     )
             return request
 
