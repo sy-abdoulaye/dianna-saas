@@ -33,6 +33,16 @@ Date : 20 octobre 2026. Branche : `lot-3`.
 
 **Démonstration.** Demandes du prototype : télétravail sur deux semaines, campagne « Été 2027 » avec conflit au Support client, astreintes et interventions.
 
+## Corrections de l'audit (A3-01 à A3-06)
+
+- **Annulation immédiate** : le jeton porte l'événement de la transition ; refusée (409) si une autre décision a été prise depuis, sans rien modifier.
+- **Contrôles métier dans le service** : quota, même jour, chevauchements, période de campagne, sous verrou de la fiche du demandeur, à l'envoi et aux annulations immédiates qui réactivent une demande (annulation, annulation d'une demande validée, refus). Aucune `IntegrityError` ne produit d'erreur 500.
+- **Alerte de conflit** : visible seulement pour qui peut décider ; plus de nombre d'absences dans la notification d'envoi.
+- **Tâches** : identifiants seulement pour les e-mails de Dianna, jeton d'invitation créé dans la tâche, e-mails d'allauth chiffrés (`TASKS_ENCRYPTION_KEY`). Résultats réussis supprimés aussitôt, échecs purgés après 7 jours (`purge_task_results`, service `scheduler`).
+- **Notifications devenues fausses** : supprimées à chaque transition si leur e-mail n'est pas parti ; les valideurs sont prévenus de nouveau quand une annulation immédiate remet la demande en attente.
+- **Campagnes** : ouverture sous verrou ; deux ouvertures simultanées donnent une seule campagne ouverte.
+- Tests dans `apps/approvals/tests/test_audit.py` (dont cinq tests de concurrence à deux connexions) et `apps/core/tests/test_tasks.py`.
+
 ## Tests
 
 | Commande | Résultat |

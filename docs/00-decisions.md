@@ -160,8 +160,19 @@ Versions vérifiées le 18 octobre 2026.
 | L3-14 | Campagnes de congés d'été | Brouillon, puis Ouverte, puis Close ; date limite avant la période ; une seule ouverte (contrainte en base). Le type « Congés d'été » exige une campagne ouverte et des dates dans sa période ; sinon « Autre absence » | À confirmer |
 | L3-15 | Seuil de conflit | Alerte renforcée quand les absents du service, demandeur compris, dépassent le seuil de la campagne en pourcentage de l'effectif en poste du service | À confirmer |
 | L3-16 | Annulation immédiate d'un envoi validé automatiquement | Permise pendant 30 s comme un envoi ordinaire : la demande est retirée | À confirmer |
-| L3-17 | Concurrence | Transitions sous `select_for_update` de la demande ; envois sous verrou de la fiche du demandeur ; contrainte unique partielle « une demande de télétravail active par jour » | Validé (technique) |
+| L3-17 | Concurrence | Transitions sous `select_for_update` de la demande ; contrôles métier dans le service, sous verrou de la fiche du demandeur (envoi et annulations immédiates qui réactivent une demande, A3-02) ; contrainte unique partielle « une demande de télétravail active par jour », dont la violation devient un message | Validé (technique) |
 | L3-18 | Éléments du lot 4 | Bouton « Voir le planning » et lien vers le planning du bandeau de campagne masqués jusqu'au lot 4 | À confirmer |
+
+## Audit du lot 3 (20 oct. 2026)
+
+| N° | Sujet | Décision | Statut |
+|---|---|---|---|
+| A3-01 | Annulation immédiate d'une décision | Le jeton porte l'événement créé par la transition ; l'annulation, sous verrou de la demande, n'est acceptée que si cet événement est toujours le dernier. Sinon 409 « Une autre décision a été prise depuis. Rien n'a été modifié. » et les notifications restent | Validé (20 oct. 2026) |
+| A3-02 | Contrôles métier | Quota, même jour, chevauchements (congés, astreintes) et période de campagne dans `apps/approvals/workflow.py` (`check_request`), sous verrou de la fiche du demandeur, à l'envoi et aux annulations immédiates qui rendent une demande active (annulation, annulation d'une demande validée, et aussi refus). Les formulaires ne vérifient que leurs champs. Une `IntegrityError` devient un message, jamais une erreur 500 | Validé (20 oct. 2026) |
+| A3-03 | Alerte de conflit | Calculée et affichée seulement pour qui peut décider (valideur, ou RH et administrateur à sa place). Le demandeur ne voit ni les noms ni le nombre, y compris dans la notification d'envoi | Validé (20 oct. 2026) |
+| A3-04 | Données des tâches | Les e-mails de Dianna passent des identifiants à la tâche, le contenu est construit à l'envoi ; le jeton d'invitation est créé dans la tâche (seule son empreinte est enregistrée) ; les e-mails d'allauth sont chiffrés avec `TASKS_ENCRYPTION_KEY` (distincte, obligatoire en production). Résultat d'une tâche réussie supprimé aussitôt ; échecs purgés après 7 jours par `purge_task_results` (service `scheduler` de docker-compose.yml) | Validé (20 oct. 2026) |
+| A3-05 | Notifications devenues fausses | Chaque transition supprime les notifications de la demande dont l'e-mail n'est pas encore parti (« Demande à valider », décision remplacée). Une annulation immédiate qui rend la demande de nouveau en attente prévient à nouveau les valideurs | Validé (20 oct. 2026) |
+| A3-06 | Ouverture de campagne | Service sous verrou de toutes les campagnes de l'entreprise ; deux ouvertures simultanées donnent une seule campagne ouverte, l'autre reçoit « Une campagne est déjà ouverte. » | Validé (20 oct. 2026) |
 
 ## Pour plus tard
 
