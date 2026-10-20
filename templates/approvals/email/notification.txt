@@ -1,0 +1,8 @@
+{% load i18n %}{% autoescape off %}{% blocktranslate with first_name=recipient.first_name %}Bonjour {{ first_name }},{% endblocktranslate %}
+
+{{ text }}
+
+{% translate "Ouvrir dans Dianna :" %} {{ url }}
+
+Dianna
+{% endautoescape %}

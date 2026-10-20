@@ -33,6 +33,7 @@ RULES: dict[str, tuple] = {
     "requests.decide":                  (NONE,    TEAM,    ALL,     ALL),
     "requests.manage_campaigns":        (NONE,    NONE,    ALL,     ALL),
     "requests.final_decision":          (NONE,    NONE,    ALL,     ALL),
+    "requests.cancel_approved":         (NONE,    NONE,    ALL,     ALL),
     "requests.export":                  (NONE,    NONE,    ALL,     ALL),
     # Transport et matériel
     "transport.submit":                 (SELF,    SELF,    SELF,    SELF),
@@ -72,6 +73,7 @@ SELF_FORBIDDEN = frozenset(
     {
         "requests.decide",
         "requests.final_decision",
+        "requests.cancel_approved",
         "transport.decide",
         "equipment.decide",
         "careers.launch",
