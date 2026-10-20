@@ -68,7 +68,7 @@ def full_date(day) -> str:
 
 
 def short_date(day) -> str:
-    return date_format(day, "j M")
+    return date_format(day, "j N")
 
 
 def span(start, end) -> str:

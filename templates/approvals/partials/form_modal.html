@@ -1,0 +1,38 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon kind.icon %}{% endblock %}
+{% block modal_title %}{{ kind.new_label }}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        {% if kind.key == "telework" %}
+          {% include "components/field.html" with field=form.date %}
+          {% include "components/field.html" with field=form.comment %}
+        {% elif kind.key == "leave" %}
+          <div class="pair">
+            {% include "components/field.html" with field=form.start %}
+            {% include "components/field.html" with field=form.end %}
+          </div>
+          {% include "components/field.html" with field=form.leave_type %}
+          {% include "components/field.html" with field=form.comment %}
+        {% else %}
+          {% include "components/field.html" with field=form.kind %}
+          <div class="pair">
+            {% include "components/field.html" with field=form.start %}
+            {% include "components/field.html" with field=form.end %}
+          </div>
+          {% include "components/field.html" with field=form.hours %}
+          {% include "components/field.html" with field=form.description %}
+        {% endif %}
+        {% translate "Votre demande est transmise à votre manager, ou à l'équipe RH si vous n'en avez pas. Vous pourrez l'annuler tant qu'elle est en attente." as help %}
+        {% include "components/banner.html" with kind="info" text=help %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Envoyer la demande") variant="primary" icon="send" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "components/confirm.html" %}
+{% load i18n ui %}
+{% block modal_icon_class %} is-danger{% endblock %}
+{% block modal_icon %}{% icon "alert" %}{% endblock %}
+{% block modal_title %}{% translate "Annuler cette demande ?" %}{% endblock %}
+{% block modal_body %}<p class="modal-text">{% blocktranslate %}{{ summary }}. Votre valideur ne la verra plus.{% endblocktranslate %}</p>{% endblock %}
+{% block modal_footer %}
+  {% button _("Garder la demande") data_modal_close=True %}
+  {% button _("Annuler la demande") variant="danger" hx_post=action_url hx_swap="none" %}
+{% endblock %}

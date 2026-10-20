@@ -19,7 +19,8 @@ def app(request):
         "nav_groups": SimpleLazyObject(
             lambda: build_nav(employee, enabled_modules(request), match, _menu_counts(request))
         ),
-        "unread_count": SimpleLazyObject(lambda: notifications.unread_count(employee)),
+        # Calculé tout de suite : le pluriel de {% blocktranslate count %} exige un entier.
+        "unread_count": notifications.unread_count(employee),
         "latest_notifications": SimpleLazyObject(lambda: notifications.latest(employee)),
         "current_photo_url": SimpleLazyObject(
             lambda: signed_url(employee.photo) if employee.photo else ""

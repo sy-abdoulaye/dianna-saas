@@ -107,6 +107,9 @@ NAV: tuple[NavGroup, ...] = (
 )
 
 
+APPROVAL_KINDS = {"telework": "telework", "summer_leave": "leave", "on_call": "on_call"}
+
+
 def _resolve(url_name: str | None) -> str | None:
     if not url_name:
         return None
@@ -133,6 +136,14 @@ def _is_active(item: NavItem, match) -> bool:
     if match.view_name == item.url_name:
         return True
     namespace = item.url_name.split(":")[0]
+    if namespace == "approvals":
+        # Trois modules partagent les routes des demandes : l'entrée suit le type.
+        kind = match.kwargs.get("kind") or (
+            "leave"
+            if match.url_name.startswith("campaign") or match.url_name == "new_campaign"
+            else None
+        )
+        return kind is not None and APPROVAL_KINDS.get(item.key) == kind
     # Une sous-page active son module, sauf l'export du planning qui a sa propre entrée.
     return (
         bool(match.namespace)

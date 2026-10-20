@@ -64,7 +64,7 @@ class TeleworkForm(RequestForm):
                     "Vous avez déjà %(n)s jours de télétravail la semaine du %(week)s "
                     "(maximum %(quota)s)."
                 )
-                % {"n": used, "week": date_format(rules.monday_of(day), "j M"), "quota": quota}
+                % {"n": used, "week": date_format(rules.monday_of(day), "j N"), "quota": quota}
             )
         return day
 

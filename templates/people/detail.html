@@ -131,6 +131,36 @@
           {% include "components/empty_state.html" with icon="users" title=empty_title text=empty_text %}
         {% endif %}
       </div>
+    {% elif tab == "demandes" %}
+      <div class="card">
+        {% if person_requests %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{% translate "Demandes" %}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{% translate "Type" %}</th>
+                  <th scope="col">{% translate "Détail" %}</th>
+                  <th scope="col">{% translate "Statut" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in person_requests %}
+                  <tr>
+                    <td><a class="row-link" href="{% url item.kind_meta.url_name %}">{{ item.kind_meta.label }}</a></td>
+                    <td class="text-ink-2">{{ item.summary }}</td>
+                    <td>{% status_badge "request" item.status %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% translate "Aucune demande" as t %}
+          {% blocktranslate asvar x with name=person.full_name %}Aucune demande n'a été déposée par {{ name }}.{% endblocktranslate %}
+          {% include "components/empty_state.html" with icon="file" title=t text=x %}
+        {% endif %}
+      </div>
     {% elif tab == "historique" %}
       <div class="card card-body">
         <ul class="rows">

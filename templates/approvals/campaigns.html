@@ -1,0 +1,60 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Campagnes de congés d'été" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ leave_url }}">{% translate "Congés estivaux" %}</a> › {% translate "Campagnes" %}</div>
+      <h1 class="h1">{% translate "Campagnes de congés d'été" %}</h1>
+      <p class="sub">{% translate "Une seule campagne ouverte à la fois. Après la clôture, les nouvelles demandes passent par le type « Autre absence »." %}</p>
+    </div>
+    <div class="actions">
+      {% url "approvals:new_campaign" as new_url %}
+      {% button _("Nouvelle campagne") variant="primary" icon="plus" hx_get=new_url hx_target="#modal-root" %}
+    </div>
+  </div>
+  <div id="campaigns" class="card" hx-get="{{ request.get_full_path }}" hx-trigger="campaignsChanged from:body" hx-select="#campaigns" hx-swap="outerHTML" hx-disinherit="*">
+    {% if campaigns %}
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">{% translate "Campagnes" %}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{% translate "Campagne" %}</th>
+              <th scope="col">{% translate "Période" %}</th>
+              <th scope="col">{% translate "Date limite" %}</th>
+              <th scope="col" class="num">{% translate "Seuil" %}</th>
+              <th scope="col" class="num">{% translate "Vœux" %}</th>
+              <th scope="col">{% translate "Statut" %}</th>
+              <th scope="col" class="end"><span class="sr-only">{% translate "Actions" %}</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for campaign in campaigns %}
+              <tr>
+                <td><b class="font-medium">{{ campaign.label }}</b></td>
+                <td>{{ campaign.period_start|date:"j N" }} – {{ campaign.period_end|date:"j N Y" }}</td>
+                <td>{{ campaign.deadline|date:"j F Y" }}</td>
+                <td class="num">{{ campaign.conflict_threshold }} %</td>
+                <td class="num">{{ campaign.request_count }}</td>
+                <td>{% status_badge "campaign" campaign.status %}</td>
+                <td class="end">
+                  {% if campaign.status == "draft" and not has_open %}
+                    {% url "approvals:campaign_status" campaign.pk "ouvrir" as open_url %}
+                    {% button _("Ouvrir") variant="primary" size="sm" hx_post=open_url hx_swap="none" %}
+                  {% elif campaign.status == "open" %}
+                    {% url "approvals:campaign_status" campaign.pk "clore" as close_url %}
+                    {% button _("Clore") size="sm" hx_post=close_url hx_swap="none" %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% translate "Aucune campagne" as t %}{% translate "Créez la campagne d'été pour recueillir les vœux de congés." as x %}
+      {% include "components/empty_state.html" with icon="sun" title=t text=x %}
+    {% endif %}
+  </div>
+{% endblock %}

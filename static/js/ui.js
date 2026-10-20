@@ -134,8 +134,18 @@ document.addEventListener("keydown", (event) => {
 /* ---------- Fenêtres modales ---------- */
 let modalOpener = null;
 
+// Une modale peut en remplacer une autre (détail → refus) : la zone des notifications
+// revient d'abord dans la page, et le focus final retournera au déclencheur d'origine.
+document.body.addEventListener("htmx:beforeSwap", (event) => {
+  if (event.detail.target && event.detail.target.id === "modal-root") {
+    const toasts = $("dialog #toasts");
+    if (toasts) document.body.append(toasts);
+  }
+});
+
 function openModal(dialog, opener) {
-  modalOpener = opener || document.activeElement;
+  const fromAnotherModal = Boolean(opener && opener.closest && opener.closest("dialog"));
+  if (!fromAnotherModal || !modalOpener) modalOpener = opener || document.activeElement;
   // La modale est dans la couche supérieure et rend le reste inerte : la zone des
   // notifications y est déplacée pour rester visible et cliquable (« Annuler »).
   const toasts = $("#toasts");
