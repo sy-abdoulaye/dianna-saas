@@ -43,12 +43,21 @@ Date : 20 octobre 2026. Branche : `lot-3`.
 - **Campagnes** : ouverture sous verrou ; deux ouvertures simultanées donnent une seule campagne ouverte.
 - Tests dans `apps/approvals/tests/test_audit.py` (dont cinq tests de concurrence à deux connexions) et `apps/core/tests/test_tasks.py`.
 
+## Vérification de contrôle (21 oct. 2026)
+
+- L3-13 appliquée : à l'étape « Validée par le manager », le demandeur est prévenu dans Dianna seulement ; les RH reçoivent l'e-mail.
+- Invitation : l'empreinte du jeton n'est enregistrée qu'après l'acceptation de l'e-mail par le serveur d'envoi ; en cas d'échec, l'invitation précédente reste valable et la nouvelle est marquée « Envoi échoué » dans « Utilisateurs et profils », avec « Renvoyer l'invitation ».
+- Création des campagnes par un service, comme l'ouverture et la clôture.
+- `seed_demo` : notifications liées à leur demande ; contrôles métier sur les demandes de démonstration à venir (seules les demandes passées en sont dispensées).
+- Profil `taches` de Docker Compose : configuration lue dans `.env`, réservé au développement et aux essais ; déploiement du travailleur et de la purge au lot 8.
+- Documentation alignée : 00-decisions (L1-14, T-11, A3-04, « Pour plus tard »), 02-architecture, 03-modele-de-donnees, 04-permissions, fiche 05, CLAUDE.md.
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 408 tests ; couverture 95 % au total, de 86 à 96 % sur `approvals` |
+| `make test` | 434 tests (21 octobre 2026, après l'audit et la vérification de contrôle) ; couverture 95 % au total, de 88 à 100 % sur `approvals` |
 | `make e2e` | 34 parcours, dont les parcours 1 et 2 et la page « Module désactivé » |
 | `make check` | aucune alerte, dont `--deploy` |
 

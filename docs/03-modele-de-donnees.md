@@ -25,11 +25,11 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 
 **User** (pas de company ; `AbstractBaseUser` + `PermissionsMixin`, créé au lot 0, L0-01) : `email` unique sans tenir compte de la casse (stocké en minuscules), `is_active`, `is_staff` (équipe Dianna : super-administrateur éditeur, accès à l'administration Django ; propriété `is_platform_staff`), `is_superuser`, groupes et permissions Django, `theme` (system, light, dark), `last_login`. Connexion par e-mail.
 
-**Invitation** (T) : `employee`, `token_hash` (SHA-256 du jeton, le jeton n'est jamais stocké), `expires_at` (7 jours), `accepted_at`, `revoked_at` (remplacée par une nouvelle invitation), `renewal_requested_at` (lien expiré : administrateurs prévenus une seule fois), `sent_by`.
+**Invitation** (T) : `employee`, `token_hash` (SHA-256 du jeton, le jeton n'est jamais stocké), `expires_at` (7 jours), `accepted_at`, `revoked_at` (remplacée par une nouvelle invitation), `sent_at`, `send_failed_at`, `renewal_requested_at` (lien expiré : administrateurs prévenus une seule fois), `sent_by`. Le jeton est créé par la tâche d'envoi : jusqu'à ce que l'e-mail soit accepté par le serveur d'envoi, `token_hash` est une **empreinte provisoire** qui ne correspond à aucun lien, et l'invitation précédente reste valable. À l'envoi réussi : empreinte du vrai jeton, `sent_at`, et les invitations précédentes sont remplacées (`revoked_at`). En cas d'échec : `send_failed_at`, état **« Envoi échoué »** dans « Utilisateurs et profils », avec « Renvoyer l'invitation » (A3-04).
 
 **AuditLog** (T) : `actor` (Employee, nul pour la plateforme), `action` (char), `target_type`, `target_id`, `summary` (texte sans donnée sensible), `ip`, `created_at`. Index (company, created_at).
 
-**Notification** (T) : `recipient` (Employee), `text`, `url`, `kind`, `read_at`, `created_at`, `email_sent_at`. Index (recipient, read_at).
+**Notification** (T) : `recipient` (Employee), `text`, `url`, `kind`, `read_at`, `created_at`, `email_sent_at`, `email_subject` (objet de l'e-mail, vide si la notification ne part pas par e-mail ; le corps est construit à l'envoi), `source_type` et `source_id` (demande concernée : les notifications non encore envoyées par e-mail sont retirées quand une transition les rend fausses, A3-05). Index (recipient, read_at).
 
 ## Annuaire (`people`)
 

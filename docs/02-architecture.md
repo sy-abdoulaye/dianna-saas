@@ -100,13 +100,14 @@ Toutes les demandes partagent la même machine à états (`apps/approvals/workfl
 (envoi)      → pending
 pending      → approved | refused            (valideur)
 pending      → manager_approved → approved | refused   (congés d'été avec étape RH)
-pending      → cancelled                     (demandeur)
+pending, manager_approved → cancelled        (demandeur, tant que la décision finale n'est pas prise)
 approved     → cancelled                     (RH ou administrateur, motif obligatoire ; L3-10)
 ```
 
 **Annulation immédiate (« Annuler » dans la notification visuelle, 30 s côté serveur, auteur de l'action uniquement) :**
-- après un envoi : la demande, son événement de calendrier et la notification au valideur sont **supprimés** ;
-- après une décision (validation, refus, validation manager, annulation) : la demande revient à l'état précédent, un `RequestEvent` `reverted` est ajouté, la notification au demandeur est supprimée ;
+- après un envoi : la demande, son événement de calendrier, ses notifications et son historique (`RequestEvent`) sont **supprimés** ; le journal d'audit garde la trace « Demande envoyée puis retirée » (L1-08) ;
+- après une décision (validation, refus, validation manager, annulation) : la demande revient à l'état précédent (après une validation finale RH d'un congé d'été : « Validée par le manager »), un `RequestEvent` `reverted` est ajouté ;
+- toutes les notifications de la demande dont l'e-mail n'est pas encore parti sont retirées ; si la demande est de nouveau en attente, les valideurs actuels reçoivent une nouvelle notification « à valider » (A3-05) ;
 - le jeton porte l'identifiant du `RequestEvent` créé par la transition : l'annulation n'est acceptée, sous verrou de la demande, que si cet événement est toujours le dernier. Sinon : « Une autre décision a été prise depuis. Rien n'a été modifié. » (409, A3-01) ;
 - si la demande redevient active (refus ou annulation défaits), les contrôles métier sont refaits sous le même verrou que l'envoi ; s'ils échouent, l'annulation est refusée avec le message habituel (A3-02).
 
@@ -168,11 +169,13 @@ Le jeton CSRF est transmis globalement : `<body hx-headers='{"X-CSRFToken": "{{ 
 
 ## Déploiement
 
-- Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image : `python manage.py db_worker` (django-tasks-db, L3-01), et purge quotidienne `purge_task_results` (services `worker` et `scheduler` de `docker-compose.yml`, profil `taches`).
+- Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image : `python manage.py db_worker` (django-tasks-db, L3-01), et purge quotidienne `purge_task_results`.
+- Profil `taches` de `docker-compose.yml` (services `worker` et `scheduler`) : **développement et essais seulement**. Les services lisent leur configuration, dont `DATABASE_URL`, dans `.env`. Le déploiement en production du travailleur et de la purge est fait au **lot 8**.
 - E-mails : toujours par une tâche (`apps/core/mail.py`, `apps/core/tasks.py`) ; ceux d'une action annulable partent après 45 s et seulement si la notification existe encore. Une transition supprime les notifications de la demande dont l'e-mail n'est pas parti et qui ne sont plus vraies (A3-05).
+- Les tâches d'e-mail de Dianna reçoivent `company_id` et n'envoient rien si l'entreprise est suspendue. `send_encrypted_email` (e-mails d'allauth) n'a pas d'entreprise : son contenu, déjà rendu, est chiffré.
 - Aucune donnée sensible en clair dans une ligne de tâche (A3-04) :
   - les e-mails de Dianna (notification, invitation, lien de l'espace) passent des identifiants ; le texte et les liens sont construits au moment de l'envoi ;
-  - le jeton d'invitation est créé dans la tâche : il n'existe en clair que dans l'e-mail, seule son empreinte est enregistrée ;
+  - le jeton d'invitation est créé dans la tâche : il n'existe en clair que dans l'e-mail ; son empreinte n'est enregistrée qu'une fois l'e-mail accepté par le serveur d'envoi. En cas d'échec, l'invitation précédente reste valable et la nouvelle est marquée « Envoi échoué » ;
   - les e-mails d'allauth, déjà rendus (mot de passe oublié…), sont chiffrés avec `TASKS_ENCRYPTION_KEY` (`MultiFernet`, comme `MFA_ENCRYPTION_KEY`, clé distincte, obligatoire en production) ;
   - le résultat d'une tâche réussie est supprimé dès sa fin (signal `task_finished`) ; les échecs sont purgés après 7 jours.
 - Environnements : développement local, recette, production.

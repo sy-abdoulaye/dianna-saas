@@ -32,6 +32,8 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Templates : `templates/<app>/` pour les pages, `templates/<app>/partials/` pour les fragments HTMX, `templates/components/` pour les composants communs.
 - Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français.
 - Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export.
+- Contrôles métier (A3-02) : les vérifications qui dépendent d'autres données (quota, doublon, chevauchement, période) et les verrous (`select_for_update`) sont dans le service, jamais dans la vue ni dans le formulaire ; le formulaire ne vérifie que ses champs, la vue appelle le service et affiche ses erreurs. Une `IntegrityError` devient un message, jamais une erreur 500. Seule exception : `seed_demo` crée sans `check_request` les demandes de démonstration déjà passées (dates antérieures au jour du chargement).
+- E-mails (A3-04) : toujours par `apps/core/mail.py`, donc par une tâche ; aucune donnée sensible en clair dans les arguments d'une tâche (identifiants seulement, ou contenu chiffré avec `TASKS_ENCRYPTION_KEY`).
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes
