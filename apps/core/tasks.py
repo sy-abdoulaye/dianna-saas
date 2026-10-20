@@ -71,11 +71,13 @@ def send_notification_email(company_id: int, notification_id: int) -> str:
 
 @task
 def send_invitation_email(company_id: int, invitation_id: int) -> str:
-    """Crée le jeton d'invitation et l'envoie : seule son empreinte est enregistrée."""
+    """Crée le jeton d'invitation et l'envoie. Son empreinte n'est enregistrée qu'une fois
+    l'e-mail accepté par le serveur d'envoi ; sinon l'invitation est marquée « Envoi
+    échoué », la précédente reste valable, et la tâche échoue (purgée après 7 jours)."""
     import secrets
 
+    from apps.accounts import services as accounts
     from apps.accounts.models import Invitation
-    from apps.accounts.services import hash_token, invitation_url
     from apps.core.tenancy import tenant_context
 
     company = _company(company_id)
@@ -83,20 +85,23 @@ def send_invitation_email(company_id: int, invitation_id: int) -> str:
         return "skipped"
     with tenant_context(company):
         invitation = Invitation.objects.select_related("employee").filter(pk=invitation_id).first()
-        if invitation is None or not invitation.is_usable:
+        if invitation is None or not invitation.is_usable or invitation.sent_at is not None:
             return "skipped"
         token = secrets.token_urlsafe(32)
-        invitation.token_hash = hash_token(token)
-        invitation.save(update_fields=["token_hash", "updated_at"])
         context = {
             "employee": invitation.employee,
             "company": company,
-            "url": invitation_url(invitation, token),
+            "url": accounts.invitation_url(invitation, token),
             "days": Invitation.VALIDITY_DAYS,
         }
         subject = render_to_string("accounts/email/invitation_subject.txt", context).strip()
         body = render_to_string("accounts/email/invitation_message.txt", context)
-        _send(subject, body, [invitation.employee.email])
+        try:
+            _send(subject, body, [invitation.employee.email])
+        except Exception:
+            accounts.mark_send_failed(invitation)
+            raise
+        accounts.confirm_sent(invitation, token)
     return "sent"
 
 

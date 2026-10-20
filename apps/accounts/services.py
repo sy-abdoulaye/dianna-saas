@@ -52,7 +52,8 @@ def invitation_url(invitation, token: str) -> str:
 def invite(employee: Employee, *, sent_by: Employee | None = None, request=None):
     """Envoie (ou renvoie) une invitation. Le jeton est créé par la tâche d'envoi et n'existe
     en clair que dans l'e-mail (A3-04) : l'empreinte enregistrée ici ne correspond à aucun
-    jeton tant que l'e-mail n'est pas parti."""
+    jeton tant que l'e-mail n'est pas parti. L'invitation précédente reste valable jusqu'à
+    l'envoi réussi de la nouvelle (`confirm_sent`)."""
     if employee.user_id is not None:
         raise InvitationError(_("Cette personne a déjà un compte."))
     if employee.status == EmployeeStatus.LEFT:
@@ -61,9 +62,6 @@ def invite(employee: Employee, *, sent_by: Employee | None = None, request=None)
         raise InvitationError(EMAIL_TAKEN)
 
     now = timezone.now()
-    Invitation.objects.filter(
-        employee=employee, accepted_at__isnull=True, revoked_at__isnull=True
-    ).update(revoked_at=now, updated_at=now)
     invitation = Invitation.objects.create(
         employee=employee,
         token_hash=hash_token(secrets.token_urlsafe(32)),  # jeton jeté : remplacé à l'envoi
@@ -79,6 +77,35 @@ def invite(employee: Employee, *, sent_by: Employee | None = None, request=None)
         request=request,
     )
     return invitation
+
+
+@transaction.atomic
+def confirm_sent(invitation: Invitation, token: str) -> None:
+    """E-mail accepté par le serveur d'envoi : l'empreinte du vrai jeton est enregistrée et
+    les invitations précédentes de la fiche sont remplacées."""
+    now = timezone.now()
+    invitation.token_hash = hash_token(token)
+    invitation.sent_at, invitation.send_failed_at = now, None
+    invitation.save(update_fields=["token_hash", "sent_at", "send_failed_at", "updated_at"])
+    Invitation.objects.filter(
+        employee_id=invitation.employee_id, accepted_at__isnull=True, revoked_at__isnull=True
+    ).exclude(pk=invitation.pk).update(revoked_at=now, updated_at=now)
+
+
+def mark_send_failed(invitation: Invitation) -> None:
+    """Envoi refusé : l'invitation précédente reste valable ; « Envoi échoué » à l'écran."""
+    invitation.send_failed_at = timezone.now()
+    invitation.save(update_fields=["send_failed_at", "updated_at"])
+
+
+def latest_open_invitations(employees) -> dict:
+    """Dernière invitation ni acceptée ni remplacée de chaque fiche : {employee_id: invitation}."""
+    latest = {}
+    for invitation in Invitation.objects.filter(
+        employee__in=employees, accepted_at__isnull=True, revoked_at__isnull=True
+    ).order_by("-created_at", "-pk"):
+        latest.setdefault(invitation.employee_id, invitation)
+    return latest
 
 
 def find_invitation(token: str):

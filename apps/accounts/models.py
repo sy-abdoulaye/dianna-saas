@@ -87,7 +87,12 @@ class User(Timestamped, AbstractBaseUser, PermissionsMixin):
 
 
 class Invitation(TenantModel):
-    """Invitation à créer son mot de passe (7 jours). Seule l'empreinte du jeton est stockée."""
+    """Invitation à créer son mot de passe (7 jours). Seule l'empreinte du jeton est stockée.
+
+    Le jeton est créé par la tâche d'envoi ; tant que l'e-mail n'est pas accepté par le
+    serveur d'envoi, `token_hash` est une empreinte provisoire qui ne correspond à aucun lien
+    et l'invitation précédente reste valable. Si l'envoi échoue : `send_failed_at` (« Envoi
+    échoué » dans « Utilisateurs et profils »)."""
 
     VALIDITY_DAYS = 7
 
@@ -102,6 +107,8 @@ class Invitation(TenantModel):
     expires_at = models.DateTimeField(_("expire le"))
     accepted_at = models.DateTimeField(_("acceptée le"), null=True, blank=True)
     revoked_at = models.DateTimeField(_("remplacée le"), null=True, blank=True)
+    sent_at = models.DateTimeField(_("envoyée le"), null=True, blank=True)
+    send_failed_at = models.DateTimeField(_("envoi échoué le"), null=True, blank=True)
     renewal_requested_at = models.DateTimeField(
         _("nouvelle invitation demandée le"), null=True, blank=True
     )
@@ -121,6 +128,10 @@ class Invitation(TenantModel):
 
     def __str__(self):
         return f"Invitation {self.employee}"
+
+    @property
+    def send_failed(self) -> bool:
+        return self.sent_at is None and self.send_failed_at is not None
 
     @property
     def is_usable(self) -> bool:
