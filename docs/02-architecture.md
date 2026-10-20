@@ -101,7 +101,7 @@ Toutes les demandes partagent la même machine à états (`apps/approvals/workfl
 pending      → approved | refused            (valideur)
 pending      → manager_approved → approved | refused   (congés d'été avec étape RH)
 pending      → cancelled                     (demandeur)
-approved     → cancelled                     (RH, avec motif ; lot 8)
+approved     → cancelled                     (RH ou administrateur, motif obligatoire ; L3-10)
 ```
 
 **Annulation immédiate (« Annuler » dans la notification visuelle, 30 s côté serveur, auteur de l'action uniquement) :**

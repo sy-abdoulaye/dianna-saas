@@ -31,6 +31,7 @@ Règles générales :
 | Créer, voir, annuler ses demandes en attente | Soi | Soi | Soi | Soi |
 | Voir les demandes | Soi | Équipe | Oui | Oui |
 | Valider ou refuser | Non | Équipe | Oui, sur toute demande (remplacement, M-12) ; « À valider » ne montre que les personnes sans manager | Comme RH |
+| Annuler une demande validée, avec motif (L3-10) | Non | Non | Oui | Oui |
 | Gérer les campagnes de congés d'été (`/conges/campagnes/`) | Non | Non | Oui | Oui |
 | Validation finale des congés d'été (M-03) | Non | Non | Oui | Oui |
 | Exporter (paie) | Non | Non | Oui | Oui |

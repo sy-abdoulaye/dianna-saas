@@ -19,13 +19,17 @@ Les quatre modules partagent le moteur de validation (`02-architecture.md`) et l
 
 **Annulation après envoi (L1-08) :** la demande est supprimée ; le journal d'audit garde « demande envoyée puis retirée ».
 
+**Annulation d'une demande validée (L3-10) :** réservée aux RH et aux administrateurs, motif obligatoire ; l'événement de planning est supprimé, le demandeur reçoit une notification et un e-mail. Le salarié n'annule que ses demandes en attente.
+
+**Cas particuliers du valideur :** congés d'été d'une personne sans manager avec étape RH active : validation finale RH en une seule étape (L3-02) ; manager RH ou administrateur : sa validation est finale (L3-03).
+
 **Transitions :** voir `02-architecture.md`. Après envoi, validation ou refus : notification visuelle avec « Annuler » (30 s, L0-03), notification au destinataire, e-mail selon M-16, journal d'audit.
 
 ## Télétravail
 
 - **Bloc :** indicateurs « Cette semaine x / quota », « En attente de validation », « Règle de l'entreprise : N jours par semaine ».
 - **Champs :** Jour (obligatoire), Commentaire (facultatif).
-- **Contrôles :** jour ouvré (« Le télétravail se déclare du lundi au vendredi. ») ; pas dans le passé ; pas de doublon le même jour ; quota hebdomadaire (demandes en attente + validées) : « Vous avez déjà {n} jours de télétravail la semaine du {date} (maximum {quota}). » ; quota individuel si dérogation.
+- **Contrôles :** jour ouvré (« Le télétravail se déclare du lundi au vendredi. ») ; pas dans le passé (aujourd'hui permis, L3-04) ; pas de doublon le même jour ; quota hebdomadaire (demandes en attente + validées) : « Vous avez déjà {n} jours de télétravail la semaine du {date} (maximum {quota}). » ; quota individuel si dérogation.
 - **Validation :** manager direct ; automatique si l'entreprise l'a choisi (M-02).
 - **Export (RH, lot 4) :** récapitulatif mensuel des jours de télétravail validés par salarié (CSV, Excel).
 - **Planning :** événement « Télétravail » (hachuré tant qu'il est en attente).
@@ -43,7 +47,7 @@ Les quatre modules partagent le moteur de validation (`02-architecture.md`) et l
 ## Astreintes
 
 - **Champs :** Type (Astreinte, Intervention), Début et Fin (côte à côte), Durée d'intervention en heures (pas de 0,5 ; obligatoire pour une intervention), Description.
-- **Contrôles :** fin ≥ début ; durée > 0 et ≤ 24 pour une intervention. Début et fin sont des **dates incluses** (pas d'heures en V1).
+- **Contrôles :** fin ≥ début ; durée > 0 et ≤ 24 pour une intervention ; pas de chevauchement entre deux astreintes actives de la même personne (L3-07). Début et fin sont des **dates incluses** (pas d'heures en V1).
 - **Planning :** une astreinte crée un événement « Astreinte » (hachuré tant qu'elle est en attente) ; une intervention n'est pas projetée au planning, elle sert à l'export paie.
 - **Export paie (RH) :** récapitulatif mensuel des astreintes et interventions validées par salarié (CSV et Excel).
 
