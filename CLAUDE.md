@@ -1,6 +1,6 @@
 # CLAUDE.md : Dianna
 
-**Langue.** Toutes les réponses à Leo, les notes de livraison, la documentation et les descriptions de demandes de fusion sont en français. Les noms dans le code (variables, fonctions, commits) restent en anglais.
+**Langue.** Toutes les réponses à Leo, les notes de livraison, la documentation, les descriptions de demandes de fusion et les messages de commit sont en français (commits au présent). Seuls les noms dans le code (variables, fonctions, classes, branches) restent en anglais.
 
 Dianna est un SaaS B2B multi-entreprise (multi-tenant) de gestion RH et d'organisation du travail, destiné aux PME et ETI françaises (50 à 1 000 salariés). Chaque entreprise cliente dispose d'un espace isolé et active les modules dont elle a besoin.
 
