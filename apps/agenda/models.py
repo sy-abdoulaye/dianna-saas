@@ -1,4 +1,6 @@
-"""Événement de calendrier commun (docs/02-architecture.md) : projection d'une demande dans
+"""Événement de calendrier commun et fermetures de l'entreprise.
+
+Événement de calendrier commun (docs/02-architecture.md) : projection d'une demande dans
 le planning. Créé dès l'envoi (en attente, hachuré), validé à la décision finale, supprimé en
 cas de refus ou d'annulation. Le planning (lot 4) ne lit que cette table."""
 
@@ -52,3 +54,35 @@ class CalendarEvent(TenantModel):
 
     def __str__(self):
         return f"{self.get_kind_display()} {self.start}"
+
+
+class Closure(TenantModel):
+    """Jour de fermeture saisi par l'administrateur (T-16) : toute l'entreprise, ou un site.
+    Les jours fériés ne sont pas stockés : ils viennent du paquet `holidays`
+    (apps/agenda/days.py)."""
+
+    date = models.DateField(_("date"))
+    label = models.CharField(_("libellé"), max_length=80)
+    site = models.ForeignKey(
+        "core.Site",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="closures",
+        verbose_name=_("site"),
+    )
+
+    class Meta:
+        verbose_name = _("fermeture")
+        verbose_name_plural = _("fermetures")
+        ordering = ["date", "site__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "date", "site"],
+                nulls_distinct=False,
+                name="agenda_closure_one_per_day_and_site",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.label} {self.date}"

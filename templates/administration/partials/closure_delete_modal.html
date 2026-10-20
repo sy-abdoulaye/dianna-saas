@@ -1,0 +1,8 @@
+{% extends "components/confirm.html" %}
+{% load i18n ui %}
+{% block modal_title %}{% blocktranslate with label=item.label %}Supprimer la fermeture « {{ label }} » ?{% endblocktranslate %}{% endblock %}
+{% block modal_body %}<p class="modal-text">{% blocktranslate with day=item.date|date:"j F Y" %}Le {{ day }} redeviendra un jour ouvré.{% endblocktranslate %}</p>{% endblock %}
+{% block modal_footer %}
+  {% button _("Annuler") data_modal_close=True %}
+  {% button _("Supprimer") variant="danger" icon="trash" hx_post=action_url hx_swap="none" %}
+{% endblock %}

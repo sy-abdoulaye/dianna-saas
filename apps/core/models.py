@@ -280,6 +280,8 @@ class CompanyModule(TenantModel):
 class Site(TenantModel):
     name = models.CharField(_("nom"), max_length=80)
     address = models.CharField(_("adresse"), max_length=255, blank=True)
+    # Jours fériés d'Alsace-Moselle (Vendredi saint, 26 décembre), L4-02.
+    alsace_moselle = models.BooleanField(_("jours fériés d'Alsace-Moselle"), default=False)
 
     class Meta:
         verbose_name = _("site")

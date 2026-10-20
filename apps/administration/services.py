@@ -57,9 +57,10 @@ def usage(kind: str, obj) -> int:
     return Employee.objects.filter(**{field: obj}).exclude(status=EmployeeStatus.LEFT).count()
 
 
-def add_structure(kind: str, name: str, *, actor, request=None):
+def add_structure(kind: str, name: str, *, actor, request=None, alsace_moselle=False):
     model, _field, label, _lower = STRUCTURES[kind]
-    obj = model.objects.create(name=name)
+    extra = {"alsace_moselle": alsace_moselle} if hasattr(model, "alsace_moselle") else {}
+    obj = model.objects.create(name=name, **extra)
     audit.log(
         f"company.{kind}_added",
         _("%(label)s ajouté : %(name)s") % {"label": label, "name": name},
@@ -70,10 +71,33 @@ def add_structure(kind: str, name: str, *, actor, request=None):
     return obj
 
 
-def rename_structure(kind: str, obj, name: str, *, actor, request=None):
+def rename_structure(kind: str, obj, name: str, *, actor, request=None, alsace_moselle=None):
     old = obj.name
     obj.name = name
-    obj.save(update_fields=["name", "updated_at"])
+    fields = ["name", "updated_at"]
+    changes_holidays = (
+        alsace_moselle is not None
+        and hasattr(obj, "alsace_moselle")
+        and obj.alsace_moselle != alsace_moselle
+    )
+    if changes_holidays:
+        obj.alsace_moselle = alsace_moselle
+        fields.append("alsace_moselle")
+        audit.log(
+            "company.site_holidays_changed",
+            (
+                _("Jours fériés d'Alsace-Moselle activés : %(name)s")
+                if alsace_moselle
+                else _("Jours fériés d'Alsace-Moselle désactivés : %(name)s")
+            )
+            % {"name": name},
+            actor=actor,
+            target=obj,
+            request=request,
+        )
+    obj.save(update_fields=fields)
+    if old == name:
+        return
     audit.log(
         f"company.{kind}_renamed",
         _("%(old)s renommé en %(new)s") % {"old": old, "new": name},
@@ -143,3 +167,81 @@ def export_journal_csv(*, q, start, end, actor, request=None) -> str:
         request=request,
     )
     return content
+
+
+# ---------- Fermetures (T-16) ----------
+
+
+def affected_telework(closure):
+    """Demandes de télétravail en attente ou validées le jour d'une fermeture (L4-03)."""
+    from apps.approvals.models import RequestStatus, TeleworkRequest
+
+    requests = TeleworkRequest.objects.filter(
+        date=closure.date, status__in=(RequestStatus.PENDING, RequestStatus.APPROVED)
+    ).select_related("requester")
+    if closure.site_id:
+        requests = requests.filter(requester__site_id=closure.site_id)
+    return list(requests.order_by("requester__last_name", "requester__first_name"))
+
+
+def closure_scope(closure) -> str:
+    if closure.site_id:
+        return _("site de %(name)s") % {"name": closure.site.name}
+    return _("toute l'entreprise")
+
+
+@transaction.atomic
+def add_closure(*, day, label, site, actor, request=None):
+    """Ajoute une fermeture. Les demandes de télétravail déjà faites ce jour-là restent telles
+    quelles (L4-03) : les RH sont prévenus avec leur liste."""
+    from django.urls import reverse
+    from django.utils.formats import date_format
+
+    from apps.agenda.models import Closure
+    from apps.core import notifications
+    from apps.people.models import IN_POST_STATUSES, Role
+
+    closure = Closure.objects.create(date=day, label=label, site=site)
+    when = date_format(day, "j F Y")
+    audit.log(
+        "company.closure_added",
+        _("Fermeture ajoutée : %(label)s, le %(day)s (%(scope)s)")
+        % {"label": label, "day": when, "scope": closure_scope(closure)},
+        actor=actor,
+        target=closure,
+        request=request,
+    )
+    concerned = affected_telework(closure)
+    if concerned:
+        names = ", ".join(r.requester.full_name for r in concerned)
+        text = _(
+            "Fermeture du %(day)s (%(scope)s) : %(n)s demande(s) de télétravail concernée(s) : "
+            "%(names)s."
+        ) % {"day": when, "scope": closure_scope(closure), "n": len(concerned), "names": names}
+        if len(text) > 255:
+            text = text[:254] + "…"
+        url = reverse("administration:closures") + f"#fermeture-{closure.pk}"
+        hr = Employee.objects.filter(
+            role=Role.HR, status__in=IN_POST_STATUSES, user__is_active=True
+        ).select_related("user")
+        recipients = list(hr) or list(
+            Employee.objects.filter(
+                role=Role.ADMIN, status__in=IN_POST_STATUSES, user__is_active=True
+            ).select_related("user")
+        )
+        for person in recipients:
+            notifications.notify(person, text, url=url, kind="info")
+    return closure, concerned
+
+
+@transaction.atomic
+def delete_closure(closure, *, actor, request=None):
+    from django.utils.formats import date_format
+
+    summary = _("Fermeture supprimée : %(label)s, le %(day)s (%(scope)s)") % {
+        "label": closure.label,
+        "day": date_format(closure.date, "j F Y"),
+        "scope": closure_scope(closure),
+    }
+    closure.delete()
+    audit.log("company.closure_deleted", summary, actor=actor, request=request)

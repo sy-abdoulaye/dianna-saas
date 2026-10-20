@@ -33,6 +33,15 @@ ISOLATION_CASES = {
             "approvals:cancel_approved", args=["telework", b.requests["telework"].public_id]
         ),
     ),
+    "approvals:campaign_summary": (
+        "get",
+        lambda b: reverse("approvals:campaign_summary", args=[b.requests["campaign"].pk]),
+    ),
+    # Fermetures (lot 4)
+    "administration:closure_delete": (
+        "get",
+        lambda b: reverse("administration:closure_delete", args=[b.requests["closure"].pk]),
+    ),
     "approvals:campaign_status": (
         "post",
         lambda b: reverse("approvals:campaign_status", args=[b.requests["campaign"].pk, "clore"]),
@@ -96,6 +105,7 @@ NOT_TENANT_OBJECTS = {
     # Demandes : le paramètre est le type (teletravail, conges, astreintes).
     "approvals:list",
     "approvals:new",
+    "approvals:export",
     # Annulation immédiate : jeton signé lié à l'auteur, demande relue dans l'entreprise
     # courante (test : test_undo_token_of_another_company_is_refused).
     "approvals:undo",

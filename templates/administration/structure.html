@@ -14,13 +14,14 @@
             <ul class="rows px-6 pb-5">
               {% for item in block.items %}
                 <li>
-                  <span>{{ item.name }} <span class="meta">· {% blocktranslate count n=item.usage %}{{ n }} collaborateur{% plural %}{{ n }} collaborateurs{% endblocktranslate %}</span></span>
+                  <span>{{ item.name }} <span class="meta">· {% blocktranslate count n=item.usage %}{{ n }} collaborateur{% plural %}{{ n }} collaborateurs{% endblocktranslate %}{% if item.alsace_moselle %} · {% translate "jours fériés d'Alsace-Moselle" %}{% endif %}</span></span>
                   <span class="flex gap-1">
                     {% url "administration:structure_rename" block.kind item.pk as rename_url %}
                     {% url "administration:structure_delete" block.kind item.pk as delete_url %}
                     {% blocktranslate asvar rename_label with name=item.name %}Renommer {{ name }}{% endblocktranslate %}
                     {% blocktranslate asvar delete_label with name=item.name %}Supprimer {{ name }}{% endblocktranslate %}
-                    <button class="btn btn-ghost btn-sm" type="button" hx-get="{{ rename_url }}" hx-target="#modal-root" aria-label="{{ rename_label }}">{% translate "Renommer" %}</button>
+                    {% if block.kind == "sites" %}{% blocktranslate asvar rename_label with name=item.name %}Modifier {{ name }}{% endblocktranslate %}{% endif %}
+                    <button class="btn btn-ghost btn-sm" type="button" hx-get="{{ rename_url }}" hx-target="#modal-root" aria-label="{{ rename_label }}">{% if block.kind == "sites" %}{% translate "Modifier" %}{% else %}{% translate "Renommer" %}{% endif %}</button>
                     <button class="btn btn-ghost btn-sm text-err-ink" type="button" hx-get="{{ delete_url }}" hx-target="#modal-root" aria-label="{{ delete_label }}">{% translate "Supprimer" %}</button>
                   </span>
                 </li>

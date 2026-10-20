@@ -1,11 +1,14 @@
 """Administration (`/administration/`, Administrateur uniquement)."""
 
+from datetime import timedelta
+
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -13,11 +16,13 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts import services as accounts
 from apps.administration import services
 from apps.administration.forms import (
+    ClosureForm,
     CompanyForm,
     JournalFilterForm,
     StructureForm,
     UsersFilterForm,
 )
+from apps.core import permissions
 from apps.core.access import enabled_modules, permission_required
 from apps.core.files import signed_url
 from apps.core.htmx import Toast, is_htmx, toast_response, trigger
@@ -34,9 +39,11 @@ TABS = [
     ("administration:company", gettext_lazy("Entreprise")),
     ("administration:users", gettext_lazy("Utilisateurs et profils")),
     ("administration:structure", gettext_lazy("Services et sites")),
+    ("administration:closures", gettext_lazy("Fermetures")),
     ("administration:modules", gettext_lazy("Modules")),
     ("administration:journal", gettext_lazy("Journal d'activité")),
 ]
+CLOSURES_CHANGED = "closuresChanged"
 
 MODULE_DESCRIPTIONS = {
     Module.PLANNING: gettext_lazy("Présences, télétravail, congés, astreintes, export du planning"),
@@ -53,10 +60,13 @@ MODULE_DESCRIPTIONS = {
 
 
 def tab_context(request, current: str) -> dict:
+    # Les RH n'ont accès qu'aux fermetures, en lecture (L4-04).
+    admin = permissions.can(request.employee, "admin.manage")
     return {
         "admin_tabs": [
             {"label": label, "url": reverse(name), "active": name == current}
             for name, label in TABS
+            if admin or name == "administration:closures"
         ],
         "company": request.company,
     }
@@ -227,15 +237,18 @@ def structure(request):
 def structure_form(request, kind, pk=None):
     model, _field, _label, lower = _structure(kind)
     instance = get_object_or_404(model, pk=pk) if pk else None
-    form = StructureForm(
-        request.POST or None,
-        model=model,
-        instance=instance,
-        initial={"name": instance.name} if instance else None,
-    )
+    initial = None
+    if instance:
+        initial = {
+            "name": instance.name,
+            "alsace_moselle": getattr(instance, "alsace_moselle", False),
+        }
+    form = StructureForm(request.POST or None, model=model, instance=instance, initial=initial)
     if pk:
         action_url = reverse("administration:structure_rename", args=[kind, pk])
-        title = _("Renommer « %(name)s »") % {"name": instance.name}
+        title = (_("Modifier « %(name)s »") if kind == "sites" else _("Renommer « %(name)s »")) % {
+            "name": instance.name
+        }
     else:
         action_url = reverse("administration:structure_add", args=[kind])
         title = _("Ajouter un %(kind)s") % {"kind": lower}
@@ -245,11 +258,16 @@ def structure_form(request, kind, pk=None):
         if not form.is_valid():
             return render(request, f"{template}#form", context, status=422)
         name = form.cleaned_data["name"]
+        alsace = form.cleaned_data.get("alsace_moselle") if kind == "sites" else None
         if instance:
-            services.rename_structure(kind, instance, name, actor=request.employee, request=request)
-            toast = Toast(title=_("Renommé"), message=name)
+            services.rename_structure(
+                kind, instance, name, actor=request.employee, request=request, alsace_moselle=alsace
+            )
+            toast = Toast(title=_("Modifié") if kind == "sites" else _("Renommé"), message=name)
         else:
-            services.add_structure(kind, name, actor=request.employee, request=request)
+            services.add_structure(
+                kind, name, actor=request.employee, request=request, alsace_moselle=bool(alsace)
+            )
             toast = Toast(title=_("Ajouté"), message=name)
         return _event(toast_response(toast, close_modal=True), STRUCTURE_CHANGED)
     return render(request, template, context)
@@ -284,6 +302,85 @@ def structure_delete(request, kind, pk):
     return _event(
         toast_response(Toast(title=_("Supprimé"), message=instance.name), close_modal=True),
         STRUCTURE_CHANGED,
+    )
+
+
+# ---------- Fermetures (T-16) ----------
+
+
+@require_GET
+@permission_required("closures.view")
+def closures(request):
+    from apps.agenda.models import Closure
+
+    today = timezone.localdate()
+    items = list(
+        Closure.objects.filter(date__gte=today - timedelta(days=365)).select_related("site")
+    )
+    for item in items:
+        item.scope = services.closure_scope(item)
+        item.concerned = services.affected_telework(item) if item.date >= today else []
+        item.is_past = item.date < today
+    context = {
+        **tab_context(request, "administration:closures"),
+        "upcoming": [i for i in items if not i.is_past],
+        "past": [i for i in items if i.is_past][::-1],
+        "can_manage": permissions.can(request.employee, "closures.manage"),
+    }
+    if is_htmx(request) and request.htmx.target == "closures":
+        return render(request, "administration/closures.html#lists", context)
+    return render(request, "administration/closures.html", context)
+
+
+@require_http_methods(["GET", "POST"])
+@permission_required("closures.manage")
+def closure_add(request):
+    form = ClosureForm(request.POST or None)
+    template = "administration/partials/closure_modal.html"
+    context = {"form": form, "action_url": reverse("administration:closure_add")}
+    if request.method == "POST":
+        if not form.is_valid():
+            return render(request, f"{template}#form", context, status=422)
+        closure, concerned = services.add_closure(
+            day=form.cleaned_data["date"],
+            label=form.cleaned_data["label"],
+            site=form.cleaned_data["site"],
+            actor=request.employee,
+            request=request,
+        )
+        message = closure.label
+        if concerned:
+            message = _(
+                "%(label)s. %(n)s demande(s) de télétravail concernée(s) : les RH sont prévenus."
+            ) % {"label": closure.label, "n": len(concerned)}
+        return _event(
+            toast_response(Toast(title=_("Fermeture ajoutée"), message=message), close_modal=True),
+            CLOSURES_CHANGED,
+        )
+    return render(request, template, context)
+
+
+@require_http_methods(["GET", "POST"])
+@permission_required("closures.manage")
+def closure_delete(request, pk):
+    from apps.agenda.models import Closure
+
+    closure = get_object_or_404(Closure.objects.select_related("site"), pk=pk)
+    if request.method == "GET":
+        return render(
+            request,
+            "administration/partials/closure_delete_modal.html",
+            {
+                "item": closure,
+                "action_url": reverse("administration:closure_delete", args=[pk]),
+            },
+        )
+    services.delete_closure(closure, actor=request.employee, request=request)
+    return _event(
+        toast_response(
+            Toast(title=_("Fermeture supprimée"), message=closure.label), close_modal=True
+        ),
+        CLOSURES_CHANGED,
     )
 
 
