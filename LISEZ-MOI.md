@@ -53,8 +53,9 @@ Déploiement (même image Docker pour le serveur et le travailleur) :
 1. `python manage.py migrate`, puis `python manage.py createcachetable` (cache partagé de la limitation des tentatives).
 2. Serveur web : la commande par défaut de l'image (Gunicorn).
 3. Travailleur des tâches, dans un conteneur séparé : `python manage.py db_worker`. Sans lui, aucun e-mail ne part (invitations, mot de passe oublié, demandes).
-4. Une fois par jour : `python manage.py prune_db_task_results` (purge des tâches terminées, qui contiennent le texte des e-mails).
-5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`.
+4. Purge des résultats de tâches, une fois par jour : `python manage.py purge_task_results` (échecs de plus de 7 jours ; les tâches réussies sont supprimées dès leur fin). Les lignes de tâches ne contiennent ni lien ni texte d'e-mail en clair (A3-04).
+   Les services `worker` et `scheduler` de `docker-compose.yml` font les étapes 3 et 4 : `docker compose --profile taches up -d`.
+5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `TASKS_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`.
 Contrôles : `make lint`, `make test`, `make e2e`, `make check`. Liste complète : `make help`.
 
 ## À faire hors code avant la commercialisation

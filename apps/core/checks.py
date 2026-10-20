@@ -16,34 +16,42 @@ def demo_two_factor_switch(app_configs, **kwargs):
     return []
 
 
+ENCRYPTION_SETTINGS = {
+    "MFA_ENCRYPTION_KEY": ("dianna.E002", "dianna.E003", "dianna.E004"),
+    "TASKS_ENCRYPTION_KEY": ("dianna.E005", "dianna.E006", "dianna.E007"),
+}
+
+
 @register()
-def mfa_encryption_key(app_configs, **kwargs):
-    """Clé de chiffrement des secrets TOTP : présente, valide, distincte de SECRET_KEY."""
+def encryption_keys(app_configs, **kwargs):
+    """Clés de chiffrement : présentes, valides, distinctes de SECRET_KEY et entre elles."""
     from cryptography.fernet import Fernet
 
-    from apps.accounts.mfa import parse_keys
+    from apps.core.crypto import parse_keys
 
-    keys = parse_keys(getattr(settings, "MFA_ENCRYPTION_KEY", ""))
     hint = (
         'Générez une clé : python -c "from cryptography.fernet import Fernet; '
         'print(Fernet.generate_key().decode())"'
     )
-    if not keys:
-        return [Error("MFA_ENCRYPTION_KEY est obligatoire.", hint=hint, id="dianna.E002")]
     errors = []
-    for key in keys:
-        if key == settings.SECRET_KEY:
-            errors.append(
-                Error("MFA_ENCRYPTION_KEY doit être distincte de SECRET_KEY.", id="dianna.E003")
-            )
-        try:
-            Fernet(key.encode())
-        except ValueError:
-            errors.append(
-                Error(
-                    "MFA_ENCRYPTION_KEY n'est pas une clé Fernet valide.",
-                    hint=hint,
-                    id="dianna.E004",
+    seen = {}
+    for setting, (missing_id, secret_id, invalid_id) in ENCRYPTION_SETTINGS.items():
+        keys = parse_keys(getattr(settings, setting, ""))
+        if not keys:
+            errors.append(Error(f"{setting} est obligatoire.", hint=hint, id=missing_id))
+            continue
+        for key in keys:
+            if key == settings.SECRET_KEY:
+                errors.append(Error(f"{setting} doit être distincte de SECRET_KEY.", id=secret_id))
+            if key in seen and seen[key] != setting:
+                errors.append(
+                    Error(f"{setting} doit être distincte de {seen[key]}.", id="dianna.E008")
                 )
-            )
+            seen[key] = setting
+            try:
+                Fernet(key.encode())
+            except ValueError:
+                errors.append(
+                    Error(f"{setting} n'est pas une clé Fernet valide.", hint=hint, id=invalid_id)
+                )
     return errors

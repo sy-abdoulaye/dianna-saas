@@ -99,7 +99,7 @@ class CompanyAdmin(admin.ModelAdmin):
         if change:
             super().save_model(request, obj, form, change)
             return
-        company, _admin, _token = services.create_company(
+        company, _admin = services.create_company(
             name=form.cleaned_data["name"],
             slug=form.cleaned_data["slug"],
             admin_first_name=form.cleaned_data["admin_first_name"],

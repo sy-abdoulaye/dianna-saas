@@ -16,8 +16,9 @@ class AccountAdapter(DefaultAccountAdapter):
         return False
 
     def send_mail(self, template_prefix, email, context):
-        """E-mails d'allauth (mot de passe oublié…) : rendus ici, envoyés par une tâche (L3-11)."""
-        from apps.core.mail import queue_email
+        """E-mails d'allauth (mot de passe oublié…) : rendus ici, envoyés par une tâche (L3-11)
+        dont les arguments sont chiffrés : le lien ne reste pas en clair en base (A3-04)."""
+        from apps.core.mail import queue_encrypted_email
 
         message = self.render_mail(template_prefix, email, context)
         html = next(
@@ -28,7 +29,7 @@ class AccountAdapter(DefaultAccountAdapter):
             ),
             "",
         )
-        queue_email(
+        queue_encrypted_email(
             message.subject,
             message.body,
             list(message.to),

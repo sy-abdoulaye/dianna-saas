@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 import pytest
@@ -18,21 +19,24 @@ STRONG = "Une-phrase-de-passe-solide-2026"
 def test_invitation_mail_points_to_the_company_space(company_a, run_tasks):
     with tenant_context(company_a.company):
         newcomer = EmployeeFactory(company=company_a.company, user=None)
-        invitation, token = services.invite(newcomer, sent_by=company_a.admin)
+        invitation = services.invite(newcomer, sent_by=company_a.admin)
+        placeholder = invitation.token_hash
     assert mail.outbox == []  # envoyée par le travailleur de tâches (L1-14)
     run_tasks()
     assert len(mail.outbox) == 1
     message = mail.outbox[0]
     assert message.to == [newcomer.email]
-    assert f"http://exemple.localhost/invitation/{token}/" in message.body
-    assert token not in invitation.token_hash  # seule l'empreinte est stockée
+    token = re.search(r"http://exemple\.localhost/invitation/([\w-]+)/", message.body).group(1)
+    # Jeton créé par la tâche : seule son empreinte est stockée (A3-04).
+    invitation = Invitation.all_companies.get(pk=invitation.pk)
+    assert invitation.token_hash == services.hash_token(token) != placeholder
     with tenant_context(company_a.company):
         assert AuditLog.objects.filter(action="account.invitation_sent").exists()
 
 
 def test_new_invitation_replaces_the_previous_one(company_a):
     with tenant_context(company_a.company):
-        _second, _token = services.invite(company_a.pending)
+        services.invite(company_a.pending)
         first = Invitation.objects.get(pk=company_a.invitation.pk)
     assert first.revoked_at is not None and not first.is_usable
 

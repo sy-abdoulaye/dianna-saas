@@ -357,6 +357,11 @@ class Notification(TenantModel):
     kind = models.CharField(_("type"), max_length=10, choices=Kind, default=Kind.INFO)
     read_at = models.DateTimeField(_("lue le"), null=True, blank=True)
     email_sent_at = models.DateTimeField(_("e-mail envoyé le"), null=True, blank=True)
+    # Objet de l'e-mail, s'il y en a un : le corps est construit au moment de l'envoi.
+    email_subject = models.CharField(_("objet de l'e-mail"), max_length=150, blank=True)
+    # Objet concerné (demande…) : une transition retire les notifications devenues fausses.
+    source_type = models.CharField(_("type d'objet"), max_length=20, blank=True)
+    source_id = models.PositiveBigIntegerField(_("objet"), null=True, blank=True)
 
     class Meta:
         verbose_name = _("notification")

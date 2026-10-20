@@ -13,3 +13,9 @@ class CoreConfig(AppConfig):
         from apps.core.models import check_m2m_same_company
 
         m2m_changed.connect(check_m2m_same_company, dispatch_uid="dianna.m2m_same_company")
+
+        from django.tasks.signals import task_finished
+
+        from apps.core.tasks import delete_successful_result
+
+        task_finished.connect(delete_successful_result, dispatch_uid="dianna.task_cleanup")

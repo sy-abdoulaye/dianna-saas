@@ -8,7 +8,6 @@ import secrets
 from datetime import timedelta
 
 from django.db import transaction
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -16,7 +15,7 @@ from django.utils.translation import gettext as _
 from apps.accounts.models import Invitation, User, normalize_email
 from apps.core import audit, notifications
 from apps.core.hosts import company_url
-from apps.core.mail import queue_email
+from apps.core.mail import queue_invitation_email
 from apps.people.models import Employee, EmployeeStatus, Role
 
 EMAIL_TAKEN = _(
@@ -51,7 +50,9 @@ def invitation_url(invitation, token: str) -> str:
 
 @transaction.atomic
 def invite(employee: Employee, *, sent_by: Employee | None = None, request=None):
-    """Envoie (ou renvoie) une invitation. Renvoie (invitation, jeton en clair)."""
+    """Envoie (ou renvoie) une invitation. Le jeton est créé par la tâche d'envoi et n'existe
+    en clair que dans l'e-mail (A3-04) : l'empreinte enregistrée ici ne correspond à aucun
+    jeton tant que l'e-mail n'est pas parti."""
     if employee.user_id is not None:
         raise InvitationError(_("Cette personne a déjà un compte."))
     if employee.status == EmployeeStatus.LEFT:
@@ -63,22 +64,13 @@ def invite(employee: Employee, *, sent_by: Employee | None = None, request=None)
     Invitation.objects.filter(
         employee=employee, accepted_at__isnull=True, revoked_at__isnull=True
     ).update(revoked_at=now, updated_at=now)
-    token = secrets.token_urlsafe(32)
     invitation = Invitation.objects.create(
         employee=employee,
-        token_hash=hash_token(token),
+        token_hash=hash_token(secrets.token_urlsafe(32)),  # jeton jeté : remplacé à l'envoi
         expires_at=now + timedelta(days=Invitation.VALIDITY_DAYS),
         sent_by=sent_by,
     )
-    context = {
-        "employee": employee,
-        "company": employee.company,
-        "url": invitation_url(invitation, token),
-        "days": Invitation.VALIDITY_DAYS,
-    }
-    subject = render_to_string("accounts/email/invitation_subject.txt", context).strip()
-    body = render_to_string("accounts/email/invitation_message.txt", context)
-    queue_email(subject, body, [employee.email])  # tâche sans délai (L1-14)
+    queue_invitation_email(invitation)  # tâche sans délai (L1-14)
     audit.log(
         "account.invitation_sent",
         _("Invitation envoyée à %(name)s") % {"name": employee.full_name},
@@ -86,7 +78,7 @@ def invite(employee: Employee, *, sent_by: Employee | None = None, request=None)
         target=employee,
         request=request,
     )
-    return invitation, token
+    return invitation
 
 
 def find_invitation(token: str):

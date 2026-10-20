@@ -1,4 +1,19 @@
 # PostgreSQL 18 pour le développement (T-03). `make db` le démarre.
+# Profil « taches » (même image que le serveur) : travailleur des tâches et purge quotidienne
+# des résultats de tâches (A3-04). `docker compose --profile taches up -d`.
+x-app: &app
+  build: .
+  profiles: ["taches"]
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgres://dianna:dianna@db:5432/dianna
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+
 services:
   db:
     image: postgres:18
@@ -15,6 +30,18 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  worker:
+    <<: *app
+    command: ["python", "manage.py", "db_worker"]
+
+  # Purge des résultats de tâches : réussis restants et échecs de plus de 7 jours (A3-04).
+  scheduler:
+    <<: *app
+    command:
+      - sh
+      - -c
+      - while true; do python manage.py purge_task_results; sleep 86400; done
 
 volumes:
   pgdata:

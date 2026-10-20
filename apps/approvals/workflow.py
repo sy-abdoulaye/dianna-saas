@@ -19,7 +19,6 @@ dernière transition de leur auteur.
 from dataclasses import dataclass, field
 
 from django.db import transaction
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -33,8 +32,6 @@ from apps.approvals.models import (
     TeleworkRequest,
 )
 from apps.core import audit, notifications, permissions
-from apps.core.hosts import company_url
-from apps.core.mail import queue_undoable_email
 from apps.core.models import Notification
 from apps.people.models import IN_POST_STATUSES, Employee, Role
 
@@ -222,18 +219,9 @@ def _module_url(request, tab=""):
 
 
 def _notify(recipient, text, url, kind, *, email_subject="", request=None) -> int:
-    notification = notifications.notify(recipient, text, url=url, kind=kind)
-    if email_subject and recipient.user_id and recipient.user.is_active:
-        body = render_to_string(
-            "approvals/email/notification.txt",
-            {
-                "recipient": recipient,
-                "text": text,
-                "url": company_url(recipient.company, url),
-            },
-        )
-        queue_undoable_email(email_subject, body, [recipient.user.email], notification=notification)
-    return notification.pk
+    return notifications.notify(
+        recipient, text, url=url, kind=kind, email_subject=email_subject, source=request
+    ).pk
 
 
 def _notify_validators(request, validators) -> list[int]:
@@ -250,6 +238,7 @@ def _notify_validators(request, validators) -> list[int]:
             _module_url(request, "a-valider"),
             Notification.Kind.REQUEST,
             email_subject=_("Demande à valider : %(kind)s") % {"kind": kind.lower},
+            request=request,
         )
         for v in validators
     ]
@@ -271,6 +260,7 @@ def _notify_requester(request, verb: str, reason: str = "") -> int:
         Notification.Kind.DECISION,
         email_subject=_("Votre demande de %(kind)s a été %(verb)s")
         % {"kind": kind.lower, "verb": verb},
+        request=request,
     )
 
 

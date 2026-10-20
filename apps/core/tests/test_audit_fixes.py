@@ -14,7 +14,7 @@ from django.test import Client
 
 from apps.accounts.models import User
 from apps.core import permissions
-from apps.core.checks import mfa_encryption_key
+from apps.core.checks import encryption_keys
 from apps.core.models import Company, CompanyModule, Site
 from apps.core.tenancy import tenant_context
 from conftest import activate_totp
@@ -65,18 +65,25 @@ def test_key_rotation_keeps_old_secrets_readable(settings):
 )
 def test_encryption_key_is_checked(settings, value, error_id):
     settings.MFA_ENCRYPTION_KEY = settings.SECRET_KEY if value == "__SECRET__" else value
-    assert error_id in {error.id for error in mfa_encryption_key(None)}
+    assert error_id in {error.id for error in encryption_keys(None)}
 
 
 def test_production_requires_the_encryption_key_and_host_cookies(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "x" * 60)
     monkeypatch.setenv("ALLOWED_HOSTS", "dianna.fr")
     monkeypatch.delenv("MFA_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv("TASKS_ENCRYPTION_KEY", "autre-cle")
     sys.modules.pop("config.settings.prod", None)
     with pytest.raises(ImproperlyConfigured):
         importlib.import_module("config.settings.prod")
     sys.modules.pop("config.settings.prod", None)
+    # Clé des tâches (A3-04) : obligatoire aussi.
     monkeypatch.setenv("MFA_ENCRYPTION_KEY", "cle")
+    monkeypatch.delenv("TASKS_ENCRYPTION_KEY")
+    with pytest.raises(ImproperlyConfigured):
+        importlib.import_module("config.settings.prod")
+    sys.modules.pop("config.settings.prod", None)
+    monkeypatch.setenv("TASKS_ENCRYPTION_KEY", "autre-cle")
     prod = importlib.import_module("config.settings.prod")
     sys.modules.pop("config.settings.prod", None)
     # g. Cookies __Host- : sans Domain, Path=/, Secure.

@@ -22,7 +22,7 @@ TAILWIND := bin/tailwindcss-$(TAILWIND_VERSION)-$(TW_PLATFORM)
 CSS_IN := static/css/app.css
 CSS_OUT := static/build/app.css
 
-.PHONY: help install up down db css css-build migrate test cov e2e lint format seed shell check worker
+.PHONY: help install up down db css css-build migrate test cov e2e lint format seed shell check worker purge-tasks
 
 help: ## Affiche cette aide
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
@@ -48,6 +48,9 @@ up: db css-build migrate ## Démarre PostgreSQL et le serveur de développement 
 
 worker: ## Travailleur des tâches en arrière-plan (e-mails), dans un second terminal
 	$(MANAGE) db_worker
+
+purge-tasks: ## Purge des résultats de tâches (échecs de plus de 7 jours), chaque jour en production
+	$(MANAGE) purge_task_results
 
 down: ## Arrête PostgreSQL
 	docker compose down
@@ -78,7 +81,7 @@ format: ## Formate le code Python et les templates
 
 check: ## Vérifications Django (dont la configuration de production)
 	$(MANAGE) check
-	DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") MFA_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") ALLOWED_HOSTS=example.com $(MANAGE) check --deploy --fail-level WARNING
+	DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") MFA_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") TASKS_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") ALLOWED_HOSTS=example.com $(MANAGE) check --deploy --fail-level WARNING
 
 seed: ## Charge l'entreprise de démonstration « Exemple SAS » (disponible au lot 1)
 	@if $(MANAGE) help seed_demo >/dev/null 2>&1; then $(MANAGE) seed_demo; \

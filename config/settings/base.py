@@ -127,6 +127,9 @@ MFA_TRUST_ENABLED = False
 # clés séparées par des virgules pour en changer : la première chiffre, toutes déchiffrent.
 MFA_ADAPTER = "apps.accounts.mfa.EncryptingMFAAdapter"
 MFA_ENCRYPTION_KEY = env("MFA_ENCRYPTION_KEY", default="")
+# Arguments chiffrés des tâches qui portent un e-mail d'allauth (A3-04) : clé dédiée,
+# distincte de SECRET_KEY et de MFA_ENCRYPTION_KEY.
+TASKS_ENCRYPTION_KEY = env("TASKS_ENCRYPTION_KEY", default="")
 # Double authentification des comptes de démonstration RH et Admin : développement seulement.
 DEMO_DISABLE_2FA = env.bool("DEMO_DISABLE_2FA", default=False)
 

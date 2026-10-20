@@ -20,7 +20,7 @@ def create_company(
     request=None,
 ):
     """Crée l'entreprise, active tous les modules, crée la fiche du premier administrateur et
-    lui envoie son invitation. Renvoie (company, employee, jeton d'invitation ou None)."""
+    lui envoie son invitation. Renvoie (company, employee)."""
     from apps.accounts import services as accounts
     from apps.people.models import Employee, Role
 
@@ -44,10 +44,9 @@ def create_company(
             target=company,
             request=request,
         )
-        token = None
         if invite:
-            _invitation, token = accounts.invite(admin, request=request)
-    return company, admin, token
+            accounts.invite(admin, request=request)
+    return company, admin
 
 
 def set_module(company: Company, module: str, enabled: bool, *, actor=None, request=None):
