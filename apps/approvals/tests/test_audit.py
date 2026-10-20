@@ -85,6 +85,17 @@ def test_manager_cannot_undo_after_the_final_hr_decision(client_for, company_a, 
     assert [m.subject for m in validated] == ["Votre demande de congés a été validée"]
 
 
+def test_undo_of_the_final_hr_validation_goes_back_to_manager_approved(company_a, submit):
+    request = submit(company_a, company_a.employee, LeaveRequest).request
+    with tenant_context(company_a.company):
+        workflow.approve(request, company_a.manager)
+        final = workflow.approve(request, company_a.hr)
+        workflow.undo(LeaveRequest, final.undo_payload("approve"), company_a.hr)
+        request.refresh_from_db()
+    assert request.status == RequestStatus.MANAGER_APPROVED
+    assert request.decided_by is None and request.manager_decided_by == company_a.manager
+
+
 def test_undo_of_the_latest_transition_still_works(company_a, submit):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):

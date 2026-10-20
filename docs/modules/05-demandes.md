@@ -73,7 +73,7 @@ Les quatre modules partagent le moteur de validation (`02-architecture.md`) et l
 - Un manager ne voit dans « À valider » que les demandes de son équipe directe et ne peut pas valider sa propre demande.
 - Un refus sans motif est bloqué ; le motif apparaît dans l'historique du demandeur.
 - Envoyer une demande crée l'événement de planning en attente (hachuré) ; la validation finale le rend plein ; le refus ou l'annulation le supprime.
-- « Annuler » dans la notification visuelle après une validation remet la demande « En attente » et retire la notification envoyée.
+- « Annuler » dans la notification visuelle après une validation remet la demande « En attente » et retire la notification envoyée ; après la validation finale RH d'un congé d'été (étape RH active), la demande revient à « Validée par le manager », la validation du manager est conservée.
 - « Annuler » après une décision suivie d'une autre (le manager valide, les RH valident, puis le manager annule) est refusé avec « Une autre décision a été prise depuis. Rien n'a été modifié. ».
 - « Annuler » une annulation est refusé si le quota, la règle d'un jour ou un chevauchement ne sont plus respectés entre-temps.
 - Le demandeur ne voit jamais l'alerte de conflit sur ses propres demandes.
