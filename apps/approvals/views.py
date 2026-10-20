@@ -467,15 +467,8 @@ def new_campaign(request):
     if request.method == "POST":
         if not form.is_valid():
             return render(request, f"{template}#form", {"form": form}, status=422)
-        campaign = form.save()
-        from apps.core import audit
-
-        audit.log(
-            "requests.campaign_created",
-            _("Campagne créée : %(l)s") % {"l": campaign.label},
-            actor=request.employee,
-            target=campaign,
-            request=request,
+        campaign = workflow.create_summer_campaign(
+            form.cleaned_data, request.employee, http_request=request
         )
         return trigger(
             toast_response(

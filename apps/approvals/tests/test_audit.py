@@ -166,6 +166,17 @@ def test_undo_of_an_hr_cancellation_respects_on_call_overlaps(client_for, compan
     assert toast(response)["title"] == "Cette astreinte chevauche une de vos astreintes déclarées."
 
 
+def test_hr_cannot_cancel_their_own_approved_request(company_a, submit):
+    request = submit(company_a, company_a.hr).request
+    with tenant_context(company_a.company):
+        workflow.approve(request, company_a.admin)
+        request.refresh_from_db()
+        assert request.status == RequestStatus.APPROVED
+        assert not workflow.can_cancel_approved(company_a.hr, request)
+        with pytest.raises(workflow.WorkflowError):
+            workflow.cancel_approved(request, company_a.hr, reason="Erreur")
+
+
 def test_submit_checks_live_in_the_service(company_a, submit):
     with pytest.raises(workflow.RequestValidationError) as error:
         submit(company_a, company_a.employee, date=company_a.requests["telework"].date)
@@ -321,7 +332,48 @@ def test_hr_cancellation_retracts_the_unsent_validation(company_a, submit, run_t
     assert subjects == ["Votre demande de télétravail a été annulée"]
 
 
+def test_manager_step_notifies_the_requester_in_dianna_only(company_a, submit, run_tasks):
+    """L3-13 : « Validée par le manager » : pas d'e-mail au demandeur, e-mail aux RH."""
+    request = submit(company_a, company_a.employee, LeaveRequest).request
+    with tenant_context(company_a.company):
+        result = workflow.approve(request, company_a.manager)
+        notes = Notification.objects.filter(pk__in=result.notification_ids)
+        mine = notes.get(recipient=company_a.employee)
+        assert "validée par votre manager" in mine.text and mine.email_subject == ""
+    mail.outbox.clear()
+    run_tasks(after_seconds=46)
+    recipients = [m.to[0] for m in mail.outbox]
+    assert company_a.employee.user.email not in recipients
+    assert company_a.hr.user.email in recipients
+
+
 # ---------- f. Campagnes : une seule ouverte, jamais d'erreur 500 ----------
+
+
+def test_campaign_creation_goes_through_the_service(company_a, client_for, monkeypatch):
+    calls = []
+    real = workflow.create_summer_campaign
+    monkeypatch.setattr(
+        workflow, "create_summer_campaign", lambda *a, **k: calls.append(a) or real(*a, **k)
+    )
+    response = client_for(company_a.hr).post(
+        "/conges/campagnes/nouvelle/",
+        {
+            "label": "Été 2030",
+            "period_start": "2030-06-01",
+            "period_end": "2030-09-30",
+            "deadline": "2030-02-28",
+            "conflict_threshold": 30,
+        },
+    )
+    assert response.status_code == 204 and len(calls) == 1
+    campaign = SummerCampaign.all_companies.get(label="Été 2030")
+    assert campaign.status == SummerCampaign.Status.DRAFT
+    from apps.core.models import AuditLog
+
+    assert AuditLog.all_companies.filter(
+        action="requests.campaign_created", company=company_a.company
+    ).exists()
 
 
 @pytest.mark.django_db(transaction=True)

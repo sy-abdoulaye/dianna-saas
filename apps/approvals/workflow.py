@@ -360,7 +360,7 @@ def _notify_validators(request, validators) -> list[int]:
     ]
 
 
-def _notify_requester(request, verb: str, reason: str = "") -> int:
+def _notify_requester(request, verb: str, reason: str = "", *, email: bool = True) -> int:
     kind = kind_of(request)
     text = _("Votre demande (%(kind)s, %(summary)s) a été %(verb)s.") % {
         "kind": kind.lower,
@@ -375,7 +375,9 @@ def _notify_requester(request, verb: str, reason: str = "") -> int:
         _module_url(request),
         Notification.Kind.DECISION,
         email_subject=_("Votre demande de %(kind)s a été %(verb)s")
-        % {"kind": kind.lower, "verb": verb},
+        % {"kind": kind.lower, "verb": verb}
+        if email
+        else "",
         request=request,
     )
 
@@ -478,7 +480,10 @@ def approve(request, actor: Employee, *, comment: str = "", http_request=None) -
         result.event_id = _event(request, actor, RequestEvent.Action.MANAGER_APPROVED, comment)
         sync_calendar(request)
         notifications.retract_unsent(request)
-        result.notification_ids = [_notify_requester(request, _("validée par votre manager"))]
+        # L3-13 : le demandeur est prévenu dans Dianna seulement ; les RH reçoivent l'e-mail.
+        result.notification_ids = [
+            _notify_requester(request, _("validée par votre manager"), email=False)
+        ]
         result.notification_ids += _notify_validators(request, hr_validators(request.requester))
         _audit(
             request,
@@ -687,6 +692,25 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
 
 
 # ---------- Campagnes de congés d'été (RH) ----------
+
+
+CAMPAIGN_FIELDS = ("label", "period_start", "period_end", "deadline", "conflict_threshold")
+
+
+@transaction.atomic
+def create_summer_campaign(data: dict, actor, *, http_request=None):
+    """Crée une campagne en brouillon et l'inscrit au journal d'audit."""
+    campaign = SummerCampaign.objects.create(
+        **{name: data[name] for name in CAMPAIGN_FIELDS if name in data}
+    )
+    audit.log(
+        "requests.campaign_created",
+        _("Campagne créée : %(l)s") % {"l": campaign.label},
+        actor=actor,
+        target=campaign,
+        request=http_request,
+    )
+    return campaign
 
 
 @transaction.atomic
