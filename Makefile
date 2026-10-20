@@ -64,8 +64,9 @@ css-build: $(TAILWIND) ## Compile Tailwind une fois (minifié)
 migrate: ## Applique les migrations
 	$(MANAGE) migrate
 
-test: css-build ## Tests unitaires et d'intégration (pytest, sans les parcours e2e)
-	$(RUN) pytest -m "not e2e" --cov --cov-report=term-missing:skip-covered
+test: css-build ## Tests unitaires et d'intégration (pytest, sans les parcours e2e), puis performance
+	$(RUN) pytest -m "not e2e and not perf" --cov --cov-report=term-missing:skip-covered
+	$(RUN) pytest -m perf
 
 e2e: css-build ## Parcours de bout en bout Playwright
 	$(RUN) pytest -m e2e tests/e2e

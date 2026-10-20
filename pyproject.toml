@@ -12,8 +12,11 @@ dependencies = [
     "django-htmx>=1.29.0",
     "django-tasks-db==0.13.0",
     "gunicorn>=26.2.0",
+    "holidays>=0.107,<1",
+    "openpyxl>=3.1.5,<3.2",
     "pillow>=12.3,<13",
     "psycopg[binary]>=3.2",
+    "weasyprint>=70.0,<71",
     "whitenoise>=6.12.0",
 ]
 
@@ -56,7 +59,10 @@ DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py"]
 testpaths = ["apps", "tests"]
 addopts = "--strict-markers -p no:cacheprovider"
-markers = ["e2e: parcours de bout en bout Playwright (make e2e)"]
+markers = [
+    "e2e: parcours de bout en bout Playwright (make e2e)",
+    "perf: budget de temps de réponse, mesuré sans couverture (make test, second passage)",
+]
 
 [tool.coverage.run]
 source = ["apps"]
