@@ -194,4 +194,42 @@ class CampaignForm(forms.ModelForm):
         return cleaned
 
 
+EXPORT_FORMATS = [("csv", _("CSV (tableur)")), ("xlsx", _("Excel"))]
+
+
+class MonthExportForm(forms.Form):
+    """Exports RH mensuels (télétravail, astreintes) : mois et format."""
+
+    mois = forms.DateField(
+        label=_("Mois"),
+        input_formats=["%Y-%m"],
+        widget=forms.DateInput(attrs={"type": "month"}, format="%Y-%m"),
+        error_messages={"required": _("Choisissez le mois."), "invalid": _("Choisissez le mois.")},
+    )
+    format = forms.ChoiceField(
+        label=_("Format"), choices=EXPORT_FORMATS, initial="csv", widget=forms.RadioSelect
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["mois"].initial = rules.today().replace(day=1)
+
+
+class CampaignExportForm(forms.Form):
+    campagne = forms.ChoiceField(label=_("Campagne"))
+    format = forms.ChoiceField(
+        label=_("Format"), choices=EXPORT_FORMATS, initial="csv", widget=forms.RadioSelect
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.campaigns = {str(c.pk): c for c in SummerCampaign.objects.order_by("-period_start")}
+        self.fields["campagne"].choices = [(pk, c.label) for pk, c in self.campaigns.items()]
+        opened = next((pk for pk, c in self.campaigns.items() if c.status == "open"), None)
+        self.fields["campagne"].initial = opened
+
+    def clean_campagne(self):
+        return self.campaigns[self.cleaned_data["campagne"]]
+
+
 FORMS = {"telework": TeleworkForm, "leave": LeaveForm, "on_call": OnCallForm}

@@ -8,6 +8,11 @@
       <p class="sub">{{ kind.subtitle }}</p>
     </div>
     <div class="actions">
+      {% if planning_url %}{% button _("Voir le planning") icon="cal" href=planning_url %}{% endif %}
+      {% if can_export %}
+        {% url "approvals:export" kind.key as export_url %}
+        {% button _("Exporter") icon="dl" hx_get=export_url hx_target="#modal-root" %}
+      {% endif %}
       {% if kind.key == "leave" and is_hr %}
         {% url "approvals:campaigns" as campaigns_url %}
         {% button _("Gérer les campagnes") icon="sun" href=campaigns_url %}
@@ -33,6 +38,7 @@
       {% blocktranslate asvar campaign_title with label=campaign.label %}Campagne {{ label }}.{% endblocktranslate %}
       {% blocktranslate asvar campaign_text with deadline=campaign.deadline|date:"j F Y" start=campaign.period_start|date:"j F" end=campaign.period_end|date:"j F Y" %}Déposez vos vœux avant le {{ deadline }}, pour des congés compris entre le {{ start }} et le {{ end }}. Votre manager arbitre en tenant compte des absences du service.{% endblocktranslate %}
       {% include "components/banner.html" with kind="info" title=campaign_title text=campaign_text %}
+      {% if planning_url %}<p class="meta"><a class="link" href="{{ planning_url }}">{% translate "Voir les absences du service au planning" %}</a></p>{% endif %}
     {% else %}
       {% translate "Aucune campagne de congés d'été n'est ouverte." as no_campaign_title %}
       {% translate "Vous pouvez déclarer une autre absence." as no_campaign_text %}
