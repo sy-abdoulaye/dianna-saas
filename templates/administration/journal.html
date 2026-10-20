@@ -22,7 +22,7 @@
             {% for entry in page_obj.object_list %}
               <li>
                 <span><b class="font-medium">{% if entry.actor %}{{ entry.actor.full_name }}{% else %}{% translate "Dianna" %}{% endif %}</b> · {{ entry.summary }}</span>
-                <span class="meta whitespace-nowrap">{{ entry.created_at|date:"j M Y à H:i" }}</span>
+                <span class="meta whitespace-nowrap">{{ entry.created_at|date:"j N Y à H:i" }}</span>
               </li>
             {% endfor %}
           </ul>

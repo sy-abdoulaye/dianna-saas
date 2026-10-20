@@ -1,0 +1,139 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{{ kind.label }} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{{ kind.label }}</h1>
+      <p class="sub">{{ kind.subtitle }}</p>
+    </div>
+    <div class="actions">
+      {% if kind.key == "leave" and is_hr %}
+        {% url "approvals:campaigns" as campaigns_url %}
+        {% button _("Gérer les campagnes") icon="sun" href=campaigns_url %}
+      {% endif %}
+      {% button kind.new_label variant="primary" icon="plus" hx_get=new_url hx_target="#modal-root" %}
+    </div>
+  </div>
+
+  {% if kind.key == "telework" %}
+    <div class="grid gap-4 sm:grid-cols-3">
+      {% blocktranslate asvar used_value %}{{ week_used }} / {{ quota }}{% endblocktranslate %}
+      {% translate "Cette semaine" as l1 %}{% translate "jours déclarés ou validés" as n1 %}
+      {% include "components/kpi.html" with label=l1 value=used_value note=n1 %}
+      {% translate "En attente de validation" as l2 %}
+      {% include "components/kpi.html" with label=l2 value=pending_count %}
+      {% translate "Règle de l'entreprise" as l3 %}
+      {% blocktranslate asvar rule_value count n=quota %}{{ n }} jour par semaine{% plural %}{{ n }} jours par semaine{% endblocktranslate %}
+      {% translate "Modifiable par l'administrateur" as n3 %}
+      {% include "components/kpi.html" with label=l3 value=rule_value note=n3 %}
+    </div>
+  {% elif kind.key == "leave" %}
+    {% if campaign %}
+      {% blocktranslate asvar campaign_title with label=campaign.label %}Campagne {{ label }}.{% endblocktranslate %}
+      {% blocktranslate asvar campaign_text with deadline=campaign.deadline|date:"j F Y" start=campaign.period_start|date:"j F" end=campaign.period_end|date:"j F Y" %}Déposez vos vœux avant le {{ deadline }}, pour des congés compris entre le {{ start }} et le {{ end }}. Votre manager arbitre en tenant compte des absences du service.{% endblocktranslate %}
+      {% include "components/banner.html" with kind="info" title=campaign_title text=campaign_text %}
+    {% else %}
+      {% translate "Aucune campagne de congés d'été n'est ouverte." as no_campaign_title %}
+      {% translate "Vous pouvez déclarer une autre absence." as no_campaign_text %}
+      {% include "components/banner.html" with kind="info" title=no_campaign_title text=no_campaign_text %}
+    {% endif %}
+  {% endif %}
+
+  {% include "components/tabs.html" with label=kind.label %}
+  <div class="card">
+    <form class="filters" method="get" action="{{ list_url }}" role="search" hx-get="{{ list_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
+      <input type="hidden" name="onglet" value="{{ tab }}">
+      {% if tab != "mes-demandes" %}
+        <div class="field grow">
+          <label class="label" for="request-q">{% translate "Recherche" %}</label>
+          <div class="search-input">
+            {% icon "search" %}
+            <input class="input" id="request-q" type="search" name="q" value="{{ query }}" placeholder="{% translate 'Nom du collaborateur' %}">
+          </div>
+        </div>
+      {% endif %}
+      <div class="field">
+        <label class="label" for="request-status">{% translate "Statut" %}</label>
+        <span class="select-wrap">
+          <select class="select" id="request-status" name="statut">
+            {% for value, label in status_choices %}<option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </span>
+      </div>
+      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
+    </form>
+    <div id="results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="requestsChanged from:body" hx-target="this" hx-disinherit="*">
+      {% partialdef results inline %}
+        {% if page_obj.paginator.count %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{{ kind.label }}</caption>
+              <thead>
+                <tr>
+                  {% if tab != "mes-demandes" %}<th scope="col">{% translate "Collaborateur" %}</th>{% endif %}
+                  <th scope="col">{{ kind.column }}</th>
+                  <th scope="col">{% translate "Envoyée le" %}</th>
+                  <th scope="col">{% translate "Statut" %}</th>
+                  <th scope="col" class="end">{% translate "Actions" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in page_obj.object_list %}
+                  {% url "approvals:detail" kind.key row.public_id as detail_url %}
+                  <tr>
+                    {% if tab != "mes-demandes" %}
+                      <td>
+                        <div class="who">
+                          {% include "components/avatar.html" with person=row.requester %}
+                          <span class="who-text"><b>{{ row.requester.full_name }}</b><span class="who-sub">{{ row.requester.job_title }}</span></span>
+                        </div>
+                      </td>
+                    {% endif %}
+                    <td class="min-w-56">
+                      <button class="row-link text-left" type="button" hx-get="{{ detail_url }}" hx-target="#modal-root">{{ row.summary }}</button>
+                      {% if row.conflict and row.conflict.count %}
+                        <div class="meta text-warn-ink">{% blocktranslate count n=row.conflict.count %}{{ n }} absence dans le service sur la période{% plural %}{{ n }} absences dans le service sur la période{% endblocktranslate %}</div>
+                      {% endif %}
+                    </td>
+                    <td class="text-ink-2">{{ row.submitted_at|date:"j N" }}</td>
+                    <td>{% status_badge "request" row.status %}</td>
+                    <td class="end whitespace-nowrap">
+                      {% if row.can_decide %}
+                        {% url "approvals:refuse" kind.key row.public_id as refuse_url %}
+                        {% url "approvals:approve" kind.key row.public_id as approve_url %}
+                        {% button _("Refuser") size="sm" hx_get=refuse_url hx_target="#modal-root" %}
+                        {% button _("Valider") variant="primary" size="sm" hx_post=approve_url hx_swap="none" %}
+                      {% elif row.can_cancel %}
+                        {% url "approvals:cancel" kind.key row.public_id as cancel_url %}
+                        {% button _("Annuler") variant="ghost" size="sm" hx_get=cancel_url hx_target="#modal-root" %}
+                      {% else %}
+                        {% button _("Détail") variant="ghost" size="sm" hx_get=detail_url hx_target="#modal-root" %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% pagination page_obj "#results" %}
+        {% elif tab == "a-valider" %}
+          {% translate "Rien à valider" as t %}{% translate "Toutes les demandes de votre équipe ont été traitées." as x %}
+          {% include "components/empty_state.html" with icon="check" title=t text=x %}
+        {% elif filtered %}
+          {% translate "Aucune demande ne correspond" as t %}{% translate "Modifiez la recherche ou le statut." as x %}
+          {% translate "Réinitialiser les filtres" as a %}
+          {% blocktranslate asvar reset_url %}{{ list_url }}?onglet={{ tab }}{% endblocktranslate %}
+          {% include "components/empty_state.html" with icon="search" title=t text=x action_label=a action_url=reset_url action_variant="secondary" %}
+        {% elif tab == "mes-demandes" %}
+          {% translate "Aucune demande pour le moment" as t %}{% translate "Vos demandes apparaîtront ici avec leur statut." as x %}
+          {% include "components/empty_state.html" with icon=kind.icon title=t text=x %}
+          <div class="flex justify-center pb-8">{% button kind.new_label variant="primary" icon="plus" hx_get=new_url hx_target="#modal-root" %}</div>
+        {% else %}
+          {% translate "Aucune demande pour le moment" as t %}{% translate "Les demandes de votre équipe apparaîtront ici." as x %}
+          {% include "components/empty_state.html" with icon=kind.icon title=t text=x %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}

@@ -34,10 +34,12 @@ def test_same_answer_for_known_and_unknown_addresses(company_a):
     assert "exemple" not in known.content.decode().lower().split("<body")[1]
 
 
-def test_link_is_sent_by_email_only_for_a_known_account(company_a):
+def test_link_is_sent_by_email_only_for_a_known_account(company_a, run_tasks):
     post("inconnu@ailleurs.fr")
+    run_tasks()
     assert mail.outbox == []
     post(company_a.employee.email)
+    run_tasks()
     assert len(mail.outbox) == 1
     assert mail.outbox[0].to == [company_a.employee.user.email]
     assert "http://exemple.localhost/connexion/" in mail.outbox[0].body
@@ -57,12 +59,13 @@ def test_no_csp_exception_on_the_public_page(db):
     assert "*.localhost" not in header
 
 
-def test_limit_per_typed_address(company_a):
+def test_limit_per_typed_address(company_a, run_tasks):
     for index in range(3):
         post(company_a.employee.email, REMOTE_ADDR=f"10.0.0.{index}")
     blocked = post(company_a.employee.email, REMOTE_ADDR="10.0.0.9")
     assert blocked.status_code == 422
     assert "Trop de tentatives" in blocked.content.decode()
+    run_tasks()
     assert len(mail.outbox) == 3
 
 

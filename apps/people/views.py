@@ -135,7 +135,7 @@ def suggestions(request):
 
 # ---------- Fiche ----------
 
-TAB_INFO, TAB_TEAM, TAB_HISTORY = "informations", "equipe", "historique"
+TAB_INFO, TAB_TEAM, TAB_REQUESTS, TAB_HISTORY = ("informations", "equipe", "demandes", "historique")
 
 
 class EmployeeDetailView(PermissionRequiredMixin, View):
@@ -146,6 +146,14 @@ class EmployeeDetailView(PermissionRequiredMixin, View):
         employee = get_employee(request, public_id)
         is_hr = permissions.can(me, "people.manage")
         tabs = [(TAB_INFO, _("Informations")), (TAB_TEAM, _("Équipe"))]
+        # Demandes : la personne, son manager direct et les RH (fiche annuaire).
+        sees_requests = (
+            employee.pk == me.pk
+            or employee.manager_id == me.pk
+            or (permissions.can(me, "requests.view", employee) and is_hr)
+        )
+        if sees_requests:
+            tabs.append((TAB_REQUESTS, _("Demandes")))
         if is_hr:
             tabs.append((TAB_HISTORY, _("Historique")))
         tab = request.GET.get("onglet", TAB_INFO)
@@ -175,6 +183,10 @@ class EmployeeDetailView(PermissionRequiredMixin, View):
             for person in reports:
                 person.photo_url = photo_url(person)
             context["reports"] = reports
+        elif tab == TAB_REQUESTS:
+            from apps.approvals.views import requests_of
+
+            context["person_requests"] = requests_of(request, employee)
         elif tab == TAB_HISTORY:
             context["changes"] = employee.changes.select_related("actor")[:50]
         return render(request, "people/detail.html", context)

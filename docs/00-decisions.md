@@ -33,7 +33,7 @@ Versions vérifiées le 18 octobre 2026.
 | T-08 | Accès des entreprises | Sous-domaine par entreprise (`exemple.dianna.fr`). `dianna.fr` : page vitrine minimale avec « Accéder à mon espace » (saisie de l'e-mail, lien vers le sous-domaine de l'entreprise envoyé par e-mail, L1-12) | Domaine unique et choix de l'entreprise à la connexion | Validé (18 oct. 2026) |
 | T-09 | Comptes | `User` personnalisé, connexion par e-mail. `User.email` est l'identifiant de connexion, `Employee.email` le contact professionnel. À l'invitation, le compte est créé avec l'e-mail de la fiche ; modifier l'e-mail de la fiche ne change pas l'identifiant ; changer d'identifiant est une action séparée confirmée par e-mail. Un compte appartient à une seule entreprise en V1 : inviter une adresse déjà utilisée dans une autre entreprise est refusé (« Cette adresse est déjà utilisée sur Dianna. Utilisez une autre adresse ou contactez le support. ») | — | Validé (18 oct. 2026) |
 | T-10 | Authentification | `django-allauth` 65.19.1 (compatibilité Django 6.1 vérifiée au début du lot 1), monté sous `/connexion/` : e-mail et mot de passe, réinitialisation, TOTP. Double authentification obligatoire pour RH, Administrateur et équipe Dianna, imposée par un **middleware maison** (inscription forcée à la première connexion et quand le profil passe à RH ou Admin) ; désactivable en développement par `DEMO_DISABLE_2FA` (refusé si `DEBUG = False`). SSO Google et Microsoft au lot 8 | Authentification Django native et code maison | Validé (18 oct. 2026) |
-| T-11 | Tâches en arrière-plan | Cadre de tâches de Django 6 (`django.tasks`) avec le moteur base de données du paquet `django-tasks` : pas de Redis à opérer | Celery + Redis si le volume l'exige | À confirmer |
+| T-11 | Tâches en arrière-plan | Cadre de tâches de Django 6 (`django.tasks`) avec le moteur base de données du paquet `django-tasks-db` **0.13.0** (épinglé) : pas de Redis à opérer | Celery + Redis si le volume l'exige | Validé par L3-01 (20 oct. 2026) |
 | T-12 | Fichiers | Stockage objet compatible S3 en France (Scaleway Object Storage ou OVHcloud), `django-storages`, bucket privé, URL signées de 5 minutes | Stockage disque local (déconseillé en production) | À confirmer |
 | T-13 | E-mails | `django-anymail` avec un fournisseur européen (Brevo ou Scaleway Transactional Email) | — | À confirmer |
 | T-14 | Hébergement | Conteneurs Docker chez un hébergeur français (Scaleway, OVHcloud ou Clever Cloud), PostgreSQL managé avec sauvegardes quotidiennes | — | À confirmer |
@@ -89,7 +89,7 @@ Versions vérifiées le 18 octobre 2026.
 | L1-11 | Connexion liée à l'hôte | Un compte ne se connecte que sur le sous-domaine de son entreprise (même message qu'un mauvais mot de passe) ; une session présentée sur un autre hôte est fermée. L'équipe Dianna ne se connecte que sur l'hôte éditeur | Validé (19 oct. 2026) |
 | L1-12 | Vitrine et confidentialité | **Variante discrète** : la page affiche toujours « Si cette adresse correspond à un compte Dianna, vous allez recevoir un lien de connexion par e-mail. » ; le lien vers le sous-domaine de l'entreprise part par e-mail. Plus d'exception CSP. Limite : 10 essais par 10 minutes par adresse IP réelle (X-Forwarded-For selon `TRUSTED_PROXY_COUNT`) et 3 par adresse saisie (empreinte HMAC). Écart de temps de réponse quand un e-mail part : supprimé au lot 3 (envoi en tâche de fond) | Validé (19 oct. 2026) |
 | L1-13 | Mot de passe oublié | Le lien n'est envoyé qu'aux comptes de l'espace où la demande est faite ; une adresse inconnue ne reçoit aucun e-mail (`ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False`) ; la réponse est la même dans tous les cas | Validé (19 oct. 2026) |
-| L1-14 | E-mail d'invitation | Envoyé après la validation de la transaction, de façon synchrone, jusqu'à l'arrivée des tâches en arrière-plan (T-11, lot 3) | Validé (19 oct. 2026) |
+| L1-14 | E-mail d'invitation | Envoyé par une tâche en arrière-plan, sans délai, depuis le lot 3 (T-11). Le jeton est créé par la tâche au moment de l'envoi ; son empreinte n'est enregistrée qu'une fois l'e-mail accepté par le serveur d'envoi. En cas d'échec, l'invitation précédente reste valable et la nouvelle est marquée « Envoi échoué » dans « Utilisateurs et profils », avec « Renvoyer l'invitation » (A3-04) | Validé (19 oct. 2026), mis à jour au lot 3 |
 | L1-15 | Suppression d'un service ou d'un site | Clés étrangères des fiches en `RESTRICT` : un service ou un site utilisé ne peut pas être supprimé, mais la suppression d'une entreprise entière reste possible | Validé (19 oct. 2026) |
 | L1-16 | Cache | Mémoire en développement, base de données en production (`createcachetable` au déploiement) : la limitation des tentatives est partagée entre les processus | Validé (19 oct. 2026) |
 | L1-17 | Écrans du lot 1 | Tableau de bord réduit à l'en-tête et à l'état « Tout est à jour » ; recherche globale et « Ma fiche » masquées jusqu'à l'annuaire (lot 2) ; logo de l'entreprise reporté au lot 2 (stockage des fichiers, T-12), son nom est affiché à la connexion ; pas de notification visuelle à la connexion et à la déconnexion | Validé (19 oct. 2026) |
@@ -110,17 +110,17 @@ Versions vérifiées le 18 octobre 2026.
 
 | ID | Sujet | Décision | Statut |
 |---|---|---|---|
-| L2-01 | Fichiers privés | Photos et logo sur un stockage disque privé (`PRIVATE_MEDIA_ROOT`, hors des fichiers statiques), noms aléatoires rangés par entreprise, servis par URL signée de 5 minutes liée à l'entreprise. Le stockage objet S3 (T-12) arrive au lot 5 avec les justificatifs | À confirmer |
-| L2-02 | Images | Dépendance **Pillow 12.3** ajoutée : type vérifié côté serveur, 40 millions de pixels au plus (lus sur l'en-tête, avant décodage), image reconstruite à partir de ses seuls pixels et réencodée : aucune métadonnée conservée (EXIF dont la position GPS, commentaire JPEG, XMP, profil ICC, textes PNG). Photo : JPG ou PNG, 2 Mo, réduite à 512 px. Logo : PNG ou JPG, 1 Mo (pas de SVG, qui peut contenir du script) | À confirmer |
-| L2-03 | Fiche « Parti » | Pour qui ne voit pas les départs, l'URL d'une fiche partie renvoie 404 (le prototype affichait « Accès non autorisé ») : son existence n'est pas révélée | À confirmer |
-| L2-04 | Fiche : éléments des lots suivants | Onglet « Demandes » et raccourcis (fiche de suivi, demandes) masqués jusqu'aux lots 3 et 7 (règle 6) | À confirmer |
-| L2-05 | Archivage | Date de départ modifiable dans la confirmation (aujourd'hui par défaut) ; impossible d'archiver sa propre fiche ou le dernier administrateur actif ; seul un administrateur archive une fiche de profil Administrateur (A2-06) ; annulation pendant 30 s depuis la notification | À confirmer |
-| L2-06 | Import CSV | Aucune invitation envoyée (envoi depuis « Utilisateurs et profils ») ; dates JJ/MM/AAAA ou AAAA-MM-JJ ; UTF-8 ou Windows-1252 (Excel) ; 1 000 lignes et 1 Mo au plus ; manager présent dans l'annuaire ou dans le fichier ; contrat CDI, CDD, Alternance ou Stage ; longueurs contrôlées d'après les modèles ; fichier malformé (octet nul, encodage, champ trop long) refusé avec un message, jamais d'erreur 500 ; confirmation sans aperçu en session : « L'import a expiré. Recommencez. » | À confirmer |
-| L2-07 | Utilisateurs et profils | Liste de toutes les fiches en poste avec l'état du compte (actif, invitation envoyée, pas de compte) et l'envoi ou le renvoi de l'invitation | À confirmer |
-| L2-08 | Onglet « Entreprise » | Champs de la fiche administration (nom, quota de télétravail, M-02, M-03, logo) ; pas la campagne d'été du prototype, gérée dans le module Congés | À confirmer |
-| L2-09 | Journal d'activité | Période par défaut : les 30 derniers jours ; export CSV de la période (point-virgule, UTF-8 avec BOM), lui-même journalisé | À confirmer |
-| L2-10 | Tableau de bord initial | Indicateurs Administrateur (4) et RH (effectif en poste, arrivées à venir) seulement ; les autres blocs arrivent avec leurs modules | À confirmer |
-| L2-11 | Changement d'identifiant de connexion | L'action séparée confirmée par e-mail (T-09) n'est pas encore livrée : le formulaire de fiche rappelle que l'identifiant ne suit pas l'e-mail de la fiche. Prévu au lot 8 (voir « Pour plus tard ») | À confirmer |
+| L2-01 | Fichiers privés | Photos et logo sur un stockage disque privé (`PRIVATE_MEDIA_ROOT`, hors des fichiers statiques), noms aléatoires rangés par entreprise, servis par URL signée de 5 minutes liée à l'entreprise. Le stockage objet S3 (T-12) arrive au lot 5 avec les justificatifs | Validé (20 oct. 2026) |
+| L2-02 | Images | Dépendance **Pillow 12.3** ajoutée : type vérifié côté serveur, 40 millions de pixels au plus (lus sur l'en-tête, avant décodage), image reconstruite à partir de ses seuls pixels et réencodée : aucune métadonnée conservée (EXIF dont la position GPS, commentaire JPEG, XMP, profil ICC, textes PNG). Photo : JPG ou PNG, 2 Mo, réduite à 512 px. Logo : PNG ou JPG, 1 Mo (pas de SVG, qui peut contenir du script) | Validé (20 oct. 2026) |
+| L2-03 | Fiche « Parti » | Pour qui ne voit pas les départs, l'URL d'une fiche partie renvoie 404 (le prototype affichait « Accès non autorisé ») : son existence n'est pas révélée | Validé (20 oct. 2026) |
+| L2-04 | Fiche : éléments des lots suivants | Onglet « Demandes » et raccourcis (fiche de suivi, demandes) masqués jusqu'aux lots 3 et 7 (règle 6) | Validé (20 oct. 2026) |
+| L2-05 | Archivage | Date de départ modifiable dans la confirmation (aujourd'hui par défaut) ; impossible d'archiver sa propre fiche ou le dernier administrateur actif ; seul un administrateur archive une fiche de profil Administrateur (A2-06) ; annulation pendant 30 s depuis la notification | Validé (20 oct. 2026) |
+| L2-06 | Import CSV | Aucune invitation envoyée (envoi depuis « Utilisateurs et profils ») ; dates JJ/MM/AAAA ou AAAA-MM-JJ ; UTF-8 ou Windows-1252 (Excel) ; 1 000 lignes et 1 Mo au plus ; manager présent dans l'annuaire ou dans le fichier ; contrat CDI, CDD, Alternance ou Stage ; longueurs contrôlées d'après les modèles ; fichier malformé (octet nul, encodage, champ trop long) refusé avec un message, jamais d'erreur 500 ; confirmation sans aperçu en session : « L'import a expiré. Recommencez. » | Validé (20 oct. 2026) |
+| L2-07 | Utilisateurs et profils | Liste de toutes les fiches en poste avec l'état du compte (actif, invitation envoyée, pas de compte) et l'envoi ou le renvoi de l'invitation | Validé (20 oct. 2026) |
+| L2-08 | Onglet « Entreprise » | Champs de la fiche administration (nom, quota de télétravail, M-02, M-03, logo) ; pas la campagne d'été du prototype, gérée dans le module Congés | Validé (20 oct. 2026) |
+| L2-09 | Journal d'activité | Période par défaut : les 30 derniers jours ; export CSV de la période (point-virgule, UTF-8 avec BOM), lui-même journalisé | Validé (20 oct. 2026) |
+| L2-10 | Tableau de bord initial | Indicateurs Administrateur (4) et RH (effectif en poste, arrivées à venir) seulement ; les autres blocs arrivent avec leurs modules | Validé (20 oct. 2026) |
+| L2-11 | Changement d'identifiant de connexion | L'action séparée confirmée par e-mail (T-09) n'est pas encore livrée : le formulaire de fiche rappelle que l'identifiant ne suit pas l'e-mail de la fiche. Prévu au lot 8 (voir « Pour plus tard ») | Validé (20 oct. 2026) |
 | L2-12 | Garde-fou d'isolation | Un queryset métier est lié à l'entreprise courante à sa construction ; à l'évaluation, erreur sans entreprise courante, avec une autre entreprise ou s'il a été construit sans entreprise (A2-01). Il peut être construit sans être lu (champs de `ModelForm` créés à l'import) | Validé (technique) |
 
 ## Audit du lot 2 (20 oct. 2026)
@@ -135,12 +135,53 @@ Versions vérifiées le 18 octobre 2026.
 | A2-06 | Archivage d'un administrateur | Réservé aux administrateurs (`people.archive_admin`, docs/04-permissions.md) : « Seul un administrateur peut archiver un administrateur. » | Validé (20 oct. 2026) |
 | A2-07 | Photos et logos : liens signés | Un lien signé de 5 minutes, utilisable sans connexion sur l'hôte de l'entreprise, est accepté pour les photos et les logos (le logo est affiché sur la page de connexion) | Validé (20 oct. 2026) |
 
+## Préparation du lot 3 (20 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L3-01 | Tâches en arrière-plan (T-11) | `django-tasks-db` **0.13.0** épinglé, moteur base de données de `django.tasks`. Réserve : la version ne déclare que Django 6.0 ; un essai avec Django 6.1.2 (migrations, tâche immédiate, tâche différée) est concluant, à revérifier à chaque mise à jour. Le travailleur (`manage.py db_worker`) tourne en intégration continue (un test passe par une vraie tâche) et figure dans la documentation de déploiement | Validé (20 oct. 2026) |
+| L3-02 | Congés d'été sans manager | Si l'étape RH est active et que le demandeur n'a pas de manager, la demande passe directement en validation finale RH, en une seule étape | Validé (20 oct. 2026) |
+| L3-03 | Manager RH ou administrateur | Quand le manager direct est RH ou administrateur, sa validation est finale : personne ne valide deux fois | Validé (20 oct. 2026) |
+| L3-04 | Télétravail dans le passé | Un jour passé est refusé ; aujourd'hui est permis | Validé (20 oct. 2026) |
+| L3-05 | Quota de télétravail | Compté par semaine du lundi au dimanche ; la dérogation de la fiche remplace le quota de l'entreprise | Validé (20 oct. 2026) |
+| L3-06 | Durée d'un congé | 31 jours calendaires au plus, week-ends compris | Validé (20 oct. 2026) |
+| L3-07 | Chevauchement des astreintes | Refusé entre deux astreintes actives de la même personne ; pas de contrôle pour les interventions | Validé (20 oct. 2026) |
+| L3-08 | Exports RH | Récapitulatifs mensuels du télétravail, export paie des astreintes et synthèse de campagne : lot 4 | Validé (20 oct. 2026) |
+| L3-09 | Tableau de bord au lot 3 | Compteurs « à traiter » du menu et onglet « Demandes » de la fiche ; les blocs du tableau de bord restent au lot 4 | Validé (20 oct. 2026) |
+| L3-10 | Annulation d'une demande validée | Par un RH ou un administrateur, motif obligatoire : `approved → cancelled`, événement de planning supprimé, notification et e-mail au demandeur, historique et journal. Le salarié n'annule que ses demandes en attente | Validé (20 oct. 2026) |
+| L3-11 | E-mails d'allauth | Mot de passe oublié et autres e-mails d'allauth passent par les tâches, sans délai | Validé (20 oct. 2026) |
+
+## Décisions prises pendant le lot 3 (20 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L3-12 | Jour ouvré | Du lundi au vendredi. Les jours fériés et les fermetures (T-16) ne sont pas encore exclus du télétravail : ils arrivent avec le planning (lot 4) | Validé (21 oct. 2026) |
+| L3-13 | E-mails des demandes (M-16) | « À valider » au valideur, et décisions finales (validée, refusée, annulée) au demandeur : différés de 45 s, annulables. L'étape « Validée par le manager » notifie le demandeur et les RH dans l'application, et les RH par e-mail | Validé (21 oct. 2026) |
+| L3-14 | Campagnes de congés d'été | Brouillon, puis Ouverte, puis Close ; date limite avant la période ; une seule ouverte (contrainte en base). Le type « Congés d'été » exige une campagne ouverte et des dates dans sa période ; sinon « Autre absence » | Validé (21 oct. 2026) |
+| L3-15 | Seuil de conflit | Alerte renforcée quand les absents du service, demandeur compris, dépassent le seuil de la campagne en pourcentage de l'effectif en poste du service | Validé (21 oct. 2026) |
+| L3-16 | Annulation immédiate d'un envoi validé automatiquement | Permise pendant 30 s comme un envoi ordinaire : la demande est retirée | Validé (21 oct. 2026) |
+| L3-17 | Concurrence | Transitions sous `select_for_update` de la demande ; contrôles métier dans le service, sous verrou de la fiche du demandeur (envoi et annulations immédiates qui réactivent une demande, A3-02) ; contrainte unique partielle « une demande de télétravail active par jour », dont la violation devient un message | Validé (21 oct. 2026) |
+| L3-18 | Éléments du lot 4 | Bouton « Voir le planning » et lien vers le planning du bandeau de campagne masqués jusqu'au lot 4 | Validé (21 oct. 2026) |
+
+## Audit du lot 3 (20 oct. 2026)
+
+| N° | Sujet | Décision | Statut |
+|---|---|---|---|
+| A3-01 | Annulation immédiate d'une décision | Le jeton porte l'événement créé par la transition ; l'annulation, sous verrou de la demande, n'est acceptée que si cet événement est toujours le dernier. Sinon 409 « Une autre décision a été prise depuis. Rien n'a été modifié. » et les notifications restent | Validé (20 oct. 2026) |
+| A3-02 | Contrôles métier | Quota, même jour, chevauchements (congés, astreintes) et période de campagne dans `apps/approvals/workflow.py` (`check_request`), sous verrou de la fiche du demandeur, à l'envoi et aux annulations immédiates qui rendent une demande active (annulation, annulation d'une demande validée, et aussi refus). Les formulaires ne vérifient que leurs champs. Une `IntegrityError` devient un message, jamais une erreur 500 | Validé (20 oct. 2026) |
+| A3-03 | Alerte de conflit | Calculée et affichée seulement pour qui peut décider (valideur, ou RH et administrateur à sa place). Le demandeur ne voit ni les noms ni le nombre, y compris dans la notification d'envoi | Validé (20 oct. 2026) |
+| A3-04 | Données des tâches | Les e-mails de Dianna passent des identifiants à la tâche, le contenu est construit à l'envoi ; le jeton d'invitation est créé dans la tâche (seule son empreinte est enregistrée) ; les e-mails d'allauth sont chiffrés avec `TASKS_ENCRYPTION_KEY` (distincte, obligatoire en production). Résultat d'une tâche réussie supprimé aussitôt ; échecs purgés après 7 jours par `purge_task_results`. Le profil `taches` de docker-compose.yml (services `migrate`, `worker` et `scheduler`, réglages de développement et base `db` du fichier) sert au développement et aux essais ; le déploiement en production du travailleur et de la purge est fait au lot 8 | Validé (20 oct. 2026) |
+| A3-05 | Notifications devenues fausses | Chaque transition supprime les notifications de la demande dont l'e-mail n'est pas encore parti (« Demande à valider », décision remplacée). Une annulation immédiate qui rend la demande de nouveau en attente prévient à nouveau les valideurs | Validé (20 oct. 2026) |
+| A3-06 | Ouverture de campagne | Service sous verrou de toutes les campagnes de l'entreprise ; deux ouvertures simultanées donnent une seule campagne ouverte, l'autre reçoit « Une campagne est déjà ouverte. » | Validé (20 oct. 2026) |
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
 - **Lot 5 :** les justificatifs de transport sont servis seulement à un utilisateur connecté qui a la permission de les voir (contrôle à chaque téléchargement), pas par simple lien signé comme les photos et logos (A2-07).
 - **Lot 8 :** le blocage après des échecs de connexion est indexé par adresse et par hôte.
 - **Lot 8 :** limite de taille des envois au niveau du proxy (`client_max_body_size` ou équivalent) : Django ne limite pas la taille des fichiers reçus avant de les écrire sur disque.
+- **Lot 8 :** déploiement en production du travailleur de tâches (`db_worker`) et de la purge quotidienne (`purge_task_results`) ; le profil `taches` de docker-compose.yml ne sert qu'au développement et aux essais (A3-04).
+- **Lot 8 :** le message d'erreur du serveur d'envoi (SMTP) est gardé 7 jours dans les tâches en échec (il peut contenir l'adresse du destinataire) : à revoir avec la politique de conservation RGPD (M-13).
 - **Lot 8 :** changement d'identifiant de connexion (T-09, L2-11), en revoyant le message « Cette adresse est déjà utilisée sur Dianna », qui indique à un administrateur qu'une adresse a un compte dans une autre entreprise.
 
 ## Métier : à confirmer

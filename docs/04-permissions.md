@@ -28,12 +28,17 @@ Règles générales :
 
 | Action | Salarié | Manager | RH | Admin |
 |---|---|---|---|---|
-| Créer, voir, annuler ses demandes en attente | Soi | Soi | Soi | Soi |
+| Créer, voir, annuler ses demandes en attente (y compris « Validée par le manager ») | Soi | Soi | Soi | Soi |
 | Voir les demandes | Soi | Équipe | Oui | Oui |
 | Valider ou refuser | Non | Équipe | Oui, sur toute demande (remplacement, M-12) ; « À valider » ne montre que les personnes sans manager | Comme RH |
+| Annuler une demande validée, avec motif (L3-10) | Non | Non | Oui, sauf sa propre demande | Oui, sauf sa propre demande |
+| Annulation immédiate (« Annuler » dans la notification, 30 s) | Auteur de l'action seulement | Auteur seulement | Auteur seulement | Auteur seulement |
+| Voir l'alerte de conflit d'absences (noms et nombre) | Non, jamais sur ses propres demandes | Si peut décider (équipe directe) | Si peut décider (à la place du manager ou étape RH) | Comme RH |
 | Gérer les campagnes de congés d'été (`/conges/campagnes/`) | Non | Non | Oui | Oui |
 | Validation finale des congés d'été (M-03) | Non | Non | Oui | Oui |
 | Exporter (paie) | Non | Non | Oui | Oui |
+
+Personne ne décide pour soi-même ni n'annule sa propre demande validée (`SELF_FORBIDDEN`). L'annulation immédiate est liée à l'auteur par un jeton signé ; elle est refusée si une autre décision a suivi (A3-01). L'alerte de conflit n'est calculée que pour qui peut décider sur la demande (A3-03).
 
 ## Transport et matériel
 

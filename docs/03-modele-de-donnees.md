@@ -25,11 +25,11 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 
 **User** (pas de company ; `AbstractBaseUser` + `PermissionsMixin`, créé au lot 0, L0-01) : `email` unique sans tenir compte de la casse (stocké en minuscules), `is_active`, `is_staff` (équipe Dianna : super-administrateur éditeur, accès à l'administration Django ; propriété `is_platform_staff`), `is_superuser`, groupes et permissions Django, `theme` (system, light, dark), `last_login`. Connexion par e-mail.
 
-**Invitation** (T) : `employee`, `token_hash` (SHA-256 du jeton, le jeton n'est jamais stocké), `expires_at` (7 jours), `accepted_at`, `revoked_at` (remplacée par une nouvelle invitation), `renewal_requested_at` (lien expiré : administrateurs prévenus une seule fois), `sent_by`.
+**Invitation** (T) : `employee`, `token_hash` (SHA-256 du jeton, le jeton n'est jamais stocké), `expires_at` (7 jours), `accepted_at`, `revoked_at` (remplacée par une nouvelle invitation), `sent_at`, `send_failed_at`, `renewal_requested_at` (lien expiré : administrateurs prévenus une seule fois), `sent_by`. Le jeton est créé par la tâche d'envoi : jusqu'à ce que l'e-mail soit accepté par le serveur d'envoi, `token_hash` est une **empreinte provisoire** qui ne correspond à aucun lien, et l'invitation précédente reste valable. À l'envoi réussi et confirmé : empreinte du vrai jeton, `sent_at`, et les invitations **plus anciennes** de la fiche sont remplacées (`revoked_at`), sous verrou ; une invitation remplacée entre-temps par une plus récente ne remplace rien, et une invitation plus récente encore en attente d'envoi n'est jamais remplacée. En cas d'échec de l'envoi ou de sa confirmation : `send_failed_at`, état **« Envoi échoué »** dans « Utilisateurs et profils », avec « Renvoyer l'invitation » (A3-04).
 
 **AuditLog** (T) : `actor` (Employee, nul pour la plateforme), `action` (char), `target_type`, `target_id`, `summary` (texte sans donnée sensible), `ip`, `created_at`. Index (company, created_at).
 
-**Notification** (T) : `recipient` (Employee), `text`, `url`, `kind`, `read_at`, `created_at`, `email_sent_at`. Index (recipient, read_at).
+**Notification** (T) : `recipient` (Employee), `text`, `url`, `kind`, `read_at`, `created_at`, `email_sent_at`, `email_subject` (objet de l'e-mail, vide si la notification ne part pas par e-mail ; le corps est construit à l'envoi), `source_type` et `source_id` (demande concernée : les notifications non encore envoyées par e-mail sont retirées quand une transition les rend fausses, A3-05). Index (recipient, read_at).
 
 ## Annuaire (`people`)
 
@@ -60,18 +60,18 @@ Index : (company, last_name), (company, service), (company, manager). Le statut 
 
 ## Agenda (`agenda`)
 
-**CalendarEvent** (T) : `employee`, `kind` (telework, leave, on_call), `start`, `end` (dates incluses), `status` (pending, approved), `source_type`, `source_id`. Index (company, start, end), (employee, start). Les demandes refusées ou annulées suppriment leur événement.
+**CalendarEvent** (T) : `employee`, `kind` (telework, leave, on_call), `start`, `end` (dates incluses), `status` (pending, approved), `source_type`, `source_id`. Index (company, start, end), (employee, start). Unique (company, source_type, source_id) ; fin ≥ début. Les demandes refusées ou annulées suppriment leur événement.
 
 ## Demandes (`approvals`)
 
 Base abstraite **ApprovalRequest** (T) : `public_id`, `requester` (Employee), `status` (pending, manager_approved, approved, refused, cancelled), `submitted_at`, `decided_by` (Employee, nul), `decided_at`, `decision_comment`. Le statut `manager_approved` n'est utilisé que par les congés d'été quand l'étape RH est active.
 
-**RequestEvent** (T) : historique générique : `request_type`, `request_id`, `actor`, `action` (submitted, approved, refused, cancelled, reverted), `comment`, `created_at`.
+**RequestEvent** (T) : historique générique : `request_type`, `request_id`, `actor` (nul pour une validation automatique), `action` (submitted, auto_approved, manager_approved, approved, refused, cancelled, reverted), `comment`, `created_at`.
 
 | Modèle | Champs propres | Contraintes |
 |---|---|---|
-| **TeleworkRequest** | `date`, `comment` | jour ouvré, pas dans le passé, une seule demande active par jour, quota hebdomadaire (pending + approved) |
-| **SummerCampaign** | `label` (« Été 2027 »), `period_start`, `period_end`, `deadline`, `status` (draft, open, closed), `conflict_threshold` (%, défaut 30) | une seule campagne ouverte |
+| **TeleworkRequest** | `date`, `comment` | jour ouvré, pas dans le passé, une seule demande active par jour (contrainte unique partielle en base), quota hebdomadaire (pending + approved) |
+| **SummerCampaign** | `label` (« Été 2027 »), `period_start`, `period_end`, `deadline`, `status` (draft, open, closed), `conflict_threshold` (%, défaut 30) | une seule campagne ouverte (contrainte unique partielle) ; fin ≥ début |
 | **LeaveRequest** | `campaign` (nul pour une autre absence), `start`, `end`, `leave_type` (summer, other), `comment`, `manager_decided_by`, `manager_decided_at` (première décision ; la décision finale RH utilise `decided_by` et `decided_at`) | fin ≥ début, ≤ 31 jours, pas de chevauchement avec ses demandes actives |
 | **OnCallDeclaration** | `kind` (on_call, intervention), `start`, `end` (dates incluses), `hours` (décimal, obligatoire si intervention, ≤ 24), `description` | fin ≥ début ; seul `on_call` crée un `CalendarEvent` |
 | **TransportProof** | `month` (date au 1er du mois, début de validité), `ticket_type` (monthly, yearly, single), `amount` (décimal), `file`, `valid_until` (calculé : fin du mois pour mensuel et titre unique, mois + 12 − 1 jour pour annuel) | pas de chevauchement de validité entre deux justificatifs actifs du même salarié et du même type ; montant > 0 et ≤ 1 000 |

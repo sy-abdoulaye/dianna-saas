@@ -26,12 +26,15 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "config.apps.StaticFilesConfig",
     "django_htmx",
+    "django_tasks_db",
     "allauth",
     "allauth.account",
     "allauth.mfa",
     "apps.core",
     "apps.accounts",
     "apps.people",
+    "apps.agenda",
+    "apps.approvals",
     "apps.dashboard",
     "apps.administration",
 ]
@@ -124,6 +127,9 @@ MFA_TRUST_ENABLED = False
 # clés séparées par des virgules pour en changer : la première chiffre, toutes déchiffrent.
 MFA_ADAPTER = "apps.accounts.mfa.EncryptingMFAAdapter"
 MFA_ENCRYPTION_KEY = env("MFA_ENCRYPTION_KEY", default="")
+# Arguments chiffrés des tâches qui portent un e-mail d'allauth (A3-04) : clé dédiée,
+# distincte de SECRET_KEY et de MFA_ENCRYPTION_KEY.
+TASKS_ENCRYPTION_KEY = env("TASKS_ENCRYPTION_KEY", default="")
 # Double authentification des comptes de démonstration RH et Admin : développement seulement.
 DEMO_DISABLE_2FA = env.bool("DEMO_DISABLE_2FA", default=False)
 
@@ -208,6 +214,9 @@ MESSAGE_TAGS = {
     messages.WARNING: "warn",
     messages.ERROR: "err",
 }
+
+# Tâches en arrière-plan (T-11, L3-01) : travailleur `python manage.py db_worker`.
+TASKS = {"default": {"BACKEND": "django_tasks_db.DatabaseBackend"}}
 
 # Annulation immédiate (L0-03) : fenêtre côté serveur et délai des e-mails annulables
 UNDO_WINDOW_SECONDS = 30

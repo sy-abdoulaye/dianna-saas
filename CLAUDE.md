@@ -1,5 +1,7 @@
 # CLAUDE.md : Dianna
 
+**Langue.** Toutes les réponses à Leo, les notes de livraison, la documentation et les descriptions de demandes de fusion sont en français. Les noms dans le code (variables, fonctions, commits) restent en anglais.
+
 Dianna est un SaaS B2B multi-entreprise (multi-tenant) de gestion RH et d'organisation du travail, destiné aux PME et ETI françaises (50 à 1 000 salariés). Chaque entreprise cliente dispose d'un espace isolé et active les modules dont elle a besoin.
 
 Ce fichier donne les règles de travail. Le détail est dans `docs/`. Lis `docs/README.md` au début de chaque session, puis la fiche du module concerné dans `docs/modules/`.
@@ -32,6 +34,8 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Templates : `templates/<app>/` pour les pages, `templates/<app>/partials/` pour les fragments HTMX, `templates/components/` pour les composants communs.
 - Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français.
 - Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export.
+- Contrôles métier (A3-02) : les vérifications qui dépendent d'autres données (quota, doublon, chevauchement, période) et les verrous (`select_for_update`) sont dans le service, jamais dans la vue ni dans le formulaire ; le formulaire ne vérifie que ses champs, la vue appelle le service et affiche ses erreurs. Une `IntegrityError` devient un message, jamais une erreur 500. Seule exception : `seed_demo` crée sans `check_request` les demandes de démonstration déjà passées (dates antérieures au jour du chargement).
+- E-mails (A3-04) : toujours par `apps/core/mail.py`, donc par une tâche ; aucune donnée sensible en clair dans les arguments d'une tâche (identifiants seulement, ou contenu chiffré avec `TASKS_ENCRYPTION_KEY`).
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes

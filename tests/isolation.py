@@ -10,6 +10,33 @@ Chaque cas : nom de route → (méthode, fonction qui construit l'URL depuis les
 from django.urls import reverse
 
 ISOLATION_CASES = {
+    # Demandes (lot 3) : une demande de B ouverte par un administrateur de A.
+    "approvals:detail": (
+        "get",
+        lambda b: reverse("approvals:detail", args=["telework", b.requests["telework"].public_id]),
+    ),
+    "approvals:approve": (
+        "post",
+        lambda b: reverse("approvals:approve", args=["leave", b.requests["leave"].public_id]),
+    ),
+    "approvals:refuse": (
+        "get",
+        lambda b: reverse("approvals:refuse", args=["telework", b.requests["telework"].public_id]),
+    ),
+    "approvals:cancel": (
+        "post",
+        lambda b: reverse("approvals:cancel", args=["on_call", b.requests["on_call"].public_id]),
+    ),
+    "approvals:cancel_approved": (
+        "get",
+        lambda b: reverse(
+            "approvals:cancel_approved", args=["telework", b.requests["telework"].public_id]
+        ),
+    ),
+    "approvals:campaign_status": (
+        "post",
+        lambda b: reverse("approvals:campaign_status", args=[b.requests["campaign"].pk, "clore"]),
+    ),
     # Annuaire (lot 2)
     "people:detail": ("get", lambda b: reverse("people:detail", args=[b.employee.public_id])),
     "people:edit": ("get", lambda b: reverse("people:edit", args=[b.employee.public_id])),
@@ -66,6 +93,12 @@ NOT_TENANT_OBJECTS = {
     "people:undo",
     # Ajout d'un service ou d'un site : le paramètre est le type (« services », « sites »).
     "administration:structure_add",
+    # Demandes : le paramètre est le type (teletravail, conges, astreintes).
+    "approvals:list",
+    "approvals:new",
+    # Annulation immédiate : jeton signé lié à l'auteur, demande relue dans l'entreprise
+    # courante (test : test_undo_token_of_another_company_is_refused).
+    "approvals:undo",
     # Modules : le paramètre est le code du module, pas un objet d'une entreprise.
     "administration:toggle_module",
 }

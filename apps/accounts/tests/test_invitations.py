@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 import pytest
@@ -15,22 +16,30 @@ pytestmark = pytest.mark.django_db
 STRONG = "Une-phrase-de-passe-solide-2026"
 
 
-def test_invitation_mail_points_to_the_company_space(company_a, django_capture_on_commit_callbacks):
-    with tenant_context(company_a.company), django_capture_on_commit_callbacks(execute=True):
+def test_invitation_mail_points_to_the_company_space(company_a, run_tasks):
+    with tenant_context(company_a.company):
         newcomer = EmployeeFactory(company=company_a.company, user=None)
-        invitation, token = services.invite(newcomer, sent_by=company_a.admin)
+        invitation = services.invite(newcomer, sent_by=company_a.admin)
+        placeholder = invitation.token_hash
+    assert mail.outbox == []  # envoyée par le travailleur de tâches (L1-14)
+    run_tasks()
     assert len(mail.outbox) == 1
     message = mail.outbox[0]
     assert message.to == [newcomer.email]
-    assert f"http://exemple.localhost/invitation/{token}/" in message.body
-    assert token not in invitation.token_hash  # seule l'empreinte est stockée
+    token = re.search(r"http://exemple\.localhost/invitation/([\w-]+)/", message.body).group(1)
+    # Jeton créé par la tâche : seule son empreinte est stockée (A3-04).
+    invitation = Invitation.all_companies.get(pk=invitation.pk)
+    assert invitation.token_hash == services.hash_token(token) != placeholder
     with tenant_context(company_a.company):
         assert AuditLog.objects.filter(action="account.invitation_sent").exists()
 
 
-def test_new_invitation_replaces_the_previous_one(company_a):
+def test_new_invitation_replaces_the_previous_one_once_sent(company_a, run_tasks):
     with tenant_context(company_a.company):
-        _second, _token = services.invite(company_a.pending)
+        services.invite(company_a.pending)
+        assert Invitation.objects.get(pk=company_a.invitation.pk).is_usable  # pas encore partie
+    run_tasks()
+    with tenant_context(company_a.company):
         first = Invitation.objects.get(pk=company_a.invitation.pk)
     assert first.revoked_at is not None and not first.is_usable
 
@@ -112,3 +121,99 @@ def test_theme_is_saved_on_the_account(client_for, company_a):
     assert User.objects.get(pk=company_a.employee.user_id).theme == "dark"
     assert client.post("/compte/theme/", {"theme": "rose"}).status_code == 400
     assert 'data-user-theme="dark"' in client.get("/").content.decode()
+
+
+def test_failed_send_keeps_the_previous_invitation(company_a, client_for, run_tasks, monkeypatch):
+    """L'empreinte n'est enregistrée qu'après l'acceptation de l'e-mail par le serveur
+    d'envoi ; un échec laisse l'invitation précédente valable et affiche « Envoi échoué »."""
+    from smtplib import SMTPException
+
+    from django.tasks import TaskResultStatus
+    from django_tasks_db.models import DBTaskResult
+
+    from apps.core import tasks
+
+    previous_token = company_a.invitation_token
+
+    def refuse(*args, **kwargs):
+        raise SMTPException("550 boîte inconnue")
+
+    with tenant_context(company_a.company):
+        new = services.invite(company_a.pending, sent_by=company_a.admin)
+        placeholder = new.token_hash
+    monkeypatch.setattr(tasks, "_send", refuse)
+    run_tasks()
+    monkeypatch.undo()
+
+    assert mail.outbox == []
+    assert DBTaskResult.objects.get().status == TaskResultStatus.FAILED
+    with tenant_context(company_a.company):
+        new = Invitation.objects.get(pk=new.pk)
+        assert new.send_failed and new.token_hash == placeholder
+        still_valid = services.find_invitation(previous_token)
+        assert still_valid.pk == company_a.invitation.pk and still_valid.is_usable
+    page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
+    assert "Envoi échoué" in page and "Renvoyer l'invitation" in page
+
+    # « Renvoyer » : l'envoi réussit, l'ancienne invitation est remplacée.
+    with tenant_context(company_a.company):
+        retry = services.invite(company_a.pending, sent_by=company_a.admin)
+    run_tasks()
+    assert len(mail.outbox) == 1
+    with tenant_context(company_a.company):
+        assert not services.find_invitation(previous_token).is_usable
+        retry = Invitation.objects.get(pk=retry.pk)
+        assert retry.sent_at is not None and not retry.send_failed
+    page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
+    assert "Envoi échoué" not in page
+
+
+def test_failed_confirmation_marks_the_send_as_failed(
+    company_a, client_for, run_tasks, monkeypatch
+):
+    """L'e-mail est parti mais sa confirmation échoue : l'empreinte n'est pas enregistrée,
+    le lien est inutilisable, donc « Envoi échoué » ; l'invitation précédente reste valable."""
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("base indisponible")
+
+    with tenant_context(company_a.company):
+        new = services.invite(company_a.pending, sent_by=company_a.admin)
+    monkeypatch.setattr(services, "confirm_sent", broken)
+    run_tasks()
+    monkeypatch.undo()
+    assert len(mail.outbox) == 1
+    with tenant_context(company_a.company):
+        assert Invitation.objects.get(pk=new.pk).send_failed
+        assert services.find_invitation(company_a.invitation_token).is_usable
+    page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
+    assert "Envoi échoué" in page
+
+
+def test_confirmation_of_a_replaced_invitation_replaces_nothing(company_a, client_for):
+    """Deux invitations envoyées l'une après l'autre ; la plus récente part la première.
+    La confirmation tardive de l'ancienne ne remplace pas la nouvelle."""
+    with tenant_context(company_a.company):
+        older = services.invite(company_a.pending, sent_by=company_a.admin)
+        newer = services.invite(company_a.pending, sent_by=company_a.admin)
+        assert services.confirm_sent(newer, "jeton-recent") is True
+        assert services.confirm_sent(older, "jeton-ancien") is False
+        newer = Invitation.objects.get(pk=newer.pk)
+        older = Invitation.objects.get(pk=older.pk)
+        assert newer.is_usable and newer.revoked_at is None
+        assert older.revoked_at is not None and not older.is_usable
+        assert services.find_invitation("jeton-recent").pk == newer.pk
+        assert not services.find_invitation("jeton-ancien").is_usable
+        latest = services.latest_open_invitations([company_a.pending])
+        assert latest[company_a.pending.pk].pk == newer.pk
+    page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
+    assert "Invitation envoyée" in page and "Envoi échoué" not in page
+
+
+def test_confirmation_never_replaces_a_newer_invitation_still_queued(company_a):
+    with tenant_context(company_a.company):
+        older = services.invite(company_a.pending, sent_by=company_a.admin)
+        newer = services.invite(company_a.pending, sent_by=company_a.admin)
+        assert services.confirm_sent(older, "jeton-ancien") is True
+        assert Invitation.objects.get(pk=newer.pk).is_usable  # partira à son tour
+        assert not Invitation.objects.get(pk=company_a.invitation.pk).is_usable

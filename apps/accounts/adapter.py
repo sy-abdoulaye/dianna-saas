@@ -15,6 +15,28 @@ class AccountAdapter(DefaultAccountAdapter):
         """Pas d'inscription libre : les comptes naissent d'une invitation."""
         return False
 
+    def send_mail(self, template_prefix, email, context):
+        """E-mails d'allauth (mot de passe oublié…) : rendus ici, envoyés par une tâche (L3-11)
+        dont les arguments sont chiffrés : le lien ne reste pas en clair en base (A3-04)."""
+        from apps.core.mail import queue_encrypted_email
+
+        message = self.render_mail(template_prefix, email, context)
+        html = next(
+            (
+                content
+                for content, mimetype in getattr(message, "alternatives", [])
+                if mimetype == "text/html"
+            ),
+            "",
+        )
+        queue_encrypted_email(
+            message.subject,
+            message.body,
+            list(message.to),
+            from_email=message.from_email,
+            html=html,
+        )
+
     def add_message(self, request, level, message_template=None, *args, **kwargs):
         # Connexion et déconnexion : pas de notification visuelle (comme le prototype).
         if message_template in self.SILENT_MESSAGES:

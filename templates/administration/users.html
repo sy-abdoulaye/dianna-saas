@@ -58,7 +58,7 @@
                       {% else %}
                         {% url "administration:send_invitation" person.public_id as invite_url %}
                         <div class="flex flex-wrap items-center gap-2">
-                          {% if person.invitation_pending %}<span class="badge badge-wait">{% translate "Invitation envoyée" %}</span>{% else %}<span class="badge badge-off">{% translate "Pas de compte" %}</span>{% endif %}
+                          {% if person.invitation_failed %}<span class="badge badge-ko">{% translate "Envoi échoué" %}</span>{% elif person.invitation_pending %}<span class="badge badge-wait">{% translate "Invitation envoyée" %}</span>{% else %}<span class="badge badge-off">{% translate "Pas de compte" %}</span>{% endif %}
                           {% if person.invitation_pending %}{% translate "Renvoyer l'invitation" as invite_label %}{% else %}{% translate "Envoyer l'invitation" as invite_label %}{% endif %}
                           {% button invite_label variant="ghost" size="sm" icon="send" hx_post=invite_url hx_swap="none" %}
                         </div>

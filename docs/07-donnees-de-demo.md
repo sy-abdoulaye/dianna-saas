@@ -23,7 +23,7 @@ Adresses en développement : vitrine http://localhost:8000, Exemple SAS http://e
 - 24 salariés répartis sur 3 sites (Lyon, Paris, Nantes) et 6 services ; 4 managers (Louise Martin, Paul Lefèvre, Claire Dubois, Élodie Vidal) ; 1 arrivée prochaine ; 1 départ.
 - Demandes de télétravail sur la semaine courante et la suivante, dont une en attente pour Camille et deux à valider pour Louise.
 - Campagne « Été 2027 » ouverte, avec des vœux qui se chevauchent dans le service Support client (conflit visible).
-- Astreintes et interventions, justificatifs de transport (un refusé, plusieurs en attente).
+- Astreintes et interventions ; justificatifs de transport (un refusé, plusieurs en attente) au lot 5.
 - 15 équipements (attribués, en stock, en réparation) et 3 demandes de matériel.
 - 5 annonces (2 épinglées), 4 questionnaires (ouvert, ouvert avec moins de 3 réponses, clos, brouillon) avec commentaires sur les notes.
 - 10 entretiens à toutes les étapes, fiches de suivi avec une note privée de Louise.

@@ -33,6 +33,7 @@ Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est
 make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind
 make up          # PostgreSQL 18 (Docker, port 5434), CSS, migrations, serveur sur :8000
 make css         # dans un second terminal : recompile la feuille de style à chaque modification
+make worker      # dans un troisième terminal : travailleur des tâches (e-mails, invitations)
 ```
 
 Adresses (les sous-domaines de `localhost` fonctionnent sans configuration dans Chrome et Firefox) :
@@ -47,7 +48,14 @@ Adresses (les sous-domaines de `localhost` fonctionnent sans configuration dans 
 
 En développement, `DEMO_DISABLE_2FA=True` dispense les comptes RH et Admin de démonstration de la double authentification. Pour la tester : `DEMO_DISABLE_2FA=false make up`.
 
-Déploiement : `python manage.py migrate` puis `python manage.py createcachetable` (cache partagé de la limitation des tentatives).
+Déploiement (même image Docker pour le serveur et le travailleur) :
+
+1. `python manage.py migrate`, puis `python manage.py createcachetable` (cache partagé de la limitation des tentatives).
+2. Serveur web : la commande par défaut de l'image (Gunicorn).
+3. Travailleur des tâches, dans un conteneur séparé : `python manage.py db_worker`. Sans lui, aucun e-mail ne part (invitations, mot de passe oublié, demandes).
+4. Purge des résultats de tâches, une fois par jour : `python manage.py purge_task_results` (échecs de plus de 7 jours ; les tâches réussies sont supprimées dès leur fin). Les lignes de tâches ne contiennent ni lien ni texte d'e-mail en clair (A3-04).
+   Pour le développement et les essais seulement : `docker compose --profile taches up -d` démarre la base `db`, applique les migrations (service `migrate`), puis le travailleur (`worker`) et la purge quotidienne (`scheduler`). Ces services utilisent les réglages de développement (`config.settings.dev` et ses clés publiques) et la base `db` de `docker-compose.yml` ; le `.env` créé par `make install` suffit et n'a pas à être modifié. En développement, les e-mails s'affichent dans le journal du travailleur : `docker compose logs -f worker`. Le déploiement en production du travailleur et de la purge est prévu au lot 8.
+5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `TASKS_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`.
 Contrôles : `make lint`, `make test`, `make e2e`, `make check`. Liste complète : `make help`.
 
 ## À faire hors code avant la commercialisation

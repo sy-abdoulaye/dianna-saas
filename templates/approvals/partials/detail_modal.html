@@ -1,0 +1,58 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_class %} modal-wide{% endblock %}
+{% block modal_icon %}{% icon kind.icon %}{% endblock %}
+{% block modal_title %}{% blocktranslate with label=kind.label %}{{ label }} · détail{% endblocktranslate %}{% endblock %}
+{% block modal_body %}
+  <div class="flex flex-wrap items-center gap-3">
+    {% include "components/avatar.html" with person=obj.requester size="m" %}
+    <div><b>{{ obj.requester.full_name }}</b><div class="meta">{{ obj.requester.job_title }}{% if obj.requester.service %} · {{ obj.requester.service }}{% endif %}</div></div>
+    <div class="ml-auto">{% status_badge "request" obj.status %}</div>
+  </div>
+  {% if acting_for and can_decide %}
+    {% blocktranslate asvar acting with name=acting_for.full_name %}Vous agissez à la place de {{ name }}.{% endblocktranslate %}
+    {% translate "Votre décision est tracée dans le journal." as acting_text %}
+    {% include "components/banner.html" with kind="warn" title=acting text=acting_text %}
+  {% endif %}
+  {% if conflict and conflict.count %}
+    {% blocktranslate asvar conflict_title count n=conflict.count %}{{ n }} autre absence dans le service sur cette période :{% plural %}{{ n }} autres absences dans le service sur cette période :{% endblocktranslate %}
+    {% if conflict.over_threshold %}
+      {% blocktranslate asvar conflict_text with names=conflict.people|join:", " threshold=conflict.threshold %}{{ names }}. Plus de {{ threshold }} % du service serait absent.{% endblocktranslate %}
+      {% include "components/banner.html" with kind="err" title=conflict_title text=conflict_text %}
+    {% else %}
+      {% blocktranslate asvar conflict_text with names=conflict.people|join:", " %}{{ names }}.{% endblocktranslate %}
+      {% include "components/banner.html" with kind="warn" title=conflict_title text=conflict_text %}
+    {% endif %}
+  {% endif %}
+  <dl class="dl">
+    <dt>{{ kind.column }}</dt><dd>{{ summary }}</dd>
+    {% if obj.comment %}<dt>{% translate "Commentaire" %}</dt><dd>{{ obj.comment|linebreaksbr }}</dd>{% endif %}
+    {% if obj.description %}<dt>{% translate "Description" %}</dt><dd>{{ obj.description|linebreaksbr }}</dd>{% endif %}
+    <dt>{% translate "Envoyée le" %}</dt><dd>{{ obj.submitted_at|date:"j F Y à H:i" }}</dd>
+  </dl>
+  <div>
+    <h3 class="h3 mb-2">{% translate "Historique" %}</h3>
+    <ul class="rows">
+      {% for event in history %}
+        <li>
+          <span>{{ event.get_action_display }}{% if event.comment %} : « {{ event.comment }} »{% endif %}{% if event.actor %} <span class="meta">{% blocktranslate with name=event.actor.full_name %}par {{ name }}{% endblocktranslate %}</span>{% endif %}</span>
+          <span class="meta whitespace-nowrap">{{ event.created_at|date:"j N à H:i" }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endblock %}
+{% block modal_footer %}
+  {% if can_decide %}
+    {% button _("Refuser") hx_get=urls.refuse hx_target="#modal-root" %}
+    {% button _("Valider") variant="primary" icon="check" hx_post=urls.approve hx_swap="none" %}
+  {% elif can_cancel %}
+    {% button _("Fermer") data_modal_close=True %}
+    {% button _("Annuler la demande") variant="danger" hx_get=urls.cancel hx_target="#modal-root" %}
+  {% elif can_cancel_approved %}
+    {% button _("Fermer") data_modal_close=True %}
+    {% button _("Annuler la demande validée") variant="danger" hx_get=urls.cancel_approved hx_target="#modal-root" %}
+  {% else %}
+    {% button _("Fermer") data_modal_close=True %}
+  {% endif %}
+{% endblock %}

@@ -17,11 +17,18 @@ def app(request):
         "current_employee": employee,
         "current_company": request.company,
         "nav_groups": SimpleLazyObject(
-            lambda: build_nav(employee, enabled_modules(request), match)
+            lambda: build_nav(employee, enabled_modules(request), match, _menu_counts(request))
         ),
-        "unread_count": SimpleLazyObject(lambda: notifications.unread_count(employee)),
+        # Calculé tout de suite : le pluriel de {% blocktranslate count %} exige un entier.
+        "unread_count": notifications.unread_count(employee),
         "latest_notifications": SimpleLazyObject(lambda: notifications.latest(employee)),
         "current_photo_url": SimpleLazyObject(
             lambda: signed_url(employee.photo) if employee.photo else ""
         ),
     }
+
+
+def _menu_counts(request) -> dict:
+    from apps.approvals.views import menu_counts
+
+    return menu_counts(request)

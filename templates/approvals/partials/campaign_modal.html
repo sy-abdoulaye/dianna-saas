@@ -1,0 +1,28 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "sun" %}{% endblock %}
+{% block modal_title %}{% translate "Nouvelle campagne" %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{% url 'approvals:new_campaign' %}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        {% include "components/field.html" with field=form.label %}
+        <div class="pair">
+          {% include "components/field.html" with field=form.period_start %}
+          {% include "components/field.html" with field=form.period_end %}
+        </div>
+        <div class="pair">
+          {% include "components/field.html" with field=form.deadline %}
+          {% include "components/field.html" with field=form.conflict_threshold %}
+        </div>
+        {% translate "La campagne est créée en brouillon : ouvrez-la pour recueillir les vœux." as help %}
+        {% include "components/banner.html" with kind="info" text=help %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Créer la campagne") variant="primary" icon="plus" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

@@ -35,6 +35,64 @@ class CompanyData:
     notification: object
     audit: object
     change: object
+    requests: dict
+
+
+def build_requests(employee) -> dict:
+    """Une demande de chaque type, avec son historique et son événement de calendrier,
+    créées sans le moteur (données de la batterie d'isolation)."""
+    from datetime import date, timedelta
+
+    from django.utils import timezone
+
+    from apps.agenda.models import CalendarEvent
+    from apps.approvals.models import (
+        LeaveRequest,
+        OnCallDeclaration,
+        RequestEvent,
+        SummerCampaign,
+        TeleworkRequest,
+    )
+
+    monday = timezone.localdate() + timedelta(days=7 - timezone.localdate().weekday())
+    now = timezone.now()
+    campaign = SummerCampaign.objects.create(
+        label="Été 2027",
+        period_start=date(2027, 6, 1),
+        period_end=date(2027, 9, 30),
+        deadline=date(2027, 2, 28),
+        status=SummerCampaign.Status.OPEN,
+    )
+    telework = TeleworkRequest.objects.create(requester=employee, date=monday, submitted_at=now)
+    leave = LeaveRequest.objects.create(
+        requester=employee,
+        campaign=campaign,
+        start=date(2027, 7, 5),
+        end=date(2027, 7, 16),
+        submitted_at=now,
+    )
+    on_call = OnCallDeclaration.objects.create(
+        requester=employee, start=monday, end=monday + timedelta(days=6), submitted_at=now
+    )
+    event = RequestEvent.objects.create(
+        request_type="telework", request_id=telework.pk, actor=employee, action="submitted"
+    )
+    calendar = CalendarEvent.objects.create(
+        employee=employee,
+        kind="telework",
+        start=monday,
+        end=monday,
+        source_type="telework",
+        source_id=telework.pk,
+    )
+    return {
+        "telework": telework,
+        "leave": leave,
+        "on_call": on_call,
+        "campaign": campaign,
+        "event": event,
+        "calendar": calendar,
+    }
 
 
 def build_company(slug: str, name: str) -> CompanyData:
@@ -57,6 +115,7 @@ def build_company(slug: str, name: str) -> CompanyData:
         from apps.people.models import EmployeeChange
 
         change = EmployeeChange.objects.create(employee=employee, actor=admin)
+        requests = build_requests(employee)
     audit = AuditLogFactory(company=company, actor=admin)
     return CompanyData(
         company,
@@ -72,6 +131,7 @@ def build_company(slug: str, name: str) -> CompanyData:
         notification,
         audit,
         change,
+        requests,
     )
 
 
@@ -139,3 +199,58 @@ def anonymous_client():
         return Client(HTTP_HOST=host_for(company))
 
     return _client
+
+
+@pytest.fixture
+def run_tasks():
+    """Exécute les tâches en attente avec le vrai travailleur (`db_worker --batch`).
+    `after_seconds` simule le temps écoulé (e-mails différés de 45 s). Dans un test, la
+    connexion porte la transaction du test : le travailleur ne doit pas la fermer."""
+    from datetime import timedelta
+
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    def _run(*, after_seconds: int = 0):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                "django_tasks_db.management.commands.db_worker.close_old_connections",
+                lambda: None,
+            )
+            if after_seconds:
+                real_now = timezone.now
+                patch.setattr(
+                    timezone, "now", lambda: real_now() + timedelta(seconds=after_seconds)
+                )
+            call_command("db_worker", "--batch", "--no-startup-delay", verbosity=0)
+
+    return _run
+
+
+@pytest.fixture
+def submit():
+    """submit(company_data, employee, model, **data) : envoie une demande par le service,
+    avec ses contrôles métier (RequestValidationError si l'un échoue). Les congés d'été sont
+    rattachés par le service à la campagne ouverte, comme à l'écran."""
+    from datetime import timedelta
+
+    from apps.approvals import workflow
+    from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest
+    from apps.approvals.tests.conftest import next_weekday
+
+    def _submit(company_data, employee, model=TeleworkRequest, **data):
+        if model is TeleworkRequest:
+            data.setdefault("date", next_weekday(weekday=2))
+        if model is LeaveRequest:
+            data.setdefault(
+                "start", company_data.requests["campaign"].period_start + timedelta(days=60)
+            )
+            data.setdefault("end", data["start"] + timedelta(days=9))
+            data.setdefault("leave_type", LeaveRequest.LeaveType.SUMMER)
+        if model is OnCallDeclaration:
+            data.setdefault("start", next_weekday(offset_days=21))
+            data.setdefault("end", data["start"] + timedelta(days=6))
+        with tenant_context(company_data.company):
+            return workflow.submit(model, employee, data)
+
+    return _submit

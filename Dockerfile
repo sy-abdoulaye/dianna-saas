@@ -26,7 +26,10 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 COPY --from=css /src/static/build ./static/build
-RUN SECRET_KEY=build-only MFA_ENCRYPTION_KEY=$(python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())") python manage.py collectstatic --noinput \
+RUN SECRET_KEY=build-only \
+    MFA_ENCRYPTION_KEY=$(python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())") \
+    TASKS_ENCRYPTION_KEY=$(python -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())") \
+    python manage.py collectstatic --noinput \
     && useradd --system --uid 1000 dianna && chown -R dianna /app
 USER dianna
 EXPOSE 8000

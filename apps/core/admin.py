@@ -99,7 +99,7 @@ class CompanyAdmin(admin.ModelAdmin):
         if change:
             super().save_model(request, obj, form, change)
             return
-        company, _admin, _token = services.create_company(
+        company, _admin = services.create_company(
             name=form.cleaned_data["name"],
             slug=form.cleaned_data["slug"],
             admin_first_name=form.cleaned_data["admin_first_name"],
@@ -128,7 +128,13 @@ def _unregister(model_label: str):
         admin.site.unregister(model)
 
 
-for _label in ("mfa.Authenticator", "account.EmailAddress", "auth.Group"):
+# Les tâches en attente contiennent des e-mails destinés aux clients : non inscrites.
+for _label in (
+    "mfa.Authenticator",
+    "account.EmailAddress",
+    "auth.Group",
+    "django_tasks_database.DBTaskResult",
+):
     _unregister(_label)
 
 admin.site.site_header = _("Dianna · administration éditeur")

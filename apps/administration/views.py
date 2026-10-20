@@ -11,7 +11,6 @@ from django.utils.translation import gettext_lazy
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts import services as accounts
-from apps.accounts.models import Invitation
 from apps.administration import services
 from apps.administration.forms import (
     CompanyForm,
@@ -115,13 +114,11 @@ def users(request):
     if data.get("profil"):
         people_qs = people_qs.filter(role=data["profil"])
     page_obj = Paginator(people_qs, 8).get_page(request.GET.get("page"))
-    pending = set(
-        Invitation.objects.filter(
-            employee__in=page_obj.object_list, accepted_at__isnull=True, revoked_at__isnull=True
-        ).values_list("employee_id", flat=True)
-    )
+    latest = accounts.latest_open_invitations(page_obj.object_list)
     for person in page_obj.object_list:
-        person.invitation_pending = person.pk in pending
+        invitation = latest.get(person.pk)
+        person.invitation_pending = invitation is not None
+        person.invitation_failed = invitation is not None and invitation.send_failed
     context = {
         **tab_context(request, "administration:users"),
         "filter_form": form,

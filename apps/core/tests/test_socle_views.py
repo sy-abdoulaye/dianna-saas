@@ -108,25 +108,23 @@ def staff_client(db):
     return client
 
 
-def test_admin_creates_a_company_and_invites_its_first_admin(
-    staff_client, django_capture_on_commit_callbacks
-):
-    with django_capture_on_commit_callbacks(execute=True):
-        response = staff_client.post(
-            "/core/company/add/",
-            {
-                "name": "Nouvelle SARL",
-                "slug": "nouvelle",
-                "admin_first_name": "Ada",
-                "admin_last_name": "Lovelace",
-                "admin_email": "ada@nouvelle.fr",
-            },
-        )
+def test_admin_creates_a_company_and_invites_its_first_admin(staff_client, run_tasks):
+    response = staff_client.post(
+        "/core/company/add/",
+        {
+            "name": "Nouvelle SARL",
+            "slug": "nouvelle",
+            "admin_first_name": "Ada",
+            "admin_last_name": "Lovelace",
+            "admin_email": "ada@nouvelle.fr",
+        },
+    )
     assert response.status_code == 302
     company = Company.objects.get(slug="nouvelle")
     assert CompanyModule.all_companies.filter(company=company).count() == len(Module.values)
     admin = Employee.all_companies.get(company=company)
     assert admin.role == "admin" and admin.user is None
+    run_tasks()
     assert mail.outbox[-1].to == ["ada@nouvelle.fr"]
     assert "http://nouvelle.localhost/invitation/" in mail.outbox[-1].body
 
@@ -191,6 +189,13 @@ def test_seed_demo_loads_both_companies(settings, db):
         "marc.diallo@exemple.fr",
         "nadia.berger@autre.fr",
     }
+    # Notifications des demandes : liées à leur demande (retrait quand elles deviennent fausses).
+    from apps.core.models import Notification
+
+    to_validate = Notification.all_companies.filter(company=exemple, kind="request")
+    assert to_validate.exists()
+    assert not to_validate.filter(source_id__isnull=True).exists()
+    assert not to_validate.filter(source_type="").exists()
     with pytest.raises(CommandError):
         call_command("seed_demo")
     call_command("seed_demo", "--reset")

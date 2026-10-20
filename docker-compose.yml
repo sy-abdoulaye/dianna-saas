@@ -1,4 +1,23 @@
 # PostgreSQL 18 pour le développement (T-03). `make db` le démarre.
+# Profil « taches » (même image que le serveur), pour le développement et les essais
+# seulement : travailleur des tâches et purge quotidienne des résultats (A3-04).
+# `docker compose --profile taches up -d`. Réglages de développement (config.settings.dev et
+# ses clés publiques) et base `db` de ce fichier, quelle que soit l'adresse du .env de la
+# machine. Le déploiement en production du travailleur et de la purge est prévu au lot 8.
+x-app: &app
+  build: .
+  profiles: ["taches"]
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DJANGO_SETTINGS_MODULE: config.settings.dev
+    DATABASE_URL: postgres://dianna:dianna@db:5432/dianna
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+
 services:
   db:
     image: postgres:18
@@ -15,6 +34,30 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # Migrations de la base `db` avant le travailleur et la purge (exécuté une fois).
+  migrate:
+    <<: *app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+
+  worker:
+    <<: *app
+    command: ["python", "manage.py", "db_worker"]
+    depends_on: &after_migrate
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Purge des résultats de tâches : réussis restants et échecs de plus de 7 jours (A3-04).
+  scheduler:
+    <<: *app
+    depends_on: *after_migrate
+    command:
+      - sh
+      - -c
+      - while true; do python manage.py purge_task_results; sleep 86400; done
 
 volumes:
   pgdata:

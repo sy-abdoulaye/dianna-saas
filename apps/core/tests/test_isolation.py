@@ -9,6 +9,14 @@ from django.test import Client
 from django.urls import URLPattern, URLResolver, get_resolver
 
 from apps.accounts.models import Invitation
+from apps.agenda.models import CalendarEvent
+from apps.approvals.models import (
+    LeaveRequest,
+    OnCallDeclaration,
+    RequestEvent,
+    SummerCampaign,
+    TeleworkRequest,
+)
 from apps.core.models import (
     AuditLog,
     Company,
@@ -164,6 +172,12 @@ TENANT_ROWS = {
     AuditLog: lambda d: d.audit,
     Invitation: lambda d: d.invitation,
     EmployeeChange: lambda d: d.change,
+    TeleworkRequest: lambda d: d.requests["telework"],
+    LeaveRequest: lambda d: d.requests["leave"],
+    OnCallDeclaration: lambda d: d.requests["on_call"],
+    SummerCampaign: lambda d: d.requests["campaign"],
+    RequestEvent: lambda d: d.requests["event"],
+    CalendarEvent: lambda d: d.requests["calendar"],
     CompanyModule: lambda d: CompanyModule.all_companies.filter(company=d.company).first(),
 }
 

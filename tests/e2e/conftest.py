@@ -19,6 +19,15 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.e2e)
 
 
+@pytest.fixture(autouse=True)
+def site_port(request, settings):
+    """Les e-mails construisent leurs liens dans la tâche, sans la requête (A3-04) : le port
+    vient de SITE_PORT, ici celui du serveur de test."""
+    if "live_server" in request.fixturenames:
+        live_server = request.getfixturevalue("live_server")
+        settings.SITE_PORT = live_server.url.rsplit(":", 1)[1]
+
+
 @pytest.fixture
 def styleguide_url(live_server, settings):
     settings.DEBUG = True

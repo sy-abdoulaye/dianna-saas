@@ -16,3 +16,4 @@ MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend
 WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = True
 DATABASES["default"]["CONN_MAX_AGE"] = 0  # noqa: F405
+TASKS_ENCRYPTION_KEY = "bkL6eGrZbWVjzVSFiC8n2k6AKPNMBagpAshOOsdCMnk="

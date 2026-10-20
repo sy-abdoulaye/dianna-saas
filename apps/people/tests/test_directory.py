@@ -227,15 +227,13 @@ def test_future_arrival_means_upcoming(client_for, company_a):
     assert Employee.all_companies.get(email="ada.lovelace@exemple.fr").status == "upcoming"
 
 
-def test_admin_creates_with_role_and_invitation(
-    client_for, company_a, django_capture_on_commit_callbacks
-):
-    with django_capture_on_commit_callbacks(execute=True):
-        client_for(company_a.admin).post(
-            "/annuaire/nouveau/", form_data(company_a, role=Role.HR, invite="on")
-        )
+def test_admin_creates_with_role_and_invitation(client_for, company_a, run_tasks):
+    client_for(company_a.admin).post(
+        "/annuaire/nouveau/", form_data(company_a, role=Role.HR, invite="on")
+    )
     ada = Employee.all_companies.get(email="ada.lovelace@exemple.fr")
     assert ada.role == Role.HR
+    run_tasks()
     assert mail.outbox[-1].to == ["ada.lovelace@exemple.fr"]
 
 

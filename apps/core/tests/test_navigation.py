@@ -22,8 +22,9 @@ def test_real_menu_shows_existing_routes_and_soon_entries_without_link():
     items = {item.key: item for group in groups for item in group.items}
     assert items["dashboard"].url == "/"
     assert items["workload"].soon and items["workload"].url is None
+    assert items["telework"].url == "/teletravail/"
     # Les modules des lots suivants n'ont pas encore de route : pas d'entrée.
-    assert "telework" not in items
+    assert "equipment" not in items
 
 
 def test_recruitment_is_shown_to_people_with_reports_not_to_the_manager_profile_alone():
