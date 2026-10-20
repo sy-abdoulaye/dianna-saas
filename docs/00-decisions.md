@@ -37,8 +37,8 @@ Versions vérifiées le 18 octobre 2026.
 | T-12 | Fichiers | Stockage objet compatible S3 en France (Scaleway Object Storage ou OVHcloud), `django-storages`, bucket privé, URL signées de 5 minutes | Stockage disque local (déconseillé en production) | À confirmer |
 | T-13 | E-mails | `django-anymail` avec un fournisseur européen (Brevo ou Scaleway Transactional Email) | — | À confirmer |
 | T-14 | Hébergement | Conteneurs Docker chez un hébergeur français (Scaleway, OVHcloud ou Clever Cloud), PostgreSQL managé avec sauvegardes quotidiennes | — | À confirmer |
-| T-15 | Exports | CSV (module `csv`, séparateur point-virgule, encodage UTF-8 avec BOM pour Excel), Excel (`openpyxl`), iCalendar (`icalendar`), PDF (`WeasyPrint`) | — | À confirmer |
-| T-16 | Jours fériés | Paquet `holidays` (France), complété par les fermetures saisies par l'entreprise | — | À confirmer |
+| T-15 | Exports | CSV (module `csv`, séparateur point-virgule, encodage UTF-8 avec BOM pour Excel), Excel (`openpyxl` **3.1.5**), iCalendar écrit sans dépendance (L4-05), PDF (`WeasyPrint` **70.0**, récupérateur d'URL fermé, L4-06) | — | Validé (21 oct. 2026) |
+| T-16 | Jours fériés | Paquet `holidays` **0.107** (France ; Alsace-Moselle par site, L4-02), complété par les fermetures saisies par l'administrateur | — | Validé (21 oct. 2026) |
 | T-17 | Tests | `pytest`, `pytest-django`, `factory_boy`, couverture ≥ 85 % sur `services.py` et `permissions.py`, parcours de bout en bout avec Playwright | — | À confirmer |
 | T-18 | Qualité | `ruff` (lint et format), `djlint` (templates), `pre-commit`, intégration continue GitHub Actions | — | À confirmer |
 | T-19 | Configuration | Variables d'environnement (`django-environ`), réglages séparés `base`, `dev`, `test`, `prod` | — | À confirmer |
@@ -174,12 +174,37 @@ Versions vérifiées le 18 octobre 2026.
 | A3-05 | Notifications devenues fausses | Chaque transition supprime les notifications de la demande dont l'e-mail n'est pas encore parti (« Demande à valider », décision remplacée). Une annulation immédiate qui rend la demande de nouveau en attente prévient à nouveau les valideurs | Validé (20 oct. 2026) |
 | A3-06 | Ouverture de campagne | Service sous verrou de toutes les campagnes de l'entreprise ; deux ouvertures simultanées donnent une seule campagne ouverte, l'autre reçoit « Une campagne est déjà ouverte. » | Validé (20 oct. 2026) |
 
+## Préparation du lot 4 (21 oct. 2026)
+
+Réponses aux questions Q1 à Q13 de la préparation du lot 4.
+
+| N° | Sujet | Décision | Statut |
+|---|---|---|---|
+| L4-01 | Case du planning | État principal congé > télétravail > sur site ; vide le week-end ; libellé du jour férié ou de la fermeture ; « — » avant l'arrivée. Le repère « A » de l'astreinte reste visible le week-end et les jours non ouvrés (une astreinte de week-end se voit) | À confirmer |
+| L4-02 | Jours fériés d'Alsace-Moselle | Réglage par site (« Services et sites » : Vendredi saint et 26 décembre) | Validé (21 oct. 2026) |
+| L4-03 | Fermeture ajoutée après des demandes | Les demandes de télétravail du jour restent telles quelles ; les RH sont prévenus avec la liste des demandes concernées (notification et onglet Fermetures) ; le planning affiche la fermeture | Validé (21 oct. 2026) |
+| L4-04 | Saisie des fermetures | Administrateur seul (onglet « Fermetures » de l'administration) ; les RH le consultent en lecture ; date passée refusée ; une fermeture par jour et par périmètre (entreprise ou site) | Validé (21 oct. 2026) |
+| L4-05 | iCalendar | Fichier .ics téléchargé, écrit sans dépendance (RFC 5545 : échappement, lignes de 75 octets) ; un événement par absence et par télétravail, « en attente » en TENTATIVE ; l'abonnement par URL est au lot 8 | Validé (21 oct. 2026) |
+| L4-06 | PDF | WeasyPrint avec un récupérateur d'URL maison (`apps/core/pdf.py`) : seuls les polices et feuilles de style de Dianna et le logo de l'entreprise courante ; toute autre adresse refusée sans requête (file://, http(s)://, data:, adresses internes). Bibliothèques Pango et HarfBuzz ajoutées à l'image Docker | Validé (21 oct. 2026) |
+| L4-07 | Grand effectif | 50 personnes par page dans les vues semaine et mois, filtres conservés, la personne connectée en tête de chaque page | Validé (21 oct. 2026) |
+| L4-08 | Tableau de bord | Blocs des modules à venir (matériel, annonces, justificatifs, entretiens) masqués jusqu'à leur lot ; indicateurs disponibles à la place (salarié : prochains congés, sur site aujourd'hui ; manager : en congés aujourd'hui ; RH : demandes à valider, vœux de la campagne) | Validé (21 oct. 2026) |
+| L4-09 | Exports RH | Bouton « Exporter » des RH et administrateurs dans chaque module : télétravail (récapitulatif du mois), astreintes (paie du mois), congés (synthèse de campagne) ; CSV ou Excel | Validé (21 oct. 2026) |
+| L4-10 | Synthèse de campagne | Par service et par semaine de la période : vœux, absents et pourcentage de l'effectif en poste, alerte au-delà du seuil ; écran, CSV et Excel | Validé (21 oct. 2026) |
+| L4-11 | Excel | Une feuille, en-têtes et colonnes d'identité figés, couleurs de la légende lues dans les jetons de `app.css` ; neutralisation des formules comme le CSV (toute cellule texte enregistrée comme texte) | Validé (21 oct. 2026) |
+| L4-12 | Périmètre et journal des exports | Chaque export (planning, RH, synthèse) vérifie le périmètre côté serveur comme la vue ; un périmètre hors des choix de la personne est refusé (400). Journal d'audit avec période, format et périmètre, sans nom de personne | Validé (21 oct. 2026) |
+| L4-13 | Colonnes de l'export du planning | Jours ouvrés (lundi à vendredi) de la période, comme le prototype ; jours fériés et fermetures avec leur libellé ; l'astreinte ajoutée au libellé de la case | À confirmer |
+| L4-14 | Récapitulatif mensuel du télétravail | Toutes les personnes en poste (0 compris) et celles qui ont eu un télétravail validé dans le mois ; dates au format JJ/MM | À confirmer |
+| L4-15 | Export paie des astreintes | Jours d'astreinte validés comptés dans le mois (une astreinte à cheval est coupée), interventions validées commencées dans le mois et leurs heures | À confirmer |
+
+Nouvelles dépendances du lot 4 (accord du 21 oct. 2026) : `holidays` 0.107, `openpyxl` 3.1.5 (avec `et-xmlfile` 2.0.0), `weasyprint` 70.0 (avec `pydyf` 0.13.0, `tinycss2` 1.5.1, `cssselect2` 0.10.1, `tinyhtml5` 2.1.0, `fonttools` 4.67.0, `brotli` 1.2.0, `zopfli` 0.4.3, `pyphen` 0.18.1, `cffi` 2.1.1). Bornes dans `pyproject.toml` : `holidays<1`, `openpyxl<3.2`, `weasyprint<71` ; versions exactes dans `uv.lock`. Paquets système de l'image : `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz-subset0`.
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
 - **Lot 5 :** les justificatifs de transport sont servis seulement à un utilisateur connecté qui a la permission de les voir (contrôle à chaque téléchargement), pas par simple lien signé comme les photos et logos (A2-07).
 - **Lot 8 :** le blocage après des échecs de connexion est indexé par adresse et par hôte.
 - **Lot 8 :** limite de taille des envois au niveau du proxy (`client_max_body_size` ou équivalent) : Django ne limite pas la taille des fichiers reçus avant de les écrire sur disque.
+- **Lot 8 :** abonnement iCalendar par URL : jeton personnel, révocable, limité aux droits de son propriétaire (L4-05).
 - **Lot 8 :** déploiement en production du travailleur de tâches (`db_worker`) et de la purge quotidienne (`purge_task_results`) ; le profil `taches` de docker-compose.yml ne sert qu'au développement et aux essais (A3-04).
 - **Lot 8 :** le message d'erreur du serveur d'envoi (SMTP) est gardé 7 jours dans les tâches en échec (il peut contenir l'adresse du destinataire) : à revoir avec la politique de conservation RGPD (M-13).
 - **Lot 8 :** changement d'identifiant de connexion (T-09, L2-11), en revoyant le message « Cette adresse est déjà utilisée sur Dianna », qui indique à un administrateur qu'une adresse a un compte dans une autre entreprise.

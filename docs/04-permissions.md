@@ -54,8 +54,13 @@ Personne ne décide pour soi-même ni n'annule sa propre demande validée (`SELF
 
 | Action | Salarié | Manager | RH | Admin |
 |---|---|---|---|---|
-| Voir le planning | Son service | Son service | Toute l'entreprise | Toute l'entreprise |
-| Exporter | Son service | Son service | Oui | Oui |
+| Voir le planning | Son service | Son service et son équipe directe (L1-06) | Toute l'entreprise | Toute l'entreprise |
+| Exporter le planning (CSV, Excel, iCalendar, PDF) | Son service | Son service et son équipe directe | Oui, entreprise ou un service | Comme RH |
+| Voir les fermetures et jours fériés | Non | Non | Oui (lecture) | Oui |
+
+Le filtre de service n'est proposé qu'aux RH et administrateurs ; pour les autres, un service passé dans l'URL ne fait que restreindre leur périmètre, et un périmètre d'export hors de leurs choix est refusé (400). Chaque export est inscrit au journal d'audit (L4-12).
+
+Exports RH des demandes (`requests.export`, L4-09) : récapitulatif mensuel du télétravail, export paie des astreintes, synthèse de campagne. Salarié et manager : non ; RH et administrateur : oui.
 
 ## Carrière et évaluations
 
@@ -99,3 +104,5 @@ La gestion des compétences d'entretien (lot 7) fait partie de l'administration.
 | Action | Salarié | Manager | RH | Admin |
 |---|---|---|---|---|
 | Paramètres de l'entreprise, services et sites, modules, profils, journal | Non | Non | Non | Oui |
+| Fermetures (onglet « Fermetures ») : consulter | Non | Non | Oui (seul onglet visible) | Oui |
+| Fermetures : ajouter, supprimer | Non | Non | Non | Oui |

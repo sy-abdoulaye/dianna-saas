@@ -27,7 +27,7 @@ docs/reference/                prototype interactif, données de démonstration,
 
 ## Développement local
 
-Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est installé par uv.
+Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est installé par uv. Pour les exports PDF (WeasyPrint), les bibliothèques Pango et HarfBuzz : sous Debian ou Ubuntu, `sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0` (déjà présentes dans l'image Docker).
 
 ```bash
 make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind

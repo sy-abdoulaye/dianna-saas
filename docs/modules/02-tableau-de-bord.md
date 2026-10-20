@@ -15,6 +15,13 @@ Route : `/`. Titre « Bonjour {prénom} », sous-titre : date, profil, entrepris
 
 État vide « Tout est à jour » quand il n'y a rien à traiter.
 
+**Lot 4 (L4-08).** Les blocs et indicateurs des modules à venir (matériel, annonces, justificatifs, entretiens, questionnaires, comptes rendus) restent masqués jusqu'à leur lot. Indicateurs affichés :
+- Salarié : Télétravail cette semaine, Mes demandes en attente, Mes prochains congés, Sur site aujourd'hui (son service).
+- Manager : Demandes à valider, Équipe sur site aujourd'hui, En télétravail aujourd'hui, En congés aujourd'hui.
+- RH : Demandes à valider, Vœux de la campagne (si une campagne est ouverte), Effectif en poste, Arrivées à venir.
+- Admin : inchangé.
+« À traiter » : une ligne par module avec des demandes à valider (mêmes compteurs que le menu), bouton « Ouvrir » vers l'onglet « À valider ». « Aujourd'hui » : répartition du périmètre du planning, lien « Voir le planning ». Raccourcis : Annuaire.
+
 ## Critères d'acceptation
 
 - Chaque élément « À traiter » mène à l'écran où l'action se fait.

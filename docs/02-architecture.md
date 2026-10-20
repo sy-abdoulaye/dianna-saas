@@ -123,6 +123,21 @@ L'annulation immédiate proposée dans les notifications visuelles (bouton « An
 
 `CalendarEvent(company, employee, kind, start, end, status, source_type, source_id)` est **créé dès l'envoi** de la demande (statut `pending`, affiché hachuré), passé en `approved` à la validation finale, et supprimé en cas de refus ou d'annulation. Il est alimenté par le télétravail, les congés et les astreintes (pas les interventions). Le planning ne lit **que** cette table. Statuts affichés : en attente (hachuré) et validé. Les jours sans événement sont « Sur site » les jours ouvrés, hors jours fériés et fermetures.
 
+**Jours non ouvrés (T-16).** `apps/agenda/days.py` : jours fériés du paquet `holidays` (France, Alsace-Moselle pour les sites qui ont ce réglage, L4-02) et fermetures `Closure` saisies par l'administrateur (entreprise ou site). `DayOffs(début, fin)` charge une période en deux requêtes. Le télétravail est refusé ces jours-là par `check_request` (envoi et annulation immédiate) ; congés et astreintes ne sont pas concernés.
+
+**Calcul de la grille (`apps/planning/services.py`).** Case : « — » avant l'arrivée, vide le week-end, libellé du jour férié ou de la fermeture, puis congés > télétravail > sur site ; repère « A » de l'astreinte cumulé (L1-07, L4-01). Requêtes par grille, quel que soit l'effectif : les personnes de la page, leurs événements de la période, les fermetures, les sites d'Alsace-Moselle, la répartition du jour. 50 personnes par page, la personne connectée en tête (L4-07). Mesuré pour 200 personnes sur un mois : vue mois environ 150 ms, export CSV environ 50 ms, export Excel environ 200 ms (test `apps/planning/tests/test_performance.py`, budget 300 ms).
+
+## Exports
+
+| Format | Module | Règles |
+|---|---|---|
+| CSV | `apps/core/csv_export.py` | point-virgule, UTF-8 avec BOM, cellules neutralisées (=, +, -, @, tabulation, retour chariot préfixés d'une apostrophe) |
+| Excel | `apps/core/xlsx_export.py` (openpyxl, écriture seule) | même neutralisation, toute cellule texte enregistrée comme texte ; couleurs lues dans les jetons de `app.css` (`apps/core/tokens.py`) |
+| iCalendar | `apps/core/ics_export.py` | sans dépendance : échappement et lignes de 75 octets (RFC 5545) ; fichier téléchargé, abonnement au lot 8 |
+| PDF | `apps/core/pdf.py` (WeasyPrint) | gabarit HTML, A4 paysage ; récupérateur d'URL fermé (`DiannaURLFetcher`) : seuls `https://dianna.invalid/static/css|fonts/…` et le logo de l'entreprise courante ; toute autre adresse refusée sans requête (L4-06) |
+
+Chaque export vérifie le périmètre côté serveur avec la même fonction que la vue et s'inscrit au journal d'audit avec la période, le format et le périmètre, sans nom de personne (L4-12).
+
 ## HTMX : modèles d'interaction
 
 | Interaction | Modèle |
@@ -169,7 +184,7 @@ Le jeton CSRF est transmis globalement : `<body hx-headers='{"X-CSRFToken": "{{ 
 
 ## Déploiement
 
-- Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image : `python manage.py db_worker` (django-tasks-db, L3-01), et purge quotidienne `purge_task_results`.
+- Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image : `python manage.py db_worker` (django-tasks-db, L3-01), et purge quotidienne `purge_task_results`. L'image contient Pango et HarfBuzz pour les exports PDF (WeasyPrint) ; `XDG_CACHE_HOME=/tmp` pour le cache de Fontconfig.
 - Profil `taches` de `docker-compose.yml` (services `migrate`, `worker` et `scheduler`) : **développement et essais seulement**, avec `config.settings.dev` et la base `db` du fichier (`DATABASE_URL` forcée sur `db:5432`, le `.env` de la machine n'est pas modifié). Le déploiement en production du travailleur et de la purge est fait au **lot 8**.
 - E-mails : toujours par une tâche (`apps/core/mail.py`, `apps/core/tasks.py`) ; ceux d'une action annulable partent après 45 s et seulement si la notification existe encore. Une transition supprime les notifications de la demande dont l'e-mail n'est pas parti et qui ne sont plus vraies (A3-05).
 - Les tâches d'e-mail de Dianna reçoivent `company_id` et n'envoient rien si l'entreprise est suspendue. `send_encrypted_email` (e-mails d'allauth) n'a pas d'entreprise : son contenu, déjà rendu, est chiffré.

@@ -19,9 +19,9 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 
 **CompanyModule** (T) : `module` (choix : planning, telework, summer_leave, on_call, transport, equipment, announcements, surveys, careers, interventions), `enabled` (bool). Unique (company, module). Le socle, l'annuaire (L1-05) et l'administration ne sont pas désactivables.
 
-**Site** (T) : `name`, `address` optionnel. Unique (company, `Lower(name)`).
+**Site** (T) : `name`, `address` optionnel, `alsace_moselle` (jours fériés d'Alsace-Moselle : Vendredi saint et 26 décembre, L4-02). Unique (company, `Lower(name)`).
 **Service** (T) : `name`. Unique (company, `Lower(name)`).
-**Closure** (T) : `date`, `label`, `site` optionnel (fermetures d'entreprise ; les jours fériés viennent du paquet `holidays`).
+**Closure** (T, `apps.agenda`) : `date`, `label`, `site` optionnel (vide : toute l'entreprise). Une fermeture par jour et par périmètre (contrainte unique, `nulls_distinct=False`). Saisie par l'administrateur, lue par les RH ; pas de télétravail ce jour-là. Les jours fériés ne sont pas stockés : ils viennent du paquet `holidays` (`apps/agenda/days.py`).
 
 **User** (pas de company ; `AbstractBaseUser` + `PermissionsMixin`, créé au lot 0, L0-01) : `email` unique sans tenir compte de la casse (stocké en minuscules), `is_active`, `is_staff` (équipe Dianna : super-administrateur éditeur, accès à l'administration Django ; propriété `is_platform_staff`), `is_superuser`, groupes et permissions Django, `theme` (system, light, dark), `last_login`. Connexion par e-mail.
 
