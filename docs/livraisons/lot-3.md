@@ -52,12 +52,18 @@ Date : 20 octobre 2026. Branche : `lot-3`.
 - Profil `taches` de Docker Compose : configuration lue dans `.env`, réservé au développement et aux essais ; déploiement du travailleur et de la purge au lot 8.
 - Documentation alignée : 00-decisions (L1-14, T-11, A3-04, « Pour plus tard »), 02-architecture, 03-modele-de-donnees, 04-permissions, fiche 05, CLAUDE.md.
 
+## Corrections finales (21 oct. 2026)
+
+- Profil Compose `taches` : réglages de développement, base `db` forcée, migrations avant le travailleur et la purge ; démarrage vérifié avec un `.env` créé par `make install`.
+- Critère d'acceptation : l'annulation d'une validation finale RH ramène la demande à « Validée par le manager ».
+- Invitations : un échec de confirmation après l'envoi donne « Envoi échoué » ; la confirmation vérifie sous verrou que l'invitation n'a pas été remplacée entre-temps.
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 434 tests (21 octobre 2026, après l'audit et la vérification de contrôle) ; couverture 95 % au total, de 88 à 100 % sur `approvals` |
+| `make test` | 439 tests (21 octobre 2026, après les corrections finales) ; couverture 95 % au total, de 88 à 100 % sur `approvals` |
 | `make e2e` | 34 parcours, dont les parcours 1 et 2 et la page « Module désactivé » |
 | `make check` | aucune alerte, dont `--deploy` |
 
@@ -75,6 +81,6 @@ Date : 20 octobre 2026. Branche : `lot-3`.
 
 ## Écarts et points à relire
 
-- Décisions L3-12 à L3-18 dans `00-decisions.md` (« À confirmer »). La principale : les jours fériés ne sont pas encore exclus du télétravail (planning, lot 4).
+- Décisions L3-12 à L3-18 validées le 21 octobre 2026. Les jours fériés et les fermetures seront exclus du télétravail au lot 4, avec le planning (L3-12).
 - Les exports RH sont au lot 4 (L3-08).
 - Dépendance ajoutée : `django-tasks-db` 0.13.0, avec la réserve sur Django 6.1 (L3-01).
