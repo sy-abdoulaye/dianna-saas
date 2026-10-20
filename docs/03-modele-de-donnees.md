@@ -60,18 +60,18 @@ Index : (company, last_name), (company, service), (company, manager). Le statut 
 
 ## Agenda (`agenda`)
 
-**CalendarEvent** (T) : `employee`, `kind` (telework, leave, on_call), `start`, `end` (dates incluses), `status` (pending, approved), `source_type`, `source_id`. Index (company, start, end), (employee, start). Les demandes refusées ou annulées suppriment leur événement.
+**CalendarEvent** (T) : `employee`, `kind` (telework, leave, on_call), `start`, `end` (dates incluses), `status` (pending, approved), `source_type`, `source_id`. Index (company, start, end), (employee, start). Unique (company, source_type, source_id) ; fin ≥ début. Les demandes refusées ou annulées suppriment leur événement.
 
 ## Demandes (`approvals`)
 
 Base abstraite **ApprovalRequest** (T) : `public_id`, `requester` (Employee), `status` (pending, manager_approved, approved, refused, cancelled), `submitted_at`, `decided_by` (Employee, nul), `decided_at`, `decision_comment`. Le statut `manager_approved` n'est utilisé que par les congés d'été quand l'étape RH est active.
 
-**RequestEvent** (T) : historique générique : `request_type`, `request_id`, `actor`, `action` (submitted, approved, refused, cancelled, reverted), `comment`, `created_at`.
+**RequestEvent** (T) : historique générique : `request_type`, `request_id`, `actor` (nul pour une validation automatique), `action` (submitted, auto_approved, manager_approved, approved, refused, cancelled, reverted), `comment`, `created_at`.
 
 | Modèle | Champs propres | Contraintes |
 |---|---|---|
-| **TeleworkRequest** | `date`, `comment` | jour ouvré, pas dans le passé, une seule demande active par jour, quota hebdomadaire (pending + approved) |
-| **SummerCampaign** | `label` (« Été 2027 »), `period_start`, `period_end`, `deadline`, `status` (draft, open, closed), `conflict_threshold` (%, défaut 30) | une seule campagne ouverte |
+| **TeleworkRequest** | `date`, `comment` | jour ouvré, pas dans le passé, une seule demande active par jour (contrainte unique partielle en base), quota hebdomadaire (pending + approved) |
+| **SummerCampaign** | `label` (« Été 2027 »), `period_start`, `period_end`, `deadline`, `status` (draft, open, closed), `conflict_threshold` (%, défaut 30) | une seule campagne ouverte (contrainte unique partielle) ; fin ≥ début |
 | **LeaveRequest** | `campaign` (nul pour une autre absence), `start`, `end`, `leave_type` (summer, other), `comment`, `manager_decided_by`, `manager_decided_at` (première décision ; la décision finale RH utilise `decided_by` et `decided_at`) | fin ≥ début, ≤ 31 jours, pas de chevauchement avec ses demandes actives |
 | **OnCallDeclaration** | `kind` (on_call, intervention), `start`, `end` (dates incluses), `hours` (décimal, obligatoire si intervention, ≤ 24), `description` | fin ≥ début ; seul `on_call` crée un `CalendarEvent` |
 | **TransportProof** | `month` (date au 1er du mois, début de validité), `ticket_type` (monthly, yearly, single), `amount` (décimal), `file`, `valid_until` (calculé : fin du mois pour mensuel et titre unique, mois + 12 − 1 jour pour annuel) | pas de chevauchement de validité entre deux justificatifs actifs du même salarié et du même type ; montant > 0 et ≤ 1 000 |

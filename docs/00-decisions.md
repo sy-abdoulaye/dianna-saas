@@ -151,6 +151,18 @@ Versions vérifiées le 18 octobre 2026.
 | L3-10 | Annulation d'une demande validée | Par un RH ou un administrateur, motif obligatoire : `approved → cancelled`, événement de planning supprimé, notification et e-mail au demandeur, historique et journal. Le salarié n'annule que ses demandes en attente | Validé (20 oct. 2026) |
 | L3-11 | E-mails d'allauth | Mot de passe oublié et autres e-mails d'allauth passent par les tâches, sans délai | Validé (20 oct. 2026) |
 
+## Décisions prises pendant le lot 3 (20 oct. 2026)
+
+| ID | Sujet | Décision | Statut |
+|---|---|---|---|
+| L3-12 | Jour ouvré | Du lundi au vendredi. Les jours fériés et les fermetures (T-16) ne sont pas encore exclus du télétravail : ils arrivent avec le planning (lot 4) | À confirmer |
+| L3-13 | E-mails des demandes (M-16) | « À valider » au valideur, et décisions finales (validée, refusée, annulée) au demandeur : différés de 45 s, annulables. L'étape « Validée par le manager » notifie le demandeur et les RH dans l'application, et les RH par e-mail | À confirmer |
+| L3-14 | Campagnes de congés d'été | Brouillon, puis Ouverte, puis Close ; date limite avant la période ; une seule ouverte (contrainte en base). Le type « Congés d'été » exige une campagne ouverte et des dates dans sa période ; sinon « Autre absence » | À confirmer |
+| L3-15 | Seuil de conflit | Alerte renforcée quand les absents du service, demandeur compris, dépassent le seuil de la campagne en pourcentage de l'effectif en poste du service | À confirmer |
+| L3-16 | Annulation immédiate d'un envoi validé automatiquement | Permise pendant 30 s comme un envoi ordinaire : la demande est retirée | À confirmer |
+| L3-17 | Concurrence | Transitions sous `select_for_update` de la demande ; envois sous verrou de la fiche du demandeur ; contrainte unique partielle « une demande de télétravail active par jour » | Validé (technique) |
+| L3-18 | Éléments du lot 4 | Bouton « Voir le planning » et lien vers le planning du bandeau de campagne masqués jusqu'au lot 4 | À confirmer |
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».

@@ -225,3 +225,30 @@ def run_tasks():
             call_command("db_worker", "--batch", "--no-startup-delay", verbosity=0)
 
     return _run
+
+
+@pytest.fixture
+def submit():
+    """submit(company_data, employee, model, **data) : envoie une demande par le moteur."""
+    from datetime import timedelta
+
+    from apps.approvals import workflow
+    from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest
+    from apps.approvals.tests.conftest import next_weekday
+
+    def _submit(company_data, employee, model=TeleworkRequest, **data):
+        if model is TeleworkRequest:
+            data.setdefault("date", next_weekday(weekday=2))
+        if model is LeaveRequest:
+            data.setdefault(
+                "start", company_data.requests["campaign"].period_start + timedelta(days=30)
+            )
+            data.setdefault("end", data["start"] + timedelta(days=9))
+            data.setdefault("campaign", company_data.requests["campaign"])
+        if model is OnCallDeclaration:
+            data.setdefault("start", next_weekday())
+            data.setdefault("end", data["start"] + timedelta(days=6))
+        with tenant_context(company_data.company):
+            return workflow.submit(model, employee, data)
+
+    return _submit
