@@ -7,12 +7,14 @@
       <h1 class="h1">{% blocktranslate with name=current_employee.first_name %}Bonjour {{ name }}{% endblocktranslate %}</h1>
       <p class="sub">{{ today|date:"l j F Y"|capfirst }} · {{ current_employee.get_role_display }} · {{ current_company.name }}</p>
     </div>
-    {% if is_admin %}
-      <div class="actions">
+    <div class="actions">
+      {% if is_admin %}
         {% url "administration:company" as admin_url %}
         {% button _("Administration") variant="primary" icon="set" href=admin_url %}
-      </div>
-    {% endif %}
+      {% elif new_telework_url %}
+        {% button _("Déclarer du télétravail") variant="primary" icon="home" hx_get=new_telework_url hx_target="#modal-root" %}
+      {% endif %}
+    </div>
   </div>
   {% if kpis %}
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -20,12 +22,61 @@
     </div>
   {% endif %}
   <div class="split">
-    <section class="card card-body stack">
-      <h2 class="h2">{% translate "À traiter" %}</h2>
-      {% translate "Tout est à jour" as empty_title %}
-      {% translate "Aucune demande ni aucun entretien n'attend votre action." as empty_text %}
-      {% include "components/empty_state.html" with icon="check" title=empty_title text=empty_text %}
-    </section>
+    <div class="stack">
+      <section class="card card-body stack" aria-labelledby="h-todo">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="h2" id="h-todo">{% translate "À traiter" %}</h2>
+          {% if todo %}<span class="count">{{ todo|length }}</span>{% endif %}
+        </div>
+        {% if todo %}
+          <ul class="rows">
+            {% for item in todo %}
+              <li>
+                <span class="flex items-center gap-2">{% icon item.icon %}{{ item.text }}</span>
+                {% button _("Ouvrir") size="sm" href=item.url %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          {% translate "Tout est à jour" as empty_title %}
+          {% translate "Aucune demande ni aucun entretien n'attend votre action." as empty_text %}
+          {% include "components/empty_state.html" with icon="check" title=empty_title text=empty_text %}
+        {% endif %}
+      </section>
+      {% if mix %}
+        <section class="card card-body stack" aria-labelledby="h-today">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="h2" id="h-today">{% blocktranslate with scope=mix.scope %}Aujourd'hui · {{ scope }}{% endblocktranslate %}</h2>
+            <a class="link" href="{{ planning_url }}">{% translate "Voir le planning" %}</a>
+          </div>
+          <div class="today-mix">
+            <div><span class="cell k-site">{{ mix.counts.site }}</span><span>{% translate "Sur site" context "planning" %}</span></div>
+            <div><span class="cell k-tt">{{ mix.counts.tt }}</span><span>{% translate "Télétravail" context "planning" %}</span></div>
+            <div><span class="cell k-cp">{{ mix.counts.cp }}</span><span>{% translate "Congés" context "planning" %}</span></div>
+            <div><span class="cell k-as">{{ mix.counts.on_call }}</span><span>{% translate "Astreinte" %}</span></div>
+          </div>
+        </section>
+      {% endif %}
+      {% if latest is not None and has_requests %}
+        <section class="card card-body stack" aria-labelledby="h-latest">
+          <h2 class="h2" id="h-latest">{% translate "Mes dernières demandes" %}</h2>
+          {% if latest %}
+            <ul class="rows">
+              {% for item in latest %}
+                <li>
+                  <span><a class="link font-medium" href="{% url item.kind_meta.url_name %}">{{ item.kind_meta.label }}</a><span class="meta"> · {{ item.summary }}</span></span>
+                  {% status_badge "request" item.status %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            {% translate "Aucune demande" as latest_title %}
+            {% translate "Vos demandes de télétravail, de congés ou d'astreinte apparaîtront ici." as latest_text %}
+            {% include "components/empty_state.html" with icon="file" title=latest_title text=latest_text %}
+          {% endif %}
+        </section>
+      {% endif %}
+    </div>
     <aside class="stack">
       <section class="card card-body stack">
         <h2 class="h2">{% translate "Raccourcis" %}</h2>
