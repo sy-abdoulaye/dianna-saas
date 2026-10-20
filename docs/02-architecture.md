@@ -170,7 +170,7 @@ Le jeton CSRF est transmis globalement : `<body hx-headers='{"X-CSRFToken": "{{ 
 ## Déploiement
 
 - Image Docker unique (Gunicorn, WhiteNoise pour les fichiers statiques), travailleur de tâches séparé utilisant la même image : `python manage.py db_worker` (django-tasks-db, L3-01), et purge quotidienne `purge_task_results`.
-- Profil `taches` de `docker-compose.yml` (services `worker` et `scheduler`) : **développement et essais seulement**. Les services lisent leur configuration, dont `DATABASE_URL`, dans `.env`. Le déploiement en production du travailleur et de la purge est fait au **lot 8**.
+- Profil `taches` de `docker-compose.yml` (services `migrate`, `worker` et `scheduler`) : **développement et essais seulement**, avec `config.settings.dev` et la base `db` du fichier (`DATABASE_URL` forcée sur `db:5432`, le `.env` de la machine n'est pas modifié). Le déploiement en production du travailleur et de la purge est fait au **lot 8**.
 - E-mails : toujours par une tâche (`apps/core/mail.py`, `apps/core/tasks.py`) ; ceux d'une action annulable partent après 45 s et seulement si la notification existe encore. Une transition supprime les notifications de la demande dont l'e-mail n'est pas parti et qui ne sont plus vraies (A3-05).
 - Les tâches d'e-mail de Dianna reçoivent `company_id` et n'envoient rien si l'entreprise est suspendue. `send_encrypted_email` (e-mails d'allauth) n'a pas d'entreprise : son contenu, déjà rendu, est chiffré.
 - Aucune donnée sensible en clair dans une ligne de tâche (A3-04) :

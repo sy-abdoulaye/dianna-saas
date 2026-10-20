@@ -133,3 +133,19 @@ def test_purge_is_scheduled_in_docker_compose():
     scheduler = compose.split("  scheduler:", 1)[1]
     assert "python manage.py purge_task_results" in scheduler
     assert "sleep 86400" in scheduler
+    assert "depends_on: *after_migrate" in scheduler
+
+
+def test_tasks_profile_uses_development_settings_and_the_compose_database():
+    """Profil « taches » : essais seulement, sans dépendre du .env de la machine."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    compose = (Path(settings.BASE_DIR) / "docker-compose.yml").read_text()
+    app = compose.split("x-app: &app", 1)[1].split("services:", 1)[0]
+    assert "DJANGO_SETTINGS_MODULE: config.settings.dev" in app
+    assert "DATABASE_URL: postgres://dianna:dianna@db:5432/dianna" in app
+    assert "condition: service_healthy" in app
+    worker = compose.split("  worker:", 1)[1].split("  scheduler:", 1)[0]
+    assert "condition: service_completed_successfully" in worker  # migrations d'abord
