@@ -1,17 +1,16 @@
 # PostgreSQL 18 pour le développement (T-03). `make db` le démarre.
-# Profil « taches » (même image que le serveur) : travailleur des tâches et purge quotidienne
-# des résultats de tâches (A3-04). `docker compose --profile taches up -d`.
+# Profil « taches » (même image que le serveur), pour le développement et les essais
+# seulement : travailleur des tâches et purge quotidienne des résultats (A3-04).
+# `docker compose --profile taches up -d`. Les deux services lisent toute leur configuration,
+# dont DATABASE_URL, dans .env : l'adresse doit être joignable depuis le conteneur (par
+# exemple postgres://dianna:dianna@db:5432/dianna pour la base de ce fichier).
+# Le déploiement en production du travailleur et de la purge est prévu au lot 8.
 x-app: &app
   build: .
   profiles: ["taches"]
   env_file:
     - path: .env
       required: false
-  environment:
-    DATABASE_URL: postgres://dianna:dianna@db:5432/dianna
-  depends_on:
-    db:
-      condition: service_healthy
   restart: unless-stopped
 
 services:
