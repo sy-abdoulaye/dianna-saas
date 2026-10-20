@@ -6,7 +6,6 @@ import json
 from functools import wraps
 
 from django.core.paginator import Paginator
-from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
@@ -28,7 +27,6 @@ from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
 from apps.core.htmx import Toast, is_htmx, toast_response, trigger
 from apps.core.models import Module
-from apps.people.models import Employee
 
 CHANGED = "requestsChanged"
 TAB_MINE, TAB_TODO, TAB_TEAM = "mes-demandes", "a-valider", "equipe"
@@ -157,9 +155,10 @@ def _decorate(row, me, tab):
     row.summary = summary(row)
     row.can_decide = workflow.can_decide(me, row)
     row.can_cancel = row.requester_id == me.pk and row.is_open
+    # Alerte de conflit : seulement pour qui peut décider (A3-03).
     row.conflict = (
         rules.conflicts_of(row)
-        if isinstance(row, LeaveRequest) and row.is_open and tab != TAB_MINE
+        if isinstance(row, LeaveRequest) and row.is_open and row.can_decide
         else None
     )
 
@@ -195,21 +194,14 @@ def new_request(request, kind):
     if request.method == "GET":
         form = form_class(requester=me, initial=initial)
         return render(request, template, _form_context(meta, form, action_url))
-    try:
-        with transaction.atomic():
-            # La fiche est verrouillée : deux envois simultanés ne contournent ni le quota
-            # ni la règle « une demande par jour ».
-            me = Employee.objects.select_for_update().get(pk=me.pk)
-            form = form_class(request.POST, requester=me)
-            if not form.is_valid():
-                return render(
-                    request, f"{template}#form", _form_context(meta, form, action_url), status=422
-                )
+    form = form_class(request.POST, requester=me)
+    if form.is_valid():
+        try:
             result = workflow.submit(meta.model, me, form.model_data(), http_request=request)
-    except IntegrityError:
-        form = form_class(request.POST, requester=me)
-        form.is_valid()
-        form.add_error(None, _("Vous avez déjà une demande pour ce jour."))
+        except workflow.RequestValidationError as error:
+            for name, message in error.errors.items():
+                form.add_error(name if name in form.fields else None, message)
+    if not form.is_valid():
         return render(
             request, f"{template}#form", _form_context(meta, form, action_url), status=422
         )
@@ -230,12 +222,6 @@ def _submit_toast(result) -> Toast:
     manager = workflow.active_manager(req.requester)
     dest = manager.full_name if manager else _("l'équipe RH")
     message = _("%(summary)s transmise à %(dest)s.") % {"summary": summary(req), "dest": dest}
-    if isinstance(req, LeaveRequest):
-        conflict = rules.conflicts_of(req)
-        if conflict.count:
-            message += " " + _(
-                "Attention : %(n)s autre(s) absence(s) dans votre service sur cette période."
-            ) % {"n": conflict.count}
     return Toast(title=_("Demande envoyée"), message=message, emphasis=summary(req))
 
 
@@ -253,16 +239,17 @@ def _with_undo(request, result, action, toast: Toast):
 def detail(request, kind, public_id):
     obj = get_request(request, kind, public_id)
     me = request.employee
+    can_decide = workflow.can_decide(me, obj)
     context = {
         "kind": KINDS[kind],
         "obj": obj,
         "summary": summary(obj),
         "history": workflow.history(obj),
+        # Noms et nombre des autres absents : seulement pour qui décide (A3-03).
         "conflict": rules.conflicts_of(obj)
-        if isinstance(obj, LeaveRequest)
-        and obj.status not in (RequestStatus.REFUSED, RequestStatus.CANCELLED)
+        if isinstance(obj, LeaveRequest) and can_decide
         else None,
-        "can_decide": workflow.can_decide(me, obj),
+        "can_decide": can_decide,
         "acting_for": workflow.acting_for(me, obj),
         "can_cancel": obj.requester_id == me.pk and obj.is_open,
         "can_cancel_approved": workflow.can_cancel_approved(me, obj),
@@ -504,42 +491,15 @@ def campaign_status(request, pk, action):
     blocked = _campaign_module(request)
     if blocked:
         return blocked
-    from apps.core import audit
-
-    with transaction.atomic():
-        campaign = get_object_or_404(SummerCampaign.objects.select_for_update(), pk=pk)
-        if action == "ouvrir":
-            if campaign.status != SummerCampaign.Status.DRAFT:
-                return toast_response(
-                    Toast(title=_("Cette campagne ne peut pas être ouverte."), kind="err"),
-                    status=409,
-                )
-            if SummerCampaign.objects.filter(status=SummerCampaign.Status.OPEN).exists():
-                return toast_response(
-                    Toast(
-                        title=_("Une campagne est déjà ouverte : clôturez-la d'abord."), kind="err"
-                    ),
-                    status=409,
-                )
-            campaign.status = SummerCampaign.Status.OPEN
-            title = _("Campagne ouverte")
-        elif action == "clore":
-            if campaign.status != SummerCampaign.Status.OPEN:
-                return toast_response(
-                    Toast(title=_("Cette campagne n'est pas ouverte."), kind="err"), status=409
-                )
-            campaign.status = SummerCampaign.Status.CLOSED
-            title = _("Campagne close")
-        else:
-            raise Http404
-        campaign.save(update_fields=["status", "updated_at"])
-        audit.log(
-            f"requests.campaign_{campaign.status}",
-            f"{title} : {campaign.label}",
-            actor=request.employee,
-            target=campaign,
-            request=request,
-        )
+    campaign = get_object_or_404(SummerCampaign, pk=pk)
+    services = {"ouvrir": workflow.open_summer_campaign, "clore": workflow.close_summer_campaign}
+    if action not in services:
+        raise Http404
+    try:
+        campaign = services[action](campaign, request.employee, http_request=request)
+    except workflow.WorkflowError as error:
+        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+    title = _("Campagne ouverte") if action == "ouvrir" else _("Campagne close")
     return trigger(
         toast_response(Toast(title=title, message=campaign.label)), **{CAMPAIGNS_CHANGED: True}
     )

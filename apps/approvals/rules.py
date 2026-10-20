@@ -46,21 +46,29 @@ def open_campaign():
     return SummerCampaign.objects.filter(status=SummerCampaign.Status.OPEN).first()
 
 
-def leave_overlaps(employee: Employee, start, end) -> bool:
-    return LeaveRequest.objects.filter(
-        requester=employee, status__in=ACTIVE_STATUSES, start__lte=end, end__gte=start
-    ).exists()
+def leave_overlaps(employee: Employee, start, end, *, exclude_pk=None) -> bool:
+    return (
+        LeaveRequest.objects.filter(
+            requester=employee, status__in=ACTIVE_STATUSES, start__lte=end, end__gte=start
+        )
+        .exclude(pk=exclude_pk)
+        .exists()
+    )
 
 
-def on_call_overlaps(employee: Employee, start, end) -> bool:
+def on_call_overlaps(employee: Employee, start, end, *, exclude_pk=None) -> bool:
     """Deux astreintes actives de la même personne ne se chevauchent pas (L3-07)."""
-    return OnCallDeclaration.objects.filter(
-        requester=employee,
-        kind=OnCallDeclaration.Kind.ON_CALL,
-        status__in=ACTIVE_STATUSES,
-        start__lte=end,
-        end__gte=start,
-    ).exists()
+    return (
+        OnCallDeclaration.objects.filter(
+            requester=employee,
+            kind=OnCallDeclaration.Kind.ON_CALL,
+            status__in=ACTIVE_STATUSES,
+            start__lte=end,
+            end__gte=start,
+        )
+        .exclude(pk=exclude_pk)
+        .exists()
+    )
 
 
 @dataclass(frozen=True)

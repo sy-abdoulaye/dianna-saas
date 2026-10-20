@@ -10,25 +10,39 @@ Chaque transition :
 - s'exécute dans une transaction et verrouille la demande (`select_for_update`) puis vérifie
   l'état de départ : deux clics rapides ne font qu'une transition, le second reçoit
   « Cette demande a déjà été traitée. » ;
-- enregistre un RequestEvent, met à jour l'événement de calendrier, crée les notifications,
-  met en file les e-mails (45 s, annulables) et écrit le journal d'audit.
-Les annulations immédiates (« Annuler » dans la notification visuelle, 30 s) défont la
-dernière transition de leur auteur.
+- enregistre un RequestEvent, met à jour l'événement de calendrier, retire les notifications
+  devenues fausses (e-mail pas encore parti, A3-05), crée les nouvelles, met en file les
+  e-mails (45 s, annulables) et écrit le journal d'audit.
+
+Contrôles métier (A3-02) : ceux qui dépendent des autres demandes (quota, même jour,
+chevauchements, période de la campagne) sont faits ici, sous verrou de la fiche du
+demandeur, à l'envoi et à chaque annulation immédiate qui rend la demande de nouveau active.
+Les formulaires ne vérifient que les champs eux-mêmes. Ordre des verrous : fiche du
+demandeur, puis demande.
+
+Annulation immédiate (« Annuler » dans la notification visuelle, 30 s) : le jeton porte
+l'événement créé par la transition ; elle n'est acceptée que si cet événement est toujours
+le dernier de la demande (A3-01).
 """
 
 from dataclasses import dataclass, field
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
 from apps.agenda.models import CalendarEvent
+from apps.approvals import rules
 from apps.approvals.kinds import kind_of, summary
 from apps.approvals.models import (
+    ACTIVE_STATUSES,
     LeaveRequest,
+    OnCallDeclaration,
     RequestEvent,
     RequestStatus,
+    SummerCampaign,
     TeleworkRequest,
 )
 from apps.core import audit, notifications, permissions
@@ -45,7 +59,18 @@ class WorkflowError(Exception):
         self.message = message
 
 
+class RequestValidationError(WorkflowError):
+    """Contrôle métier refusé : `errors` associe un champ du formulaire (ou None) au message."""
+
+    def __init__(self, errors: dict):
+        self.errors = errors
+        super().__init__(next(iter(errors.values())))
+
+
 ALREADY_PROCESSED = _("Cette demande a déjà été traitée.")
+OTHER_DECISION = _("Une autre décision a été prise depuis. Rien n'a été modifié.")
+SAME_DAY = _("Vous avez déjà une demande pour ce jour.")
+CAMPAIGN_ALREADY_OPEN = _("Une campagne est déjà ouverte.")
 
 
 @dataclass
@@ -57,12 +82,14 @@ class TransitionResult:
     previous_comment: str = ""
     notification_ids: list = field(default_factory=list)
     auto_approved: bool = False
+    event_id: int | None = None
 
     def undo_payload(self, action: str) -> dict:
         return {
             "action": action,
             "type": self.request.request_type,
             "id": str(self.request.public_id),
+            "event": self.event_id,
             "previous": self.previous_status,
             "comment": self.previous_comment,
             "notifications": self.notification_ids,
@@ -174,14 +201,103 @@ def _lock(request):
     )
 
 
-def _event(request, actor, action, comment=""):
-    RequestEvent.objects.create(
+def _event(request, actor, action, comment="") -> int:
+    return RequestEvent.objects.create(
         request_type=request.request_type,
         request_id=request.pk,
         actor=actor,
         action=action,
         comment=comment,
+    ).pk
+
+
+def _latest_event_id(request):
+    return (
+        RequestEvent.objects.filter(request_type=request.request_type, request_id=request.pk)
+        .order_by("-pk")
+        .values_list("pk", flat=True)
+        .first()
     )
+
+
+# ---------- Contrôles métier (A3-02) ----------
+
+
+def _lock_requester(employee_id) -> Employee:
+    """Verrou de la fiche : deux opérations simultanées pour la même personne passent l'une
+    après l'autre, et la seconde voit la demande de la première."""
+    return Employee.objects.select_for_update().select_related("company").get(pk=employee_id)
+
+
+def check_request(request, *, campaign=None) -> dict:
+    """Contrôles qui dépendent des autres demandes du demandeur. Renvoie {champ: message}
+    (vide si tout va bien). `request` peut ne pas être enregistrée (envoi) ; si elle l'est,
+    elle est exclue des comptes (annulation immédiate)."""
+    requester, pk = request.requester, request.pk
+    if isinstance(request, TeleworkRequest):
+        same_day = TeleworkRequest.objects.filter(
+            requester=requester,
+            date=request.date,
+            status__in=(RequestStatus.PENDING, RequestStatus.APPROVED),
+        ).exclude(pk=pk)
+        if same_day.exists():
+            return {"date": SAME_DAY}
+        quota = rules.weekly_quota(requester)
+        used = rules.telework_days_in_week(requester, request.date, exclude_pk=pk)
+        if used >= quota:
+            return {
+                "date": _(
+                    "Vous avez déjà %(n)s jours de télétravail la semaine du %(week)s "
+                    "(maximum %(quota)s)."
+                )
+                % {
+                    "n": used,
+                    "week": date_format(rules.monday_of(request.date), "j N"),
+                    "quota": quota,
+                }
+            }
+        return {}
+    if isinstance(request, LeaveRequest):
+        if request.leave_type == LeaveRequest.LeaveType.SUMMER:
+            if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
+                return {
+                    "leave_type": _(
+                        "Aucune campagne de congés d'été n'est ouverte : choisissez « Autre "
+                        "absence »."
+                    )
+                }
+            if request.start < campaign.period_start or request.end > campaign.period_end:
+                return {
+                    "start": _(
+                        "Les congés d'été de la campagne %(label)s sont compris entre le "
+                        "%(a)s et le %(b)s."
+                    )
+                    % {
+                        "label": campaign.label,
+                        "a": date_format(campaign.period_start, "j F Y"),
+                        "b": date_format(campaign.period_end, "j F Y"),
+                    }
+                }
+        if rules.leave_overlaps(requester, request.start, request.end, exclude_pk=pk):
+            return {"start": _("Cette période chevauche une de vos demandes existantes.")}
+        return {}
+    if (
+        isinstance(request, OnCallDeclaration)
+        and request.kind == OnCallDeclaration.Kind.ON_CALL
+        and rules.on_call_overlaps(requester, request.start, request.end, exclude_pk=pk)
+    ):
+        return {"start": _("Cette astreinte chevauche une de vos astreintes déclarées.")}
+    return {}
+
+
+def _save_checked(request, **kwargs):
+    """Enregistre sous point de sauvegarde : une contrainte de base violée malgré tout
+    (même jour) devient un message, jamais une erreur 500."""
+    try:
+        with transaction.atomic():
+            request.save(**kwargs)
+    except IntegrityError as exc:
+        raise RequestValidationError({"date": SAME_DAY}) from exc
 
 
 def sync_calendar(request):
@@ -264,6 +380,14 @@ def _notify_requester(request, verb: str, reason: str = "") -> int:
     )
 
 
+def _current_validators(request) -> list[Employee]:
+    if request.status == RequestStatus.MANAGER_APPROVED:
+        return hr_validators(request.requester)
+    if request.status == RequestStatus.PENDING:
+        return first_validators(request)
+    return []
+
+
 def _audit(request, actor, action, verb, *, http_request=None, extra=""):
     summary_text = _("%(verb)s : %(kind)s de %(name)s") % {
         "verb": verb,
@@ -280,21 +404,33 @@ def _audit(request, actor, action, verb, *, http_request=None, extra=""):
 
 @transaction.atomic
 def submit(model, requester: Employee, data: dict, *, http_request=None) -> TransitionResult:
-    """Envoi. La fiche du demandeur est verrouillée : deux envois simultanés ne peuvent pas
-    dépasser le quota ni créer deux demandes le même jour. Les contrôles métier sont refaits
-    par le formulaire dans la même transaction (voir forms.py)."""
+    """Envoi. La fiche du demandeur est verrouillée, puis les contrôles métier sont faits
+    (`check_request`) : deux envois simultanés ne peuvent ni dépasser le quota, ni créer deux
+    demandes le même jour, ni deux absences ou astreintes qui se chevauchent. Lève
+    RequestValidationError avec les messages par champ. Les congés d'été sont rattachés à
+    la campagne ouverte au moment de l'envoi."""
+    requester = _lock_requester(requester.pk)
+    data = dict(data)
+    data.pop("campaign", None)
     request = model(requester=requester, submitted_at=timezone.now(), **data)
-    request.save()
-    _event(request, requester, RequestEvent.Action.SUBMITTED)
-    result = TransitionResult(request, previous_status="")
+    campaign = None
+    if isinstance(request, LeaveRequest) and request.leave_type == LeaveRequest.LeaveType.SUMMER:
+        campaign = rules.open_campaign()
+        request.campaign = campaign
+    errors = check_request(request, campaign=campaign)
+    if errors:
+        raise RequestValidationError(errors)
+    _save_checked(request)
+    event_id = _event(request, requester, RequestEvent.Action.SUBMITTED)
+    result = TransitionResult(request, previous_status="", event_id=event_id)
 
     validators = first_validators(request)
     company = requester.company
     if not validators:
-        _approve_automatically(request, AUTO_APPROVAL_NO_VALIDATOR, http_request)
+        result.event_id = _approve_automatically(request, AUTO_APPROVAL_NO_VALIDATOR, http_request)
         result.auto_approved = True
     elif isinstance(request, TeleworkRequest) and company.telework_auto_approve:
-        _approve_automatically(request, AUTO_APPROVAL_TELEWORK, http_request)
+        result.event_id = _approve_automatically(request, AUTO_APPROVAL_TELEWORK, http_request)
         result.auto_approved = True
     else:
         sync_calendar(request)
@@ -308,7 +444,7 @@ def _approve_automatically(request, reason, http_request):
     request.decided_at = timezone.now()
     request.decision_comment = reason
     request.save(update_fields=["status", "decided_at", "decision_comment", "updated_at"])
-    _event(request, None, RequestEvent.Action.AUTO_APPROVED, reason)
+    event_id = _event(request, None, RequestEvent.Action.AUTO_APPROVED, reason)
     sync_calendar(request)
     _audit(
         request,
@@ -318,6 +454,7 @@ def _approve_automatically(request, reason, http_request):
         http_request=http_request,
         extra=reason,
     )
+    return event_id
 
 
 @transaction.atomic
@@ -338,8 +475,9 @@ def approve(request, actor: Employee, *, comment: str = "", http_request=None) -
         request.save(
             update_fields=["status", "manager_decided_by", "manager_decided_at", "updated_at"]
         )
-        _event(request, actor, RequestEvent.Action.MANAGER_APPROVED, comment)
+        result.event_id = _event(request, actor, RequestEvent.Action.MANAGER_APPROVED, comment)
         sync_calendar(request)
+        notifications.retract_unsent(request)
         result.notification_ids = [_notify_requester(request, _("validée par votre manager"))]
         result.notification_ids += _notify_validators(request, hr_validators(request.requester))
         _audit(
@@ -355,8 +493,9 @@ def approve(request, actor: Employee, *, comment: str = "", http_request=None) -
     request.status = RequestStatus.APPROVED
     request.decided_by, request.decided_at, request.decision_comment = actor, now, comment
     request.save()
-    _event(request, actor, RequestEvent.Action.APPROVED, comment)
+    result.event_id = _event(request, actor, RequestEvent.Action.APPROVED, comment)
     sync_calendar(request)
+    notifications.retract_unsent(request)
     result.notification_ids = [_notify_requester(request, _("validée"))]
     _audit(
         request,
@@ -392,8 +531,9 @@ def refuse(request, actor: Employee, *, reason: str, http_request=None) -> Trans
     request.decided_by, request.decided_at = actor, timezone.now()
     request.decision_comment = reason
     request.save()
-    _event(request, actor, RequestEvent.Action.REFUSED, reason)
+    result.event_id = _event(request, actor, RequestEvent.Action.REFUSED, reason)
     sync_calendar(request)
+    notifications.retract_unsent(request)
     result.notification_ids = [_notify_requester(request, _("refusée"), reason)]
     _audit(
         request,
@@ -417,8 +557,9 @@ def cancel(request, actor: Employee, *, http_request=None) -> TransitionResult:
     result = TransitionResult(request, previous_status=request.status)
     request.status = RequestStatus.CANCELLED
     request.save(update_fields=["status", "updated_at"])
-    _event(request, actor, RequestEvent.Action.CANCELLED)
+    result.event_id = _event(request, actor, RequestEvent.Action.CANCELLED)
     sync_calendar(request)
+    notifications.retract_unsent(request)  # « Demande à valider » chez le valideur (A3-05)
     _audit(request, actor, "cancelled", _("Demande annulée"), http_request=http_request)
     return result
 
@@ -442,8 +583,9 @@ def cancel_approved(
     request.status = RequestStatus.CANCELLED
     request.decision_comment = reason
     request.save(update_fields=["status", "decision_comment", "updated_at"])
-    _event(request, actor, RequestEvent.Action.CANCELLED, reason)
+    result.event_id = _event(request, actor, RequestEvent.Action.CANCELLED, reason)
     sync_calendar(request)
+    notifications.retract_unsent(request)
     result.notification_ids = [_notify_requester(request, _("annulée"), reason)]
     _audit(
         request,
@@ -458,30 +600,37 @@ def cancel_approved(
 # ---------- Annulation immédiate (30 s, auteur seulement) ----------
 
 
+REACTIVATING = ("refuse", "cancel", "cancel_approved")
+
+
 @transaction.atomic
 def undo(model, payload: dict, actor: Employee, *, http_request=None):
-    """Défait la dernière transition de son auteur. Après un envoi : la demande, son
-    événement et ses notifications sont supprimés ; le journal garde « demande envoyée puis
-    retirée » (L1-08). Après une décision : l'état précédent est rétabli."""
-    request = model.objects.select_for_update().filter(public_id=payload["id"]).first()
+    """Défait la dernière transition de son auteur, seulement si l'événement qu'elle a créé
+    est toujours le dernier de la demande : sinon « Une autre décision a été prise depuis »
+    et rien n'est modifié (A3-01). Après un envoi : la demande, son événement et ses
+    notifications sont supprimés ; le journal garde « demande envoyée puis retirée » (L1-08).
+    Après une décision : l'état précédent est rétabli ; si la demande redevient active
+    (refus ou annulation défaits), les contrôles métier sont refaits sous verrou (A3-02)."""
+    found = model.objects.filter(public_id=payload["id"]).values_list("requester_id").first()
+    if found is None:
+        raise WorkflowError(ALREADY_PROCESSED)
+    action = payload["action"]
+    if action in REACTIVATING:
+        _lock_requester(found[0])
+    request = (
+        model.objects.select_for_update(of=("self",))
+        .select_related("requester", "requester__manager", "requester__company")
+        .filter(public_id=payload["id"])
+        .first()
+    )
     if request is None:
         raise WorkflowError(ALREADY_PROCESSED)
-    Notification.objects.filter(pk__in=payload.get("notifications", [])).delete()
-    if payload["action"] == "submit":
-        if request.requester_id != actor.pk or request.status not in (
-            RequestStatus.PENDING,
-            RequestStatus.APPROVED,
-        ):
+    if payload.get("event") is None or _latest_event_id(request) != payload["event"]:
+        raise WorkflowError(OTHER_DECISION)
+    if action == "submit":
+        if request.requester_id != actor.pk:
             raise WorkflowError(ALREADY_PROCESSED)
-        if (
-            request.status == RequestStatus.APPROVED
-            and not RequestEvent.objects.filter(
-                request_type=request.request_type,
-                request_id=request.pk,
-                action=RequestEvent.Action.AUTO_APPROVED,
-            ).exists()
-        ):
-            raise WorkflowError(ALREADY_PROCESSED)
+        Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
         CalendarEvent.objects.filter(
             source_type=request.request_type, source_id=request.pk
         ).delete()
@@ -503,21 +652,82 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
         "refuse": (RequestStatus.REFUSED,),
         "cancel": (RequestStatus.CANCELLED,),
         "cancel_approved": (RequestStatus.CANCELLED,),
-    }[payload["action"]]
-    if request.status not in expected:
+    }[action]
+    if request.status not in expected or previous not in ACTIVE_STATUSES:
         raise WorkflowError(ALREADY_PROCESSED)
     request.status = previous
-    if payload["action"] == "cancel_approved":
+    if action == "cancel_approved":
         request.decision_comment = payload.get("comment", "")
-    elif payload["action"] in ("approve", "refuse"):
+    elif action in ("approve", "refuse"):
         request.decided_by, request.decided_at, request.decision_comment = None, None, ""
         if previous == RequestStatus.PENDING and isinstance(request, LeaveRequest):
             request.manager_decided_by, request.manager_decided_at = None, None
-    request.save()
+    if action in REACTIVATING:
+        errors = check_request(request, campaign=getattr(request, "campaign", None))
+        if errors:
+            raise WorkflowError(next(iter(errors.values())))
+    try:
+        _save_checked(request)
+    except RequestValidationError as error:
+        raise WorkflowError(error.message) from error
+    Notification.objects.filter(
+        pk__in=payload.get("notifications", []),
+        source_type=request.request_type,
+        source_id=request.pk,
+    ).delete()
+    notifications.retract_unsent(request)
     _event(request, actor, RequestEvent.Action.REVERTED)
     sync_calendar(request)
+    # La transition défaite avait retiré « Demande à valider » : les valideurs actuels sont
+    # de nouveau prévenus.
+    if request.status != RequestStatus.APPROVED:
+        _notify_validators(request, _current_validators(request))
     _audit(request, actor, "reverted", _("Décision annulée"), http_request=http_request)
     return request
+
+
+# ---------- Campagnes de congés d'été (RH) ----------
+
+
+@transaction.atomic
+def open_summer_campaign(campaign, actor, *, http_request=None):
+    """Ouvre une campagne. Toutes les campagnes de l'entreprise sont verrouillées : deux
+    ouvertures simultanées donnent une seule campagne ouverte (A3-06)."""
+    campaigns = {c.pk: c for c in SummerCampaign.objects.select_for_update().order_by("pk")}
+    campaign = campaigns.get(campaign.pk)
+    if campaign is None or campaign.status != SummerCampaign.Status.DRAFT:
+        raise WorkflowError(_("Cette campagne ne peut pas être ouverte."))
+    if any(c.status == SummerCampaign.Status.OPEN for c in campaigns.values()):
+        raise WorkflowError(CAMPAIGN_ALREADY_OPEN)
+    campaign.status = SummerCampaign.Status.OPEN
+    try:
+        with transaction.atomic():
+            campaign.save(update_fields=["status", "updated_at"])
+    except IntegrityError as exc:
+        raise WorkflowError(CAMPAIGN_ALREADY_OPEN) from exc
+    _campaign_audit(campaign, actor, _("Campagne ouverte"), http_request)
+    return campaign
+
+
+@transaction.atomic
+def close_summer_campaign(campaign, actor, *, http_request=None):
+    campaign = SummerCampaign.objects.select_for_update().filter(pk=campaign.pk).first()
+    if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
+        raise WorkflowError(_("Cette campagne n'est pas ouverte."))
+    campaign.status = SummerCampaign.Status.CLOSED
+    campaign.save(update_fields=["status", "updated_at"])
+    _campaign_audit(campaign, actor, _("Campagne close"), http_request)
+    return campaign
+
+
+def _campaign_audit(campaign, actor, title, http_request):
+    audit.log(
+        f"requests.campaign_{campaign.status}",
+        f"{title} : {campaign.label}",
+        actor=actor,
+        target=campaign,
+        request=http_request,
+    )
 
 
 def history(request):

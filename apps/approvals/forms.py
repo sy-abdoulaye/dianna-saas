@@ -1,12 +1,12 @@
-"""Formulaires des demandes : messages du prototype et de la fiche 05. Les contrôles
-qui dépendent des autres demandes (quota, chevauchements) sont refaits par le service
-d'envoi, sous verrou de la fiche du demandeur."""
+"""Formulaires des demandes : messages du prototype et de la fiche 05. Ils ne vérifient
+que les champs eux-mêmes (date passée, week-end, durée, heures). Les contrôles qui dépendent
+des autres demandes (quota, même jour, chevauchements, période de la campagne) sont faits
+par le service, sous verrou de la fiche du demandeur : `workflow.check_request` (A3-02)."""
 
 from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
-from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from apps.approvals import rules
@@ -41,8 +41,6 @@ class TeleworkForm(RequestForm):
         self.fields["date"].widget.attrs["min"] = rules.today().isoformat()
 
     def clean_date(self):
-        from apps.approvals.models import RequestStatus, TeleworkRequest
-
         day = self.cleaned_data["date"]
         if day < rules.today():
             raise forms.ValidationError(
@@ -50,22 +48,6 @@ class TeleworkForm(RequestForm):
             )
         if day.weekday() >= 5:
             raise forms.ValidationError(_("Le télétravail se déclare du lundi au vendredi."))
-        if TeleworkRequest.objects.filter(
-            requester=self.requester,
-            date=day,
-            status__in=(RequestStatus.PENDING, RequestStatus.APPROVED),
-        ).exists():
-            raise forms.ValidationError(_("Vous avez déjà une demande pour ce jour."))
-        quota = rules.weekly_quota(self.requester)
-        used = rules.telework_days_in_week(self.requester, day)
-        if used >= quota:
-            raise forms.ValidationError(
-                _(
-                    "Vous avez déjà %(n)s jours de télétravail la semaine du %(week)s "
-                    "(maximum %(quota)s)."
-                )
-                % {"n": used, "week": date_format(rules.monday_of(day), "j N"), "quota": quota}
-            )
         return day
 
     def model_data(self):
@@ -112,38 +94,10 @@ class LeaveForm(RequestForm):
             self.add_error(
                 "end", _("Une demande couvre au maximum 31 jours. Faites deux demandes.")
             )
-            return cleaned
-        if cleaned.get("leave_type") == LeaveRequest.LeaveType.SUMMER:
-            if self.campaign is None:
-                self.add_error(
-                    "leave_type",
-                    _(
-                        "Aucune campagne de congés d'été n'est ouverte : choisissez « Autre "
-                        "absence »."
-                    ),
-                )
-            elif start < self.campaign.period_start or end > self.campaign.period_end:
-                self.add_error(
-                    "start",
-                    _(
-                        "Les congés d'été de la campagne %(label)s sont compris entre le "
-                        "%(a)s et le %(b)s."
-                    )
-                    % {
-                        "label": self.campaign.label,
-                        "a": date_format(self.campaign.period_start, "j F Y"),
-                        "b": date_format(self.campaign.period_end, "j F Y"),
-                    },
-                )
-        if not self.errors and rules.leave_overlaps(self.requester, start, end):
-            self.add_error("start", _("Cette période chevauche une de vos demandes existantes."))
         return cleaned
 
     def model_data(self):
-        data = {k: self.cleaned_data[k] for k in ("start", "end", "leave_type", "comment")}
-        if data["leave_type"] == LeaveRequest.LeaveType.SUMMER:
-            data["campaign"] = self.campaign
-        return data
+        return {k: self.cleaned_data[k] for k in ("start", "end", "leave_type", "comment")}
 
 
 class OnCallForm(RequestForm):
@@ -189,12 +143,6 @@ class OnCallForm(RequestForm):
                 )
             elif hours % Decimal("0.5"):
                 self.add_error("hours", _("Indiquez une durée par demi-heure."))
-        if (
-            not self.errors
-            and cleaned.get("kind") == OnCallDeclaration.Kind.ON_CALL
-            and rules.on_call_overlaps(self.requester, start, end)
-        ):
-            self.add_error("start", _("Cette astreinte chevauche une de vos astreintes déclarées."))
         return cleaned
 
     def model_data(self):

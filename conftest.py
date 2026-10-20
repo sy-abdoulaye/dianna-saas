@@ -229,7 +229,9 @@ def run_tasks():
 
 @pytest.fixture
 def submit():
-    """submit(company_data, employee, model, **data) : envoie une demande par le moteur."""
+    """submit(company_data, employee, model, **data) : envoie une demande par le service,
+    avec ses contrôles métier (RequestValidationError si l'un échoue). Les congés d'été sont
+    rattachés par le service à la campagne ouverte, comme à l'écran."""
     from datetime import timedelta
 
     from apps.approvals import workflow
@@ -241,12 +243,12 @@ def submit():
             data.setdefault("date", next_weekday(weekday=2))
         if model is LeaveRequest:
             data.setdefault(
-                "start", company_data.requests["campaign"].period_start + timedelta(days=30)
+                "start", company_data.requests["campaign"].period_start + timedelta(days=60)
             )
             data.setdefault("end", data["start"] + timedelta(days=9))
-            data.setdefault("campaign", company_data.requests["campaign"])
+            data.setdefault("leave_type", LeaveRequest.LeaveType.SUMMER)
         if model is OnCallDeclaration:
-            data.setdefault("start", next_weekday())
+            data.setdefault("start", next_weekday(offset_days=21))
             data.setdefault("end", data["start"] + timedelta(days=6))
         with tenant_context(company_data.company):
             return workflow.submit(model, employee, data)
