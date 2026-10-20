@@ -552,6 +552,47 @@
   .rows > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
   .rows > li:first-child { border-top: 0; padding-top: 0; }
   .rows > li:last-child { padding-bottom: 0; }
+
+  /* Planning (prototype : .plan, .cell, .k-*, .legend). Jetons site, tel, cng, ast. */
+  .plan { overflow: auto; max-height: 620px; border-top: 1px solid var(--line); }
+  .plan table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+  .plan th, .plan td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; text-align: center; background: var(--surface); }
+  .plan thead th { position: sticky; top: 0; z-index: 2; background: var(--subtle); font: 500 12px/16px var(--font-sans); color: var(--ink-3); padding: 8px 4px; min-width: 34px; }
+  .plan th.nm { position: sticky; left: 0; z-index: 1; text-align: left; min-width: 200px; padding: 8px 12px; background: var(--surface); }
+  .plan thead th.nm { z-index: 3; background: var(--subtle); }
+  .plan td.we { background: var(--subtle); }
+  .plan th.today { box-shadow: inset 0 -3px 0 var(--brand); color: var(--sel-ink); }
+  .plan td.today { background: var(--sel-bg); }
+  .plan th.nm .who { display: flex; align-items: center; gap: 8px; }
+  .plan th.nm .who-text b { display: block; font-weight: 500; white-space: nowrap; color: var(--ink); }
+  .plan th.nm .who-sub { display: block; white-space: nowrap; font: 400 12px/16px var(--font-sans); color: var(--ink-3); }
+  .plan table.plan-semaine { table-layout: fixed; width: 100%; min-width: 820px; }
+  .plan table.plan-semaine col.col-nm { width: 240px; }
+  .plan table.plan-mois col.col-nm { width: 200px; }
+  .plan-nav { display: flex; align-items: center; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
+  .plan-title { font: 600 16px/24px var(--font-display); color: var(--title); margin-left: 4px; }
+  .plan-cell { all: unset; display: block; width: 100%; box-sizing: border-box; cursor: pointer; }
+  .plan-cell:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .plan-cell:hover .cell { box-shadow: inset 0 0 0 2px var(--brand); }
+  .cell { position: relative; display: flex; align-items: center; justify-content: center; min-height: 36px; font: 600 11px/16px var(--font-sans); }
+  .cell.wk { min-height: 40px; margin: 3px; padding: 0 6px; border-radius: 6px; font-size: 12px; }
+  .cell.m { margin: 2px; border-radius: 4px; min-height: 28px; }
+  .cell.pend, .legend i.pend { background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--ink-3) 30%, transparent) 4px 6px); }
+  .cell-oncall { position: absolute; top: 1px; right: 2px; min-width: 14px; height: 14px; padding: 0 2px; border-radius: 4px; background: var(--ast-bg); color: var(--ast-ink); font: 600 10px/14px var(--font-sans); }
+  .cell-oncall.pend { outline: 1px dashed var(--ast-ink); }
+  .k-site { background: var(--site-bg); color: var(--site-ink); }
+  .k-tt { background: var(--tel-bg); color: var(--tel-ink); }
+  .k-cp { background: var(--cng-bg); color: var(--cng-ink); }
+  .k-as { background: var(--ast-bg); color: var(--ast-ink); }
+  .k-off { background: var(--track); color: var(--ink-2); }
+  .k-none { color: var(--ink-3); }
+  .k-we { background: transparent; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; }
+  .today-mix { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .today-mix > div { display: flex; align-items: center; gap: 10px; }
+  .today-mix .cell { margin: 0; width: 40px; min-height: 40px; border-radius: 6px; font-size: 14px; }
   .person-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; padding: 16px; }
   .person-card { display: flex; flex-direction: column; overflow: hidden; text-decoration: none; color: inherit; }
   .person-card:hover { border-color: var(--line-strong); }

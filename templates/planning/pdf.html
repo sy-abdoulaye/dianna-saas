@@ -1,0 +1,38 @@
+{% load i18n %}<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{% translate "Planning" %} · {{ company.name }}</title>
+  <style>:root {% templatetag openbrace %}{% for name, value in pdf_tokens.items %} --{{ name }}: {{ value }};{% endfor %} {% templatetag closebrace %}</style>
+  <link rel="stylesheet" href="{{ pdf_static }}css/pdf.css">
+</head>
+<body>
+  {% for page in pages %}
+    <section class="page">
+      <header>
+        {% if pdf_logo %}<img class="logo" src="{{ pdf_logo }}" alt="">{% endif %}
+        <div>
+          <h1>{% translate "Planning" %} · {{ page.title }}</h1>
+          <p>{{ company.name }} · {% blocktranslate %}Export {{ period }}{% endblocktranslate %}</p>
+        </div>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th class="nm">{% translate "Collaborateur" %}</th>
+            {% for day in page.days %}<th>{{ day|date:"D j/m"|capfirst }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row, cells in page.rows %}
+            <tr>
+              <th class="nm">{{ row.employee.full_name }}<small>{{ row.employee.service.name|default:"" }}</small></th>
+              {% for cell in cells %}<td><span class="cell k-{{ cell.state }}{% if cell.pending %} pend{% endif %}">{{ cell.label }}</span></td>{% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endfor %}
+</body>
+</html>

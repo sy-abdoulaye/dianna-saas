@@ -13,6 +13,7 @@ urlpatterns = [
     path("", include("apps.people.urls")),
     path("", include("apps.administration.urls")),
     path("", include("apps.approvals.urls")),
+    path("", include("apps.planning.urls")),
 ]
 
 # Guide de style : jamais monté en production (STYLEGUIDE_ENABLED = False dans prod.py) ;
