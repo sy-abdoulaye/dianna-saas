@@ -80,16 +80,31 @@ def invite(employee: Employee, *, sent_by: Employee | None = None, request=None)
 
 
 @transaction.atomic
-def confirm_sent(invitation: Invitation, token: str) -> None:
+def confirm_sent(invitation: Invitation, token: str) -> bool:
     """E-mail accepté par le serveur d'envoi : l'empreinte du vrai jeton est enregistrée et
-    les invitations précédentes de la fiche sont remplacées."""
+    les invitations plus anciennes de la fiche sont remplacées.
+
+    Sous verrou de l'invitation : si elle a été remplacée ou acceptée entre-temps (une
+    invitation plus récente est partie), elle ne remplace rien ; son lien mène alors à
+    « Ce lien d'invitation n'est plus valable ». Une invitation plus récente encore en
+    attente d'envoi n'est jamais remplacée. Renvoie True si l'invitation est devenue celle
+    de la fiche."""
     now = timezone.now()
+    invitation = (
+        Invitation.objects.select_for_update().select_related("employee").get(pk=invitation.pk)
+    )
     invitation.token_hash = hash_token(token)
     invitation.sent_at, invitation.send_failed_at = now, None
     invitation.save(update_fields=["token_hash", "sent_at", "send_failed_at", "updated_at"])
+    if not invitation.is_usable:
+        return False
     Invitation.objects.filter(
-        employee_id=invitation.employee_id, accepted_at__isnull=True, revoked_at__isnull=True
-    ).exclude(pk=invitation.pk).update(revoked_at=now, updated_at=now)
+        employee_id=invitation.employee_id,
+        accepted_at__isnull=True,
+        revoked_at__isnull=True,
+        pk__lt=invitation.pk,
+    ).update(revoked_at=now, updated_at=now)
+    return True
 
 
 def mark_send_failed(invitation: Invitation) -> None:

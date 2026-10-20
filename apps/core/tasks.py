@@ -96,12 +96,14 @@ def send_invitation_email(company_id: int, invitation_id: int) -> str:
         }
         subject = render_to_string("accounts/email/invitation_subject.txt", context).strip()
         body = render_to_string("accounts/email/invitation_message.txt", context)
+        # Un échec de l'envoi ou de sa confirmation laisse le lien inutilisable : « Envoi
+        # échoué », l'invitation précédente reste valable.
         try:
             _send(subject, body, [invitation.employee.email])
+            accounts.confirm_sent(invitation, token)
         except Exception:
             accounts.mark_send_failed(invitation)
             raise
-        accounts.confirm_sent(invitation, token)
     return "sent"
 
 

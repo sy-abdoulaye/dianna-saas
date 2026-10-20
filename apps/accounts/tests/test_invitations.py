@@ -166,3 +166,54 @@ def test_failed_send_keeps_the_previous_invitation(company_a, client_for, run_ta
         assert retry.sent_at is not None and not retry.send_failed
     page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
     assert "Envoi échoué" not in page
+
+
+def test_failed_confirmation_marks_the_send_as_failed(
+    company_a, client_for, run_tasks, monkeypatch
+):
+    """L'e-mail est parti mais sa confirmation échoue : l'empreinte n'est pas enregistrée,
+    le lien est inutilisable, donc « Envoi échoué » ; l'invitation précédente reste valable."""
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("base indisponible")
+
+    with tenant_context(company_a.company):
+        new = services.invite(company_a.pending, sent_by=company_a.admin)
+    monkeypatch.setattr(services, "confirm_sent", broken)
+    run_tasks()
+    monkeypatch.undo()
+    assert len(mail.outbox) == 1
+    with tenant_context(company_a.company):
+        assert Invitation.objects.get(pk=new.pk).send_failed
+        assert services.find_invitation(company_a.invitation_token).is_usable
+    page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
+    assert "Envoi échoué" in page
+
+
+def test_confirmation_of_a_replaced_invitation_replaces_nothing(company_a, client_for):
+    """Deux invitations envoyées l'une après l'autre ; la plus récente part la première.
+    La confirmation tardive de l'ancienne ne remplace pas la nouvelle."""
+    with tenant_context(company_a.company):
+        older = services.invite(company_a.pending, sent_by=company_a.admin)
+        newer = services.invite(company_a.pending, sent_by=company_a.admin)
+        assert services.confirm_sent(newer, "jeton-recent") is True
+        assert services.confirm_sent(older, "jeton-ancien") is False
+        newer = Invitation.objects.get(pk=newer.pk)
+        older = Invitation.objects.get(pk=older.pk)
+        assert newer.is_usable and newer.revoked_at is None
+        assert older.revoked_at is not None and not older.is_usable
+        assert services.find_invitation("jeton-recent").pk == newer.pk
+        assert not services.find_invitation("jeton-ancien").is_usable
+        latest = services.latest_open_invitations([company_a.pending])
+        assert latest[company_a.pending.pk].pk == newer.pk
+    page = client_for(company_a.admin).get("/administration/utilisateurs/").content.decode()
+    assert "Invitation envoyée" in page and "Envoi échoué" not in page
+
+
+def test_confirmation_never_replaces_a_newer_invitation_still_queued(company_a):
+    with tenant_context(company_a.company):
+        older = services.invite(company_a.pending, sent_by=company_a.admin)
+        newer = services.invite(company_a.pending, sent_by=company_a.admin)
+        assert services.confirm_sent(older, "jeton-ancien") is True
+        assert Invitation.objects.get(pk=newer.pk).is_usable  # partira à son tour
+        assert not Invitation.objects.get(pk=company_a.invitation.pk).is_usable
