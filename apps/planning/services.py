@@ -6,6 +6,11 @@ Une seule source : `CalendarEvent` (L1-07). Une case vaut, par ordre de priorit�
 - Congés, puis Télétravail, sinon Sur site ;
 l'astreinte se cumule (repère « A »), y compris le week-end et les jours non ouvrés (L4-01).
 
+Confidentialité (minimisation, L4-16) : chacun voit tout ce qui le concerne ; le manager pour
+son équipe directe, les RH et l'administrateur voient le type exact d'absence et les demandes
+en attente ; un collègue du périmètre ne voit que les demandes validées, et « Absent » pour
+tout congé, quel que soit son type. La règle s'applique à la vue, à l'aperçu et aux exports.
+
 Requêtes par grille, quel que soit l'effectif : les personnes de la page, leurs événements de
 la période, les fermetures et les sites d'Alsace-Moselle. Jamais de requête par case.
 """
@@ -22,11 +27,18 @@ from django.utils.translation import pgettext_lazy
 
 from apps.agenda.days import DayOffs, days
 from apps.agenda.models import CalendarEvent
+from apps.approvals.models import LeaveRequest
 from apps.core import permissions
-from apps.people.models import IN_POST_STATUSES, Employee
+from apps.people.models import IN_POST_STATUSES, Employee, Role
 
 PER_PAGE = 50
 MAX_EXPORT_DAYS = 92  # 3 mois au plus par export
+MAX_PDF_DAYS = 31  # PDF : un mois au plus (L4-17)
+MAX_PDF_PEOPLE = PER_PAGE  # PDF : une page du planning au plus (L4-17)
+# Bornes des dates acceptées (planning et exports) : au-delà, retour à aujourd'hui ou erreur
+# de formulaire, jamais d'erreur 500 (L4-18).
+MIN_DATE = date(2000, 1, 1)
+MAX_DATE = date(2100, 12, 31)
 
 SITE, TELEWORK, LEAVE, WEEKEND, DAY_OFF, NOT_YET = "site", "tt", "cp", "we", "off", "none"
 LABELS = {
@@ -36,6 +48,7 @@ LABELS = {
     WEEKEND: pgettext_lazy("planning", "Week-end"),
     NOT_YET: pgettext_lazy("planning", "Pas encore arrivé"),
 }
+ABSENT = pgettext_lazy("planning", "Absent")
 LETTERS = {SITE: "S", TELEWORK: "T", LEAVE: "C", NOT_YET: "—", DAY_OFF: "F", WEEKEND: ""}
 
 
@@ -48,15 +61,11 @@ class Cell:
     on_call_pending: bool = False
     day_off_label: str = ""
     clickable: bool = False
+    leave_label: str = ""  # « Congés d'été », « Autre absence » ou « Absent » (L4-16)
 
     @property
     def label(self) -> str:
-        if self.state == DAY_OFF:
-            text = self.day_off_label
-        else:
-            text = str(LABELS[self.state])
-            if self.pending:
-                text = _("%(state)s (en attente)") % {"state": text}
+        text = self.state_label
         if self.on_call:
             on_call = _("astreinte en attente") if self.on_call_pending else _("astreinte")
             text = f"{text}, {on_call}" if text else on_call.capitalize()
@@ -67,11 +76,17 @@ class Cell:
         """Libellé de l'état principal, sans l'astreinte (repère « A » à part)."""
         if self.state == DAY_OFF:
             return self.day_off_label
-        text = str(LABELS[self.state])
+        text = (
+            self.leave_label
+            if self.state == LEAVE and self.leave_label
+            else str(LABELS[self.state])
+        )
         return _("%(state)s (en attente)") % {"state": text} if self.pending else text
 
     @property
     def letter(self) -> str:
+        if self.state == LEAVE and self.leave_label == str(ABSENT):
+            return "Ab"
         return LETTERS[self.state]
 
     @property
@@ -84,6 +99,7 @@ class Row:
     employee: Employee
     cells: list
     is_me: bool = False
+    full: bool = True  # détail visible (L4-16)
 
 
 @dataclass
@@ -154,18 +170,47 @@ def ordered(people, viewer):
     ).order_by("me_first", "last_name", "first_name", "pk")
 
 
+# ---------- Confidentialité (L4-16) ----------
+
+
+def sees_details(viewer, person) -> bool:
+    """Type exact d'absence et demandes en attente : soi, son équipe directe, RH et admin.
+    Sans `viewer` (calculs internes), tout est visible."""
+    if viewer is None or person.pk == viewer.pk:
+        return True
+    if viewer.role in (Role.HR, Role.ADMIN):
+        return True
+    return person.manager_id == viewer.pk
+
+
+def leave_types(source_ids) -> dict:
+    """{id de la demande de congé: libellé du type} en une requête."""
+    if not source_ids:
+        return {}
+    return {
+        pk: str(LeaveRequest.LeaveType(leave_type).label)
+        for pk, leave_type in LeaveRequest.objects.filter(pk__in=source_ids).values_list(
+            "pk", "leave_type"
+        )
+    }
+
+
 # ---------- Cases ----------
 
 
 def _events(employee_ids, first, last):
-    """{(employee_id, jour): {type: statut}} pour la période, en une requête."""
+    """{(employee_id, jour): {type: (statut, libellé du congé)}} pour la période (2 requêtes)."""
     found = {}
-    rows = CalendarEvent.objects.filter(
-        employee_id__in=employee_ids, start__lte=last, end__gte=first
-    ).values_list("employee_id", "kind", "start", "end", "status")
-    for employee_id, kind, start, end, status in rows:
+    rows = list(
+        CalendarEvent.objects.filter(
+            employee_id__in=employee_ids, start__lte=last, end__gte=first
+        ).values_list("employee_id", "kind", "start", "end", "status", "source_id")
+    )
+    labels = leave_types([r[5] for r in rows if r[1] == CalendarEvent.Kind.LEAVE])
+    for employee_id, kind, start, end, status, source_id in rows:
+        label = labels.get(source_id, "") if kind == CalendarEvent.Kind.LEAVE else ""
         for day in days(max(start, first), min(end, last)):
-            found.setdefault((employee_id, day), {})[kind] = status
+            found.setdefault((employee_id, day), {})[kind] = (status, label)
     return found
 
 
@@ -177,16 +222,32 @@ def build_rows(people, first, last, *, viewer=None, can_declare=False, today=Non
     rows = []
     for person in people:
         is_me = viewer is not None and person.pk == viewer.pk
+        full = sees_details(viewer, person)
         cells = [
-            _cell(person, day, events.get((person.pk, day), {}), offs, is_me and can_declare, today)
+            _cell(
+                person,
+                day,
+                events.get((person.pk, day), {}),
+                offs,
+                is_me and can_declare,
+                today,
+                full,
+            )
             for day in period
         ]
-        rows.append(Row(person, cells, is_me))
+        rows.append(Row(person, cells, is_me, full))
     return rows
 
 
-def _cell(person, day, kinds, offs, can_declare, today):
-    on_call_status = kinds.get(CalendarEvent.Kind.ON_CALL)
+def _cell(person, day, kinds, offs, can_declare, today, full=True):
+    if not full:
+        # Collègue : seulement les demandes validées.
+        kinds = {
+            kind: value
+            for kind, value in kinds.items()
+            if value[0] == CalendarEvent.Status.APPROVED
+        }
+    on_call_status = kinds.get(CalendarEvent.Kind.ON_CALL, (None, ""))[0]
     cell = Cell(
         day,
         SITE,
@@ -207,8 +268,11 @@ def _cell(person, day, kinds, offs, can_declare, today):
         return cell
     for kind, state in ((CalendarEvent.Kind.LEAVE, LEAVE), (CalendarEvent.Kind.TELEWORK, TELEWORK)):
         if kind in kinds:
+            status, label = kinds[kind]
             cell.state = state
-            cell.pending = kinds[kind] == CalendarEvent.Status.PENDING
+            cell.pending = status == CalendarEvent.Status.PENDING
+            if state == LEAVE:
+                cell.leave_label = label if full else str(ABSENT)
             return cell
     cell.clickable = can_declare and today is not None and day >= today
     return cell
@@ -267,12 +331,22 @@ def grid(viewer, *, view, anchor, page=1, q="", service=None, site=None, can_dec
 # ---------- Export ----------
 
 
-def export_rows(viewer, first, last, *, service=None):
+def in_bounds(day) -> bool:
+    return day is not None and MIN_DATE <= day <= MAX_DATE
+
+
+def export_people(viewer, *, service=None):
+    return ordered(people_in_scope(viewer, service=service), viewer)
+
+
+def export_rows(viewer, first, last, *, service=None, people=None):
     """Lignes de l'export : jours ouvrés (lundi à vendredi) de la période, périmètre de la
-    personne. Le service choisi ne fait que restreindre ce périmètre."""
-    people = ordered(people_in_scope(viewer, service=service), viewer)
+    personne. Le service choisi ne fait que restreindre ce périmètre. Les cases suivent la
+    même règle de confidentialité que la vue (L4-16)."""
+    if people is None:
+        people = export_people(viewer, service=service)
     working = [day for day in days(first, last) if day.weekday() < 5]
-    rows = build_rows(people, first, last)
+    rows = build_rows(people, first, last, viewer=viewer)
     header = [_("Collaborateur"), _("Service"), _("Site")] + [
         date_format(day, "D j/m") for day in working
     ]

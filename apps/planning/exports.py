@@ -31,9 +31,12 @@ def period_text(first, last) -> str:
     }
 
 
-def build(viewer, *, first, last, service, fmt, company):
-    """(contenu, type MIME, nom de fichier)."""
-    header, lines, rows, working = services.export_rows(viewer, first, last, service=service)
+def build(viewer, *, first, last, service, fmt, company, people=None):
+    """(contenu, type MIME, nom de fichier). `people` : personnes retenues pour le PDF (une
+    page du planning au plus, L4-17)."""
+    header, lines, rows, working = services.export_rows(
+        viewer, first, last, service=service, people=people
+    )
     stem = f"planning-{first:%Y-%m-%d}-{last:%Y-%m-%d}"
     if fmt == "csv":
         return csv_content(header, lines), CSV_CONTENT_TYPE, f"{stem}.csv"
@@ -65,24 +68,41 @@ def _xlsx(header, rows, working):
 
 
 def _ics(rows, first, last, company):
-    """Un événement par absence et par télétravail (pas les astreintes), dates complètes."""
-    people = {row.employee.pk: row.employee for row in rows}
-    events = CalendarEvent.objects.filter(
-        employee_id__in=list(people),
-        kind__in=(CalendarEvent.Kind.LEAVE, CalendarEvent.Kind.TELEWORK),
-        start__lte=last,
-        end__gte=first,
-    ).order_by("start", "employee_id")
-    items = [
-        IcsEvent(
-            uid=f"{event.source_type}-{event.source_id}@{company.slug}.dianna",
-            start=event.start,
-            end=event.end,
-            summary=f"{event.get_kind_display()} · {people[event.employee_id].full_name}",
-            tentative=event.status == CalendarEvent.Status.PENDING,
+    """Un événement par absence et par télétravail (pas les astreintes), coupé à la période
+    demandée. Même règle de confidentialité que la vue (L4-16) : pour un collègue, seulement
+    les demandes validées, et « Absent » pour tout congé."""
+    people = {row.employee.pk: row for row in rows}
+    events = list(
+        CalendarEvent.objects.filter(
+            employee_id__in=list(people),
+            kind__in=(CalendarEvent.Kind.LEAVE, CalendarEvent.Kind.TELEWORK),
+            start__lte=last,
+            end__gte=first,
+        ).order_by("start", "employee_id")
+    )
+    labels = services.leave_types(
+        [e.source_id for e in events if e.kind == CalendarEvent.Kind.LEAVE]
+    )
+    items = []
+    for event in events:
+        row = people[event.employee_id]
+        pending = event.status == CalendarEvent.Status.PENDING
+        if pending and not row.full:
+            continue
+        if event.kind == CalendarEvent.Kind.LEAVE:
+            what = labels.get(event.source_id) if row.full else str(services.ABSENT)
+            what = what or event.get_kind_display()
+        else:
+            what = event.get_kind_display()
+        items.append(
+            IcsEvent(
+                uid=f"{event.source_type}-{event.source_id}@{company.slug}.dianna",
+                start=max(event.start, first),
+                end=min(event.end, last),
+                summary=f"{what} · {row.employee.full_name}",
+                tentative=pending,
+            )
         )
-        for event in events
-    ]
     return ics_content(items, name=_("Planning %(company)s") % {"company": company.name})
 
 

@@ -33,6 +33,12 @@ from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
 from apps.core.htmx import Toast, is_htmx, toast_response, trigger
 from apps.core.models import Module
+from apps.core.ratelimit import (
+    EXPORT_LIMIT_MESSAGE,
+    export_allowed,
+    export_limited_response,
+    record_export,
+)
 
 CHANGED = "requestsChanged"
 TAB_MINE, TAB_TODO, TAB_TEAM = "mes-demandes", "a-valider", "equipe"
@@ -534,12 +540,17 @@ def export_requests(request, kind):
     template = "approvals/partials/export_modal.html"
     if "format" not in request.GET:
         return render(request, template, context)
+    # Modale : message dans le formulaire ; téléchargement direct : page « Trop d'exports ».
+    if is_htmx(request) and form.is_valid() and not export_allowed(me):
+        form.add_error(None, EXPORT_LIMIT_MESSAGE)
     if not form.is_valid():
         return render(request, f"{template}#form", context, status=422)
     if is_htmx(request):
         response = HttpResponse(status=204)
         response["HX-Redirect"] = f"{action_url}?{request.GET.urlencode()}"
         return response
+    if not record_export(me):
+        return export_limited_response(request, reverse(KINDS[kind].url_name))
     fmt = form.cleaned_data["format"]
     if kind == "telework":
         result = exports.telework_month(me, form.cleaned_data["mois"], fmt, request=request)
@@ -559,6 +570,8 @@ def campaign_summary(request, pk):
     campaign = get_object_or_404(SummerCampaign, pk=pk)
     fmt = request.GET.get("format")
     if fmt in exports.FORMAT_LABELS:
+        if not record_export(request.employee):
+            return export_limited_response(request, request.path)
         return _download(*exports.campaign_file(request.employee, campaign, fmt, request=request))
     mondays, summaries = exports.campaign_summary(campaign)
     return render(

@@ -1,0 +1,10 @@
+{% extends "layouts/app.html" %}
+{% load i18n %}
+{% block title %}{% translate "Trop d'exports" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Trop d'exports en peu de temps" as title %}
+    {% translate "Retour" as action %}
+    {% include "components/empty_state.html" with heading="h1" icon="clock" title=title text=message action_label=action action_url=back_url %}
+  </div>
+{% endblock %}

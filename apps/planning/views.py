@@ -17,6 +17,12 @@ from apps.core import permissions
 from apps.core.access import module_is_enabled, module_required, permission_required
 from apps.core.htmx import is_htmx
 from apps.core.models import Module, Service, Site
+from apps.core.ratelimit import (
+    EXPORT_LIMIT_MESSAGE,
+    export_allowed,
+    export_limited_response,
+    record_export,
+)
 from apps.planning import exports, services
 from apps.planning.forms import FORMAT_LABELS, ExportForm
 
@@ -31,10 +37,12 @@ def _int(value):
 
 
 def _anchor(value, today):
+    """Date demandée ; hors bornes (2000 à 2100) ou invalide : aujourd'hui (L4-18)."""
     try:
-        return date.fromisoformat(value) if value else today
+        day = date.fromisoformat(value) if value else today
     except ValueError:
         return today
+    return day if services.in_bounds(day) else today
 
 
 @require_GET
@@ -66,6 +74,10 @@ def planning(request):
         today=today,
     )
     base = reverse("planning:week")
+    # « Exporter » reprend le service et la page affichés : le PDF se limite à cette page.
+    export_params = {"page": grid.page_obj.number}
+    if service:
+        export_params["perimetre"] = service
 
     def link(**changes):
         params = {
@@ -102,7 +114,7 @@ def planning(request):
         "filtered": bool(q or service or site),
         "can_declare": can_declare,
         "new_telework_url": reverse("approvals:new", args=["telework"]) if can_declare else "",
-        "export_url": reverse("planning:export"),
+        "export_url": f"{reverse('planning:export')}?{urlencode(export_params)}",
         "can_see_closures": permissions.can(me, "closures.view"),
     }
     if is_htmx(request) and request.htmx.target == "planning-results":
@@ -117,12 +129,18 @@ def export(request):
     me = request.employee
     today = timezone.localdate()
     submitted = "periode" in request.GET
-    form = ExportForm(request.GET if submitted else None, viewer=me, today=today)
+    initial = {k: request.GET[k] for k in ("page", "perimetre") if request.GET.get(k)}
+    form = ExportForm(request.GET if submitted else None, viewer=me, today=today, initial=initial)
     context = {"form": form, "planning_url": reverse("planning:week")}
+    if submitted and form.is_valid() and not export_allowed(me):
+        form.add_error(None, EXPORT_LIMIT_MESSAGE)
     if submitted and form.is_valid():
         first, last = form.cleaned_data["first"], form.cleaned_data["last"]
+        people = form.cleaned_data["people"]
+        if people is None:
+            people = services.export_people(me, service=form.cleaned_data["perimetre"])[:6]
         _header, _lines, rows, working = services.export_rows(
-            me, first, last, service=form.cleaned_data["perimetre"]
+            me, first, last, service=form.cleaned_data["perimetre"], people=people
         )
         context.update(
             {
@@ -132,7 +150,9 @@ def export(request):
                     for row in rows[:6]
                 ],
                 "more_days": len(working) > 5,
-                "people_count": len(rows),
+                "people_count": len(form.cleaned_data["people"])
+                if form.cleaned_data["people"] is not None
+                else services.export_people(me, service=form.cleaned_data["perimetre"]).count(),
                 "days_count": len(working),
                 "first": first,
                 "last": last,
@@ -154,6 +174,8 @@ def download(request):
     form = ExportForm(request.GET, viewer=me, today=timezone.localdate())
     if not form.is_valid():
         return HttpResponse(status=400)
+    if not record_export(me):
+        return export_limited_response(request, reverse("planning:export"))
     first, last = form.cleaned_data["first"], form.cleaned_data["last"]
     fmt = form.cleaned_data["format"]
     content, content_type, filename = exports.build(
@@ -163,6 +185,7 @@ def download(request):
         service=form.cleaned_data["perimetre"],
         fmt=fmt,
         company=request.company,
+        people=form.cleaned_data["people"],
     )
     exports.log_export(
         viewer=me,

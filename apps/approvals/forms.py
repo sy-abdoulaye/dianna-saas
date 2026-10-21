@@ -214,6 +214,14 @@ class MonthExportForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["mois"].initial = rules.today().replace(day=1)
 
+    def clean_mois(self):
+        from apps.planning.services import in_bounds
+
+        month = self.cleaned_data["mois"]
+        if not in_bounds(month):
+            raise forms.ValidationError(_("Choisissez une date entre 2000 et 2100."))
+        return month
+
 
 class CampaignExportForm(forms.Form):
     campagne = forms.ChoiceField(label=_("Campagne"))

@@ -22,6 +22,8 @@ FORMATS = [
     ("ics", _("iCalendar (agenda)")),
     ("pdf", _("PDF")),
 ]
+OUT_OF_BOUNDS = _("Choisissez une date entre 2000 et 2100.")
+PDF_TOO_BIG = _("Pour plus de personnes ou une période plus longue, utilisez l'export Excel.")
 FORMAT_LABELS = {"csv": "CSV", "xlsx": "Excel", "ics": "iCalendar", "pdf": "PDF"}
 
 
@@ -33,6 +35,8 @@ class ExportForm(forms.Form):
     format = forms.ChoiceField(
         label=_("Format"), choices=FORMATS, initial="csv", widget=forms.RadioSelect
     )
+    # Page du planning affichée (bouton « Exporter » du planning) : le PDF s'y limite (L4-17).
+    page = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
 
     def __init__(self, *args, viewer, today, **kwargs):
         super().__init__(*args, **kwargs)
@@ -68,16 +72,39 @@ class ExportForm(forms.Form):
             first, last = services.month_of(today)
         else:
             first, last = cleaned.get("debut"), cleaned.get("fin")
-            if not first:
+            for name, day in (("debut", first), ("fin", last)):
+                if day is not None and not services.in_bounds(day):
+                    self.add_error(name, OUT_OF_BOUNDS)
+                    first = last = None
+            if not first and "debut" not in self.errors:
                 self.add_error("debut", _("Choisissez la date de début."))
-            if not last:
+            if not last and "fin" not in self.errors:
                 self.add_error("fin", _("Choisissez la date de fin."))
             if first and last and last < first:
                 self.add_error("fin", _("La fin doit être après le début."))
             elif first and last and (last - first).days + 1 > services.MAX_EXPORT_DAYS:
                 self.add_error("fin", _("La période est limitée à 3 mois par export."))
         cleaned["first"], cleaned["last"] = first, last
+        cleaned["people"] = None
+        if cleaned.get("format") == "pdf" and first and last and not self.errors:
+            self._limit_pdf(cleaned, first, last)
         return cleaned
+
+    def _limit_pdf(self, cleaned, first, last):
+        """PDF : un mois et une page du planning (50 personnes) au plus ; au-delà, l'export
+        Excel (L4-17). Avec `page`, le PDF reprend la page affichée du planning."""
+        people = services.export_people(self.viewer, service=cleaned.get("perimetre"))
+        page = cleaned.get("page")
+        if page:
+            start = (page - 1) * services.MAX_PDF_PEOPLE
+            people = list(people[start : start + services.MAX_PDF_PEOPLE])
+        else:
+            people = list(people[: services.MAX_PDF_PEOPLE + 1])
+        too_long = (last - first).days + 1 > services.MAX_PDF_DAYS
+        if too_long or len(people) > services.MAX_PDF_PEOPLE or not people:
+            self.add_error("format", PDF_TOO_BIG)
+            return
+        cleaned["people"] = people
 
     @property
     def scope_label(self) -> str:

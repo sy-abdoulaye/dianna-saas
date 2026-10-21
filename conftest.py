@@ -259,3 +259,13 @@ def submit():
             return workflow.submit(model, employee, data)
 
     return _submit
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Limites de fréquence (exports, vitrine) : chaque test part d'un cache vide."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()

@@ -11,7 +11,7 @@ from functools import lru_cache
 
 from openpyxl import Workbook
 from openpyxl.cell import WriteOnlyCell
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Font, NamedStyle, PatternFill
 from openpyxl.utils import get_column_letter
 
 from apps.core.csv_export import safe_cell
@@ -42,16 +42,27 @@ def _font(token: str = "", bold: bool = False) -> Font:
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
+def _named_style(workbook, fill: str, ink: str) -> str:
+    """Un style nommé par couple de jetons : une seule affectation par cellule (rapide en
+    écriture seule sur un grand effectif)."""
+    name = f"dianna-{fill or 'none'}-{ink or 'none'}"
+    if name not in workbook.named_styles:
+        style = NamedStyle(name=name)
+        if fill:
+            style.fill = _fill(fill)
+        if ink:
+            style.font = _font(ink)
+        style.alignment = CENTER
+        workbook.add_named_style(style)
+    return name
+
+
 def _cell(sheet, value, *, bold=False):
-    """Cellule en écriture seule (rapide sur un grand effectif) ; texte toujours neutralisé."""
+    """Cellule en écriture seule ; texte toujours neutralisé et enregistré comme texte."""
     if isinstance(value, Styled):
         cell = WriteOnlyCell(sheet, value=safe_cell(value.text))
         cell.data_type = "s"
-        if value.fill:
-            cell.fill = _fill(value.fill)
-        if value.ink:
-            cell.font = _font(value.ink)
-        cell.alignment = CENTER
+        cell.style = _named_style(sheet.parent, value.fill, value.ink)
         return cell
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return WriteOnlyCell(sheet, value=value)

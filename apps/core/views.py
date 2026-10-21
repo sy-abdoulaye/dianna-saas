@@ -2,7 +2,6 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
-from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
@@ -13,6 +12,7 @@ from apps.core import notifications
 from apps.core.forms import SpaceAccessForm, email_digest, send_space_link
 from apps.core.http import client_ip
 from apps.core.models import Notification
+from apps.core.ratelimit import over_limit
 from apps.people.models import Role
 
 ROLE_LABELS = dict(Role.choices)
@@ -113,13 +113,7 @@ ACCESS_LIMIT_PER_ADDRESS = 3
 
 
 def _over_limit(key: str, limit: int) -> bool:
-    cache.add(key, 0, ACCESS_PERIOD)
-    try:
-        attempts = cache.incr(key)
-    except ValueError:  # entrée expirée entre add et incr
-        cache.set(key, 1, ACCESS_PERIOD)
-        attempts = 1
-    return attempts > limit
+    return over_limit(key, limit, ACCESS_PERIOD)
 
 
 def _too_many_attempts(request, email: str) -> bool:

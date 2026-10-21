@@ -39,5 +39,9 @@ RUN SECRET_KEY=build-only \
 USER dianna
 EXPOSE 8000
 # Journal d'accès sans query string ni adresse IP : les recherches contiennent des noms (règle 5).
+# Délai explicite (L4-17) : une requête qui dépasse 30 s arrête son processus (le plus gros
+# export autorisé, un PDF de 50 personnes sur un mois, prend environ 2 s) ; 30 s de grâce
+# à l'arrêt pour finir les requêtes en cours.
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", \
+     "--timeout", "30", "--graceful-timeout", "30", \
      "--access-logfile", "-", "--access-logformat", "%(t)s \"%(m)s %(U)s\" %(s)s %(B)s %(M)sms"]

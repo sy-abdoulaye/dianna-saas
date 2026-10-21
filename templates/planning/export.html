@@ -19,13 +19,16 @@
           {% include "components/field.html" with field=form.debut %}
           {% include "components/field.html" with field=form.fin %}
         </div>
-        <fieldset class="field">
+        {{ form.page }}
+        <fieldset class="field"{% if form.format.errors %} aria-describedby="export-format-error"{% endif %}>
           <legend class="label">{{ form.format.label }}</legend>
           <div class="flex flex-wrap gap-4">
             {% for choice in form.format %}
               <label class="checkbox" for="{{ choice.id_for_label }}">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
             {% endfor %}
           </div>
+          <span class="hint">{% translate "PDF : une page du planning (50 personnes) et un mois au plus." %}</span>
+          {% if form.format.errors %}<p class="field-error" id="export-format-error">{% icon "alert" 16 %}{{ form.format.errors|first }}</p>{% endif %}
         </fieldset>
         <div class="flex justify-end gap-2">
           {% button _("Retour au planning") variant="ghost" href=planning_url %}
