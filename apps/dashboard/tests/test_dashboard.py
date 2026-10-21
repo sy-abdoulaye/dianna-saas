@@ -34,14 +34,18 @@ def test_employee_dashboard(client_for, company_a):
     content = client_for(company_a.employee).get("/").content.decode()
     values = kpis(content)
     assert values["Télétravail cette semaine"].endswith("/ 2")
-    assert values["Mes demandes en attente"] == "3"  # télétravail, congés, astreinte
-    assert "Mes prochains congés" in values and "Sur site aujourd'hui" in values
+    # Télétravail, congés, astreinte, justificatif de transport ; la demande de matériel de
+    # la fixture est validée.
+    assert values["Mes demandes en attente"] == "4"
+    assert values["Matériel attribué"] == "1"
+    assert "Mes prochains congés" in values and len(values) == 4
     assert "Tout est à jour" in content
     assert "Déclarer du télétravail" in content
     assert "Mes dernières demandes" in content
     assert "Voir le planning" in content
     # Blocs des modules à venir masqués (L4-08).
-    for hidden in ("Matériel attribué", "Annonces non lues", "Annonces", "Mon matériel"):
+    assert "Mon matériel" in content  # raccourci du lot 5
+    for hidden in ("Annonces non lues", "Annonces"):
         assert hidden not in content
 
 
@@ -64,8 +68,12 @@ def test_counters_are_identical_to_the_menu(client_for, company_a):
 
 
 def test_hr_dashboard(client_for, company_a):
-    values = kpis(client_for(company_a.hr).get("/").content.decode())
+    content = client_for(company_a.hr).get("/").content.decode()
+    values = kpis(content)
     assert {"Effectif en poste", "Arrivées à venir", "Demandes à valider"} <= set(values)
+    assert values["Justificatifs à valider"] == "1"  # celui de la fixture
+    assert "1 demande de justificatif de transport à valider" in content
+    assert 'href="/transport/?onglet=a-valider"' in content
     assert values["Vœux de la campagne"] == "1"
 
 

@@ -12,6 +12,7 @@ urlpatterns = [
     path("", include("apps.dashboard.urls")),
     path("", include("apps.people.urls")),
     path("", include("apps.administration.urls")),
+    path("", include("apps.equipment.urls")),  # avant les demandes : /materiel/
     path("", include("apps.approvals.urls")),
     path("", include("apps.planning.urls")),
 ]

@@ -1,0 +1,20 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "check" %}{% endblock %}
+{% block modal_title %}{% translate "Clore le signalement" %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        <p class="modal-text">{{ issue.item.get_kind_display }} <span class="font-mono">{{ issue.item.serial_number }}</span> · {{ issue.reported_by.full_name }}</p>
+        <p class="meta">{{ issue.description }}</p>
+        {% include "components/field.html" with field=form.resolution %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Clore") variant="primary" icon="check" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

@@ -194,6 +194,11 @@ def archive(employee: Employee, *, actor, departure_date=None, request=None) -> 
         ["status", "departure_date"],
         request=request,
     )
+    # Matériel encore détenu : l'archivage n'est pas bloqué, les RH reçoivent la liste à
+    # restituer (docs/modules/07-materiel.md, L5-11).
+    from apps.equipment.services import alert_hr_on_departure
+
+    alert_hr_on_departure(employee, actor=actor)
     return previous
 
 

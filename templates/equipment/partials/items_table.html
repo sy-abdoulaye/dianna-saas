@@ -1,0 +1,63 @@
+{% load i18n ui %}
+<div class="table-wrap">
+  <table class="table">
+    <caption class="sr-only">{% translate "Équipements" %}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{% translate "Équipement" %}</th>
+        <th scope="col">{% translate "N° de série" %}</th>
+        {% if show_holder %}<th scope="col">{% translate "Attribué à" %}</th>{% endif %}
+        <th scope="col">{% translate "État" %}</th>
+        {% if show_issue or park %}<th scope="col" class="end">{% translate "Actions" %}</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+        <tr>
+          <td>
+            {% if park %}
+              {% url "equipment:item_detail" item.public_id as detail_url %}
+              <button class="row-link text-left" type="button" hx-get="{{ detail_url }}" hx-target="#modal-root"><b class="font-medium">{{ item.get_kind_display }}</b></button>
+            {% else %}<b class="font-medium">{{ item.get_kind_display }}</b>{% endif %}
+            <div class="meta">{{ item.model }}</div>
+          </td>
+          <td class="font-mono text-sm">{{ item.serial_number }}</td>
+          {% if show_holder %}<td>{% if item.holder %}{{ item.holder.full_name }}{% else %}<span class="text-ink-3">—</span>{% endif %}</td>{% endif %}
+          <td>{% status_badge "equipment" item.status %}</td>
+          {% if show_issue %}
+            <td class="end">
+              {% url "equipment:issue_new" item.public_id as issue_url %}
+              {% button _("Signaler un problème") variant="ghost" size="sm" hx_get=issue_url hx_target="#modal-root" %}
+            </td>
+          {% elif park %}
+            <td class="end whitespace-nowrap">
+              {% if item.status == "assigned" %}
+                {% url "equipment:item_return" item.public_id as return_url %}
+                {% button _("Restituer") size="sm" hx_get=return_url hx_target="#modal-root" %}
+              {% elif item.status == "in_stock" %}
+                {% url "equipment:item_repair" item.public_id as repair_url %}
+                {% url "equipment:item_assign" item.public_id as assign_url %}
+                {% url "equipment:item_retire" item.public_id as retire_url %}
+                {% button _("Réparation") variant="ghost" size="sm" hx_post=repair_url hx_swap="none" %}
+                {% button _("Retirer") variant="ghost" size="sm" hx_get=retire_url hx_target="#modal-root" %}
+                {% button _("Attribuer") variant="primary" size="sm" hx_get=assign_url hx_target="#modal-root" %}
+              {% elif item.status == "repair" %}
+                {% url "equipment:item_back" item.public_id as back_url %}
+                {% if item.holder %}
+                  {% blocktranslate asvar back_label with name=item.holder.first_name %}Rendre à {{ name }}{% endblocktranslate %}
+                {% else %}
+                  {% translate "Remettre en stock" as back_label %}
+                {% endif %}
+                {% button back_label size="sm" hx_post=back_url hx_swap="none" %}
+                {% if not item.holder %}
+                  {% url "equipment:item_retire" item.public_id as retire_url %}
+                  {% button _("Retirer") variant="ghost" size="sm" hx_get=retire_url hx_target="#modal-root" %}
+                {% endif %}
+              {% endif %}
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

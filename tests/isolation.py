@@ -33,6 +33,54 @@ ISOLATION_CASES = {
             "approvals:cancel_approved", args=["telework", b.requests["telework"].public_id]
         ),
     ),
+    # Justificatif de transport (lot 5) : jamais servi pour une autre entreprise.
+    "approvals:proof_file": (
+        "get",
+        lambda b: reverse("approvals:proof_file", args=[b.requests["transport"].public_id]),
+    ),
+    # Matériel (lot 5) : équipement, signalement et demande de B.
+    "equipment:item_detail": (
+        "get",
+        lambda b: reverse("equipment:item_detail", args=[b.requests["item"].public_id]),
+    ),
+    "equipment:item_assign": (
+        "post",
+        lambda b: reverse("equipment:item_assign", args=[b.requests["stock_item"].public_id]),
+    ),
+    "equipment:item_return": (
+        "post",
+        lambda b: reverse("equipment:item_return", args=[b.requests["item"].public_id]),
+    ),
+    "equipment:item_repair": (
+        "post",
+        lambda b: reverse("equipment:item_repair", args=[b.requests["stock_item"].public_id]),
+    ),
+    "equipment:item_back": (
+        "post",
+        lambda b: reverse("equipment:item_back", args=[b.requests["item"].public_id]),
+    ),
+    "equipment:item_retire": (
+        "post",
+        lambda b: reverse("equipment:item_retire", args=[b.requests["stock_item"].public_id]),
+    ),
+    "equipment:issue_new": (
+        "get",
+        lambda b: reverse("equipment:issue_new", args=[b.requests["item"].public_id]),
+    ),
+    "equipment:issue_close": (
+        "post",
+        lambda b: reverse("equipment:issue_close", args=[b.requests["issue"].pk]),
+    ),
+    "equipment:issue_repair": (
+        "post",
+        lambda b: reverse("equipment:issue_repair", args=[b.requests["issue"].pk]),
+    ),
+    "equipment:request_assign": (
+        "get",
+        lambda b: reverse(
+            "equipment:request_assign", args=[b.requests["equipment_request"].public_id]
+        ),
+    ),
     "approvals:campaign_summary": (
         "get",
         lambda b: reverse("approvals:campaign_summary", args=[b.requests["campaign"].pk]),
@@ -106,6 +154,9 @@ NOT_TENANT_OBJECTS = {
     "approvals:list",
     "approvals:new",
     "approvals:export",
+    # Annulation d'une attribution : jeton signé lié à l'auteur ; l'équipement est relu dans
+    # l'entreprise courante (test : test_undo_token_of_another_company_is_refused, matériel).
+    "equipment:undo",
     # Annulation immédiate : jeton signé lié à l'auteur, demande relue dans l'entreprise
     # courante (test : test_undo_token_of_another_company_is_refused).
     "approvals:undo",

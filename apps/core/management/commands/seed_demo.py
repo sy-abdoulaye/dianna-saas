@@ -465,6 +465,8 @@ class Command(BaseCommand):
     def _seed_requests(self, people):
         """Demandes du prototype (prototype-donnees-demo.js, seedRequests), dates recalculées
         par rapport au lundi de la semaine du chargement. Écrites sans e-mail."""
+        from django.core.files.base import ContentFile
+
         from apps.agenda.days import day_off
         from apps.approvals import workflow
         from apps.approvals.models import (
@@ -474,9 +476,11 @@ class Command(BaseCommand):
             RequestEvent,
             SummerCampaign,
             TeleworkRequest,
+            TransportProof,
         )
         from apps.core import notifications
         from apps.core.models import Notification
+        from apps.equipment.models import EquipmentRequest
 
         today = timezone.localdate()
         monday = today - timedelta(days=today.weekday())
@@ -501,7 +505,14 @@ class Command(BaseCommand):
             request = model(requester=requester, submitted_at=submitted, status=status, **data)
             # Contrôles métier du service (A3-02), sauf pour une demande déjà passée : ses
             # dates sont antérieures à aujourd'hui (seule exception, CLAUDE.md).
-            last_day = getattr(request, "end", None) or request.date
+            if isinstance(request, TransportProof):
+                request.compute_validity()
+            last_day = (
+                getattr(request, "end", None)
+                or getattr(request, "date", None)
+                or getattr(request, "valid_until", None)
+                or today
+            )
             if status in ACTIVE_STATUSES and last_day >= today:
                 errors = workflow.check_request(request, campaign=data.get("campaign"))
                 if errors:
@@ -592,6 +603,127 @@ class Command(BaseCommand):
         )
         add(oc, "p16", "pending", "p6", start=day(5), end=day(6))
 
+        # Transport (prototype : seedRequests), mois en cours et mois précédent.
+        this_month = today.replace(day=1)
+        last_month = (this_month - timedelta(days=1)).replace(day=1)
+
+        def proof(name, data_bytes, mime):
+            return {
+                "file": ContentFile(data_bytes, name=f"justificatif.{name.rsplit('.', 1)[1]}"),
+                "file_type": mime,
+                "original_name": name,
+            }
+
+        pdf, jpg = demo_pdf(), demo_jpg()
+        tp = TransportProof
+        monthly = {"ticket_type": tp.TicketType.MONTHLY, "amount": "84.10"}
+        add(
+            tp,
+            "p1",
+            "approved",
+            "p9",
+            month=last_month,
+            **monthly,
+            **proof("abonnement-septembre.pdf", pdf, "application/pdf"),
+        )
+        add(
+            tp,
+            "p1",
+            "pending",
+            month=this_month,
+            **monthly,
+            **proof("abonnement-octobre.pdf", pdf, "application/pdf"),
+        )
+        add(
+            tp,
+            "p3",
+            "pending",
+            month=this_month,
+            **monthly,
+            **proof("justificatif-tcl.pdf", pdf, "application/pdf"),
+        )
+        add(
+            tp,
+            "p2",
+            "refused",
+            "p9",
+            month=last_month,
+            ticket_type=tp.TicketType.SINGLE,
+            amount="12.40",
+            **proof("ticket.jpg", jpg, "image/jpeg"),
+        )
+        add(
+            tp,
+            "p15",
+            "pending",
+            month=this_month,
+            ticket_type=tp.TicketType.MONTHLY,
+            amount="86.40",
+            **proof("navigo-oct.pdf", pdf, "application/pdf"),
+        )
+
+        # Matériel : demandes (prototype : seedRequests).
+        eq = EquipmentRequest
+        add(eq, "p1", "pending", kind="headset", reason="Casque actuel défectueux (micro)")
+        add(
+            eq,
+            "p13",
+            "approved",
+            "p9",
+            kind="screen",
+            reason="Deuxième écran pour le suivi des tickets",
+        )
+        add(eq, "p2", "pending", kind="laptop", reason="Renouvellement (4 ans)")
+        self._seed_equipment(people)
+
+    def _seed_equipment(self, people):
+        """Parc du prototype (seedEquipment) : 15 équipements, attributions et historique."""
+        from apps.equipment.models import (
+            EquipmentAssignment,
+            EquipmentEvent,
+            EquipmentItem,
+        )
+
+        rows = [
+            ("laptop", "Dell Latitude 5440", "p1", "assigned"),
+            ("screen", 'Dell U2723QE 27"', "p1", "assigned"),
+            ("laptop", "Dell Latitude 5440", "p3", "assigned"),
+            ("headset", "Jabra Evolve2 55", "p3", "assigned"),
+            ("laptop", 'MacBook Pro 14"', "p2", "assigned"),
+            ("laptop", 'MacBook Pro 14"', "p4", "assigned"),
+            ("laptop", "Dell Latitude 5440", "p5", "assigned"),
+            ("phone", "iPhone 14", "p5", "assigned"),
+            ("screen", 'Dell U2723QE 27"', "p13", "assigned"),
+            ("laptop", "Dell Latitude 5440", "p13", "assigned"),
+            ("laptop", "Dell Latitude 5440", None, "in_stock"),
+            ("screen", 'Dell U2723QE 27"', None, "in_stock"),
+            ("headset", "Jabra Evolve2 55", None, "in_stock"),
+            ("laptop", "Lenovo ThinkPad T14", None, "repair"),
+            ("phone", "iPhone 13", None, "in_stock"),
+        ]
+        hr = people["p9"]
+        for index, (kind, model, key, status) in enumerate(rows):
+            holder = people[key] if key else None
+            since = timezone.now() - timedelta(days=40 + index * 23)
+            item = EquipmentItem.objects.create(
+                kind=kind,
+                model=model,
+                serial_number=f"DN-{1040 + index * 13:05d}",
+                status=status,
+                holder=holder,
+                assigned_at=since if holder else None,
+            )
+            EquipmentEvent.objects.create(item=item, action="added", actor=hr)
+            if holder:
+                EquipmentAssignment.objects.create(
+                    item=item, employee=holder, assigned_at=since, assigned_by=hr
+                )
+                EquipmentEvent.objects.create(
+                    item=item, action="assigned", actor=hr, employee=holder
+                )
+            if status == "repair":
+                EquipmentEvent.objects.create(item=item, action="repair", actor=hr)
+
     def _seed_autre(self):
         services = sorted({row[3] for row in OTHER_COMPANY})
         sites = sorted({row[4] for row in OTHER_COMPANY})
@@ -617,3 +749,23 @@ class Command(BaseCommand):
                     user=self._user(email) if key in OTHER_ACCOUNTS else None,
                 )
             audit.log("platform.demo_loaded", "Données de démonstration chargées")
+
+
+def demo_pdf() -> bytes:
+    """Petit PDF valide (justificatifs de démonstration)."""
+    return (
+        b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\n"
+        b"trailer<</Root 1 0 R>>\n%%EOF\n"
+    )
+
+
+def demo_jpg() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (320, 200), (236, 239, 244)).save(buffer, format="JPEG", quality=80)
+    return buffer.getvalue()

@@ -86,9 +86,23 @@ def build_requests(employee) -> dict:
         source_type="telework",
         source_id=telework.pk,
     )
+    from django.core.files.base import ContentFile
+
     from apps.agenda.models import Closure
+    from apps.approvals.models import TransportProof
 
     closure = Closure.objects.create(date=date(2030, 12, 24), label="Fermeture de fin d'année")
+    proof = TransportProof(
+        requester=employee,
+        month=date(2030, 1, 1),
+        amount="84.10",
+        file_type="application/pdf",
+        original_name="abonnement.pdf",
+        submitted_at=now,
+    )
+    proof.compute_validity()
+    proof.file.save("justificatif.pdf", ContentFile(PDF_BYTES), save=False)
+    proof.save()
     return {
         "telework": telework,
         "leave": leave,
@@ -97,6 +111,52 @@ def build_requests(employee) -> dict:
         "event": event,
         "calendar": calendar,
         "closure": closure,
+        "transport": proof,
+        **build_equipment(employee, now),
+    }
+
+
+def build_equipment(employee, now) -> dict:
+    """Un équipement attribué (avec son historique et un signalement), un autre en stock et
+    une demande de matériel validée, sans attribution."""
+    from apps.equipment.models import (
+        EquipmentAssignment,
+        EquipmentEvent,
+        EquipmentIssue,
+        EquipmentItem,
+        EquipmentRequest,
+    )
+
+    held = EquipmentItem.objects.create(
+        kind="laptop",
+        model="Dell Latitude 5440",
+        serial_number=f"DN-{employee.company.slug.upper()}-1",
+        status="assigned",
+        holder=employee,
+        assigned_at=now,
+    )
+    stock = EquipmentItem.objects.create(
+        kind="screen", model="Dell U2723QE", serial_number=f"DN-{employee.company.slug.upper()}-2"
+    )
+    assignment = EquipmentAssignment.objects.create(item=held, employee=employee, assigned_at=now)
+    event = EquipmentEvent.objects.create(item=held, action="assigned", employee=employee)
+    issue = EquipmentIssue.objects.create(
+        item=held, reported_by=employee, description="Écran cassé"
+    )
+    equipment_request = EquipmentRequest.objects.create(
+        requester=employee,
+        kind="screen",
+        reason="Deuxième écran",
+        status="approved",
+        submitted_at=now,
+    )
+    return {
+        "item": held,
+        "stock_item": stock,
+        "assignment": assignment,
+        "equipment_event": event,
+        "issue": issue,
+        "equipment_request": equipment_request,
     }
 
 
@@ -269,3 +329,26 @@ def clear_cache():
     cache.clear()
     yield
     cache.clear()
+
+
+# Plus petit PDF valide utilisé par les tests (justificatifs).
+PDF_BYTES = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n%%EOF\n"
+)
+
+
+@pytest.fixture(autouse=True)
+def private_files(settings, tmp_path):
+    """Fichiers privés de chaque test dans un dossier temporaire, sur disque."""
+    from django.utils.functional import empty
+
+    from apps.core.files import private_storage
+
+    settings.PRIVATE_MEDIA_ROOT = tmp_path / "private"
+    settings.PRIVATE_STORAGE_BACKEND = "filesystem"
+    private_storage._wrapped = empty
+    yield
+    private_storage._wrapped = empty

@@ -1,0 +1,42 @@
+{% load i18n ui %}
+<div class="table-wrap">
+  <table class="table">
+    <caption class="sr-only">{% translate "Demandes de matériel" %}</caption>
+    <thead>
+      <tr>
+        {% if not mine %}<th scope="col">{% translate "Collaborateur" %}</th>{% endif %}
+        <th scope="col">{% translate "Demande" %}</th>
+        <th scope="col">{% translate "Envoyée le" %}</th>
+        <th scope="col">{% translate "Statut" %}</th>
+        <th scope="col" class="end">{% translate "Actions" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        {% url "approvals:detail" "equipment" row.public_id as detail_url %}
+        <tr>
+          {% if not mine %}<td>{{ row.requester.full_name }}</td>{% endif %}
+          <td class="min-w-56"><button class="row-link text-left" type="button" hx-get="{{ detail_url }}" hx-target="#modal-root">{{ row.summary }}</button></td>
+          <td class="text-ink-2">{{ row.submitted_at|date:"j N" }}</td>
+          <td>{% status_badge "request" row.status %}</td>
+          <td class="end whitespace-nowrap">
+            {% if row.can_decide %}
+              {% url "approvals:refuse" "equipment" row.public_id as refuse_url %}
+              {% url "approvals:approve" "equipment" row.public_id as approve_url %}
+              {% button _("Refuser") size="sm" hx_get=refuse_url hx_target="#modal-root" %}
+              {% button _("Valider") variant="primary" size="sm" hx_post=approve_url hx_swap="none" %}
+            {% elif row.needs_item %}
+              {% url "equipment:request_assign" row.public_id as assign_url %}
+              {% button _("Attribuer un équipement") variant="primary" size="sm" hx_get=assign_url hx_target="#modal-root" %}
+            {% elif row.can_cancel %}
+              {% url "approvals:cancel" "equipment" row.public_id as cancel_url %}
+              {% button _("Annuler") variant="ghost" size="sm" hx_get=cancel_url hx_target="#modal-root" %}
+            {% else %}
+              {% button _("Détail") variant="ghost" size="sm" hx_get=detail_url hx_target="#modal-root" %}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

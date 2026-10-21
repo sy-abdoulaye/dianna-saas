@@ -21,7 +21,13 @@ from apps.core.models import AuditLog, Module, Service
 from apps.people.models import IN_POST_STATUSES, Employee, EmployeeStatus, Role
 from apps.planning import services as planning
 
-NAV_TO_KIND = {"telework": "telework", "summer_leave": "leave", "on_call": "on_call"}
+NAV_TO_KIND = {
+    "telework": "telework",
+    "summer_leave": "leave",
+    "on_call": "on_call",
+    "transport": "transport",
+    "equipment": "equipment",
+}
 
 
 def _request_kinds(request):
@@ -58,8 +64,12 @@ def indicators(request, me, today, todo_count, mix) -> list[tuple[str, object]]:
         ]
     kpis = []
     if me.role == Role.HR:
-        if kinds:
-            kpis.append((_("Demandes à valider"), todo_count))
+        counts = menu_counts(request)
+        if "transport" in kinds:
+            kpis.append((_("Justificatifs à valider"), counts.get("transport", 0)))
+        others = [k for k in kinds if k != "transport"]
+        if others:
+            kpis.append((_("Demandes à valider"), todo_count - counts.get("transport", 0)))
         if "leave" in kinds:
             campaign = rules.open_campaign()
             if campaign is not None:
@@ -98,6 +108,11 @@ def indicators(request, me, today, todo_count, mix) -> list[tuple[str, object]]:
             for key in kinds
         )
         kpis.append((_("Mes demandes en attente"), pending))
+    if module_is_enabled(request, Module.EQUIPMENT):
+        from apps.equipment.models import EquipmentItem
+
+        held = EquipmentItem.objects.filter(holder=me).exclude(status=EquipmentItem.Status.RETIRED)
+        kpis.append((_("Matériel attribué"), held.count()))
     if "leave" in kinds:
         upcoming = (
             LeaveRequest.objects.filter(requester=me, status=RequestStatus.APPROVED, end__gte=today)
@@ -107,7 +122,7 @@ def indicators(request, me, today, todo_count, mix) -> list[tuple[str, object]]:
         kpis.append(
             (_("Mes prochains congés"), date_format(upcoming.start, "j F") if upcoming else "—")
         )
-    if mix:
+    if mix and len(kpis) < 4:
         kpis.append((_("Sur site aujourd'hui"), f"{mix['counts']['site']} / {mix['total']}"))
     return kpis
 
@@ -130,7 +145,7 @@ def todo_items(request, me) -> list[dict]:
                     count,
                 )
                 % {"n": count, "kind": meta.lower},
-                "url": f"{reverse(meta.url_name)}?onglet=a-valider",
+                "url": f"{reverse(meta.url_name)}?onglet={meta.todo_tab}",
             }
         )
     return items
@@ -167,6 +182,9 @@ def home(request):
         "planning_url": reverse("planning:week") if mix else "",
         "latest": latest_requests(request, me) if me.role != Role.ADMIN else None,
         "has_requests": bool(_request_kinds(request)),
+        "equipment_url": reverse("equipment:home")
+        if module_is_enabled(request, Module.EQUIPMENT)
+        else "",
         "new_telework_url": reverse("approvals:new", args=["telework"]) if can_declare else "",
     }
     return render(request, "dashboard/home.html", context)

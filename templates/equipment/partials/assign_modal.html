@@ -1,0 +1,19 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "laptop" %}{% endblock %}
+{% block modal_title %}{% blocktranslate with kind=item.get_kind_display|lower %}Attribuer {{ kind }}{% endblocktranslate %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        <p class="modal-text">{{ item.model }} · <span class="font-mono">{{ item.serial_number }}</span></p>
+        {% include "components/field.html" with field=form.employee %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Attribuer") variant="primary" icon="check" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

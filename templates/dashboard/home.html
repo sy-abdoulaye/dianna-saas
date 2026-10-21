@@ -17,7 +17,7 @@
     </div>
   </div>
   {% if kpis %}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 {% if kpis|length > 4 %}lg:grid-cols-5{% else %}lg:grid-cols-4{% endif %}">
       {% for label, value in kpis %}{% include "components/kpi.html" %}{% endfor %}
     </div>
   {% endif %}
@@ -71,7 +71,7 @@
             </ul>
           {% else %}
             {% translate "Aucune demande" as latest_title %}
-            {% translate "Vos demandes de télétravail, de congés ou d'astreinte apparaîtront ici." as latest_text %}
+            {% translate "Vos demandes de télétravail, de congés ou de matériel apparaîtront ici." as latest_text %}
             {% include "components/empty_state.html" with icon="file" title=latest_title text=latest_text %}
           {% endif %}
         </section>
@@ -82,6 +82,7 @@
         <h2 class="h2">{% translate "Raccourcis" %}</h2>
         {% url "people:list" as people_url %}
         {% button _("Annuaire") icon="users" href=people_url block=True %}
+        {% if equipment_url %}{% button _("Mon matériel") icon="laptop" href=equipment_url block=True %}{% endif %}
       </section>
     </aside>
   </div>
