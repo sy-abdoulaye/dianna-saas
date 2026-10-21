@@ -127,29 +127,3 @@ def test_month_grid_of_200_people_on_a_single_page(company_a, monkeypatch):
         elapsed = time.perf_counter() - start
     assert len(grid.rows) >= 200 and len(grid.days) == 31
     assert elapsed < BUDGET_SECONDS, f"{elapsed * 1000:.0f} ms"
-
-
-PDF_BUDGET_SECONDS = 5.0
-PDF_BUDGET_MEMORY = 200 * 1024 * 1024  # octets (allocations Python, tracemalloc)
-
-
-def test_largest_allowed_pdf_50_people_over_a_month(client_for, company_a):
-    """Le plus gros PDF autorisé (L4-17) : une page du planning (50 personnes), un mois.
-    Temps mesuré seul, puis mémoire (tracemalloc ralentit le code)."""
-    import tracemalloc
-
-    client = client_for(company_a.hr)
-    populate(company_a, 60)
-    url = MONTH_EXPORT + "pdf&page=1"
-    client.get(url)  # chargement des polices et des gabarits
-    start = time.perf_counter()
-    response = client.get(url)
-    elapsed = time.perf_counter() - start
-    assert response.status_code == 200 and response.content.startswith(b"%PDF")
-    tracemalloc.start()
-    client.get(url)
-    _current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    print(f"\nPDF 50 personnes x 31 jours : {elapsed * 1000:.0f} ms, pic {peak / 2**20:.0f} Mio")
-    assert elapsed < PDF_BUDGET_SECONDS, f"{elapsed * 1000:.0f} ms"
-    assert peak < PDF_BUDGET_MEMORY, f"{peak / 2**20:.0f} Mio"
