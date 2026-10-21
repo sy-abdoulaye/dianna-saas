@@ -5,6 +5,8 @@ l'historique (`EquipmentEvent`), crée la notification et l'entrée du journal d
 détenteur à la fois (L5-08) : deux attributions simultanées du même équipement donnent une
 attribution et un message, jamais une erreur 500 (contraintes de base en dernier rempart)."""
 
+import unicodedata
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -35,6 +37,29 @@ class EquipmentError(Exception):
         self.field = field
 
 
+# Contrainte de base → (message, champ) : chaque IntegrityError est traduite selon la
+# contrainte en cause (L5-19).
+CONSTRAINT_MESSAGES = {
+    "equipment_serial_unique": (SERIAL_TAKEN, "serial_number"),
+    "equipment_one_open_assignment": (ALREADY_ASSIGNED, None),
+    "equipment_one_assignment_per_request": (
+        gettext_lazy("Un équipement a déjà été attribué pour cette demande."),
+        None,
+    ),
+    "equipment_holder_matches_status": (CHANGED, None),
+}
+
+
+def _integrity_error(exc) -> EquipmentError:
+    from apps.approvals.workflow import constraint_name
+
+    message, field = CONSTRAINT_MESSAGES.get(
+        constraint_name(exc),
+        (gettext_lazy("L'opération n'a pas pu être enregistrée. Réessayez."), None),
+    )
+    return EquipmentError(message, field)
+
+
 def _lock(item) -> EquipmentItem:
     return (
         EquipmentItem.objects.select_for_update(of=("self",))
@@ -62,16 +87,26 @@ def _hr():
 # ---------- Parc ----------
 
 
+def normalize_serial(value: str) -> str:
+    """Numéro de série normalisé (L5-09) : Unicode NFKC (« ＡＢ » devient « AB »), sans aucun
+    espace (espaces insécables compris), en majuscules."""
+    return "".join(unicodedata.normalize("NFKC", value or "").split()).upper()
+
+
 @transaction.atomic
 def add_item(*, kind, model, serial_number, actor, request=None) -> EquipmentItem:
-    """Numéro de série unique dans l'entreprise, sans tenir compte de la casse (L5-09)."""
-    if EquipmentItem.objects.filter(serial_number__iexact=serial_number).exists():
+    """Numéro de série normalisé, puis unique dans l'entreprise (contrainte de base sur la
+    valeur normalisée)."""
+    serial_number = normalize_serial(serial_number)
+    if not serial_number:
+        raise EquipmentError(_("Indiquez le numéro de série."), "serial_number")
+    if EquipmentItem.objects.filter(serial_number=serial_number).exists():
         raise EquipmentError(SERIAL_TAKEN, "serial_number")
     try:
         with transaction.atomic():
             item = EquipmentItem.objects.create(kind=kind, model=model, serial_number=serial_number)
     except IntegrityError as exc:
-        raise EquipmentError(SERIAL_TAKEN, "serial_number") from exc
+        raise _integrity_error(exc) from exc
     _event(item, EquipmentEvent.Action.ADDED, actor)
     audit.log(
         "equipment.added",
@@ -112,7 +147,7 @@ def assign(item, employee, *, actor, equipment_request=None, request=None) -> di
                 request=equipment_request,
             )
     except IntegrityError as exc:
-        raise EquipmentError(ALREADY_ASSIGNED) from exc
+        raise _integrity_error(exc) from exc
     item.status, item.holder, item.assigned_at = Status.ASSIGNED, employee, now
     item.save(update_fields=["status", "holder", "assigned_at", "updated_at"])
     event_id = _event(item, EquipmentEvent.Action.ASSIGNED, actor, employee)

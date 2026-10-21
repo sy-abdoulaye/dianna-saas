@@ -35,9 +35,7 @@ class ItemForm(forms.Form):
         error_messages={"required": _("Indiquez le numéro de série.")},
     )
 
-    def clean_serial_number(self):
-        # Sans espaces ni différence de casse (L5-09) ; l'unicité est vérifiée par le service.
-        return "".join(self.cleaned_data["serial_number"].split()).upper()
+    # Normalisation et unicité : faites par le service (services.normalize_serial, A3-02).
 
 
 class AssignForm(forms.Form):

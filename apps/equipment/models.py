@@ -11,7 +11,6 @@ import uuid
 
 from django.db import models
 from django.db.models import Q
-from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
 from apps.approvals.models import ApprovalRequest, register_request_model
@@ -54,8 +53,9 @@ class EquipmentItem(TenantModel):
         verbose_name_plural = _("équipements")
         ordering = ["kind", "model", "serial_number"]
         constraints = [
+            # Valeur normalisée par le service (NFKC, sans espaces, majuscules, L5-09).
             models.UniqueConstraint(
-                Lower("serial_number"), "company", name="equipment_serial_ci_unique"
+                fields=["company", "serial_number"], name="equipment_serial_unique"
             ),
             models.CheckConstraint(
                 condition=(
