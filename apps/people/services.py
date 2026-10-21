@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit, permissions
+from apps.core.files import delete_after_commit, file_writes
 from apps.core.tenancy import get_current_company
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 
@@ -82,17 +83,22 @@ def ensure_an_admin_remains(employee, *, new_role=None, leaving=False):
         )
 
 
-@transaction.atomic
 def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
     """Crée la fiche au profil Salarié ; un autre profil est ensuite attribué par change_role
-    (journalisé people.role_changed, comme tout changement de profil)."""
+    (journalisé people.role_changed, comme tout changement de profil). La photo est écrite
+    avant l'INSERT et supprimée si la création échoue (L5-18)."""
+    with file_writes() as files, transaction.atomic():
+        return _create_employee(data, actor=actor, photo=photo, request=request, files=files)
+
+
+def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
     data = dict(data)
     role = data.pop("role", None) or Role.EMPLOYEE
     employee = Employee(**data)
     employee.company = get_current_company()  # avant le fichier : chemin <company_id>/photos/
     employee.status = status_for_arrival(employee.arrival_date)
     if photo is not None:
-        employee.photo.save(photo.name, photo, save=False)
+        files.save(employee.photo, photo)
     employee.save()
     _record(employee, actor, EmployeeChange.Kind.CREATED, request=request)
     if role != Role.EMPLOYEE:
@@ -101,13 +107,26 @@ def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
     return employee
 
 
-@transaction.atomic
 def update_employee(
     employee: Employee, data: dict, *, actor, photo=None, remove_photo=False, request=None
 ) -> list[str]:
     """Applique les changements et renvoie la liste des champs modifiés. Le profil d'accès
     passe par change_role (refus sur sa propre fiche, dernier administrateur protégé,
-    journal people.role_changed)."""
+    journal people.role_changed). Nouvelle photo écrite avant l'UPDATE et supprimée en cas
+    d'échec ; l'ancienne n'est supprimée qu'après la validation (L5-18)."""
+    with file_writes() as files, transaction.atomic():
+        return _update_employee(
+            employee,
+            data,
+            actor=actor,
+            photo=photo,
+            remove_photo=remove_photo,
+            request=request,
+            files=files,
+        )
+
+
+def _update_employee(employee, data, *, actor, photo, remove_photo, request, files):
     data = dict(data)
     role = data.pop("role", None)
     role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
@@ -126,12 +145,12 @@ def update_employee(
             employee.status = new_status
             changed.append("status")
     if photo is not None:
-        if employee.photo:
-            employee.photo.delete(save=False)
-        employee.photo.save(photo.name, photo, save=False)
+        delete_after_commit(employee.photo.name)
+        files.save(employee.photo, photo)
         changed.append("photo")
     elif remove_photo and employee.photo:
-        employee.photo.delete(save=False)
+        delete_after_commit(employee.photo.name)
+        employee.photo = None
         changed.append("photo")
     if changed:
         employee.save()

@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.core import audit
 from apps.core.csv_export import csv_content
+from apps.core.files import delete_after_commit, file_writes
 from apps.core.models import AuditLog, Company, Service, Site
 from apps.people.models import Employee, EmployeeStatus
 
@@ -23,21 +24,35 @@ class AdministrationError(Exception):
         self.message = message
 
 
-@transaction.atomic
 def update_company(
     company: Company, data: dict, *, actor, logo=None, remove_logo=False, request=None
 ) -> list[str]:
+    """Paramètres de l'entreprise ; logo écrit avant l'UPDATE, supprimé en cas d'échec,
+    ancien logo supprimé après la validation (L5-18)."""
+    with file_writes() as files, transaction.atomic():
+        return _update_company(
+            company,
+            data,
+            actor=actor,
+            logo=logo,
+            remove_logo=remove_logo,
+            request=request,
+            files=files,
+        )
+
+
+def _update_company(company, data, *, actor, logo, remove_logo, request, files):
     company = Company.objects.select_for_update().get(pk=company.pk)
     changed = [name for name, value in data.items() if getattr(company, name) != value]
     for name in changed:
         setattr(company, name, data[name])
     if logo is not None:
-        if company.logo:
-            company.logo.delete(save=False)
-        company.logo.save(logo.name, logo, save=False)
+        delete_after_commit(company.logo.name)
+        files.save(company.logo, logo)
         changed.append("logo")
     elif remove_logo and company.logo:
-        company.logo.delete(save=False)
+        delete_after_commit(company.logo.name)
+        company.logo = None
         changed.append("logo")
     if changed:
         company.save()
