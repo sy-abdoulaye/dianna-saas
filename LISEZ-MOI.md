@@ -55,7 +55,8 @@ Déploiement (même image Docker pour le serveur et le travailleur) :
 3. Travailleur des tâches, dans un conteneur séparé : `python manage.py db_worker`. Sans lui, aucun e-mail ne part (invitations, mot de passe oublié, demandes).
 4. Purge des résultats de tâches, une fois par jour : `python manage.py purge_task_results` (échecs de plus de 7 jours ; les tâches réussies sont supprimées dès leur fin). Les lignes de tâches ne contiennent ni lien ni texte d'e-mail en clair (A3-04). La même commande supprime les compteurs de limite de fréquence expirés.
    Pour le développement et les essais seulement : `docker compose --profile taches up -d` démarre la base `db`, applique les migrations (service `migrate`), puis le travailleur (`worker`) et la purge quotidienne (`scheduler`). Ces services utilisent les réglages de développement (`config.settings.dev` et ses clés publiques) et la base `db` de `docker-compose.yml` ; le `.env` créé par `make install` suffit et n'a pas à être modifié. En développement, les e-mails s'affichent dans le journal du travailleur : `docker compose logs -f worker`. Le déploiement en production du travailleur et de la purge est prévu au lot 8.
-5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `TASKS_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`.
+5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `TASKS_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`, et pour les fichiers privés sur S3 (Scaleway Object Storage, fr-par) : `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (voir `.env.example` ; `manage.py check --deploy` les vérifie).
+6. Une fois par jour, après la purge : `python manage.py enqueue_daily_tasks` (relance des abonnements annuels de transport, exécutée par le travailleur).
 Contrôles : `make lint`, `make test`, `make e2e`, `make check`. Liste complète : `make help`.
 
 ## À faire hors code avant la commercialisation

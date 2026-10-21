@@ -49,6 +49,11 @@ Personne ne décide pour soi-même ni n'annule sa propre demande validée (`SELF
 | Valider les justificatifs et les demandes de matériel | Non | Non | Oui | Oui |
 | Voir le matériel de son équipe | Non | Équipe | Oui | Oui |
 | Gérer le parc (ajouter, attribuer, restituer, réparation) | Non | Non | Oui | Oui |
+| Télécharger un justificatif | Le sien | Le sien (pas ceux de son équipe) | Oui, journalisé | Oui, journalisé |
+| Signaler un problème | Matériel qu'il détient | Idem | Idem | Idem |
+| Traiter les signalements (réparation, clôture) | Non | Non | Oui | Oui |
+
+Les justificatifs et les demandes de matériel sont validés par les RH et l'administrateur, sans étape manager (L5-04) ; personne ne valide sa propre demande (`SELF_FORBIDDEN`). Un justificatif n'est jamais servi par lien signé : chaque téléchargement vérifie `transport.view` ; une consultation par une autre personne que le demandeur est inscrite au journal (L5-01). Un salarié reçoit 403 sur les adresses du parc ; un équipement, un signalement ou une demande d'une autre entreprise donne 404.
 
 ## Planning
 

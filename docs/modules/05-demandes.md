@@ -59,13 +59,13 @@ Les quatre modules partagent le moteur de validation (`02-architecture.md`) et l
 
 ## Justificatifs de transport
 
-- **Bloc :** information sur le remboursement estimé (50 % de l'abonnement, M-06), précisant que le remboursement n'est pas géré par Dianna.
+- **Bloc :** information sur le remboursement estimé (50 % de l'abonnement, M-06), avec sa justification légale (article L3261-2 du Code du travail ; un titre unique n'est pas concerné), précisant que le remboursement n'est pas géré par Dianna.
 - **Champs :** Mois concerné, Type de titre (Abonnement mensuel, Abonnement annuel, Titre unique), Montant payé (€), Justificatif (zone de fichier : PDF, JPG ou PNG, 5 Mo).
 - **Validité :** un abonnement mensuel ou un titre unique couvre le mois choisi ; un abonnement annuel couvre 12 mois à partir du mois choisi et se dépose une seule fois. `valid_until` est calculé, pas saisi.
-- **Contrôles :** montant > 0 et ≤ 1 000 (« Le montant semble trop élevé. Vérifiez la saisie. ») ; fichier obligatoire, type et taille vérifiés côté serveur ; pas de chevauchement avec un justificatif actif du même type (« Un justificatif de ce type couvre déjà {mois}. »).
-- **Validation :** RH. Le RH voit le fichier dans le détail (aperçu PDF ou image, URL signée).
-- **Relance :** notification 15 jours avant la fin de validité d'un abonnement annuel.
-- **Export paie (RH) :** justificatifs validés du mois avec montant et remboursement estimé.
+- **Contrôles :** mois des 12 derniers au mois prochain (L5-07) ; montant > 0 et ≤ 1 000 (« Indiquez un montant supérieur à 0. », « Le montant semble trop élevé. Vérifiez la saisie. ») ; fichier obligatoire (« Joignez le justificatif. »), type réel vérifié sur le contenu (« Format non accepté : choisissez un fichier PDF, JPG ou PNG. »), 5 Mo (« Le fichier dépasse 5 Mo. »), PDF chiffré refusé (« Ce PDF est protégé par un mot de passe. Enregistrez-le de nouveau sans protection. », L5-03) ; pas de chevauchement entre abonnements actifs, mensuel ou annuel (« Un justificatif de ce type couvre déjà {mois}. », L5-06) ; un titre unique reste toujours possible.
+- **Validation :** RH et administrateur, sans étape manager (L5-04) ; le manager ne voit pas les justificatifs de son équipe. Le RH voit le fichier dans le détail : image affichée, PDF ouvert dans un nouvel onglet, « Télécharger » ; le fichier est servi après contrôle de la permission, jamais par lien signé, et la consultation est journalisée (L5-01). Le détail indique la validité et le remboursement estimé.
+- **Relance :** notification et e-mail au salarié 15 jours avant la fin de validité d'un abonnement annuel, une seule fois (L5-12).
+- **Export paie (RH) :** justificatifs validés qui couvrent le mois, montant payé, montant du mois (annuel : un douzième) et remboursement estimé de 50 % ; titre unique « Non concerné » (L5-13). CSV ou Excel, journalisé.
 
 ## Critères d'acceptation
 

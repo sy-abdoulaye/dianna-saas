@@ -142,6 +142,22 @@ Chaque export vérifie le périmètre côté serveur avec la même fonction que 
 
 **Coût des exports (L4-17).** Les exports sont générés pendant la requête : le PDF est limité à 50 personnes et un mois (environ 2 s ; mémoire résidente d'un processus qui ne fait que ce rendu : 92 Mo avant, 146 Mo au maximum, mesurée avec le module resource), et chaque personne a droit à `EXPORT_LIMIT` = 10 exports par `EXPORT_PERIOD` = 10 minutes (`apps/core/ratelimit.py`, compteur en base). Gunicorn arrête une requête au-delà de 30 s (`--timeout 30` dans le Dockerfile). La génération en arrière-plan des gros exports est prévue au lot 8 si un client en a besoin.
 
+## Fichiers privés (T-12, L5-01, L5-02)
+
+- `apps/core/files.py` : un seul stockage privé, choisi par `PRIVATE_STORAGE_BACKEND` : disque (`PRIVATE_MEDIA_ROOT`, développement et tests) ou S3 (`django-storages`, Scaleway Object Storage fr-par en production, MinIO dans l'intégration continue ; bucket privé par environnement, `default_acl=private`, chiffrement côté serveur `S3_SERVER_SIDE_ENCRYPTION`). `manage.py check --deploy` vérifie la configuration S3 (`dianna.E009`, `dianna.W009`, `dianna.W010`).
+- Chemins : `<company_id>/photos/`, `<company_id>/logo/`, `<company_id>/transport/` suivis d'un nom aléatoire ; le nom d'origine n'est jamais utilisé pour le stockage (conservé pour l'affichage et `Content-Disposition`).
+- Contrôle (`clean_document`) : lecture par morceaux arrêtée au-delà de 5 Mo ; type reconnu sur le contenu (signature PDF et fin de fichier, ou image relue par Pillow et réencodée sans métadonnées) ; PDF chiffrés refusés.
+- Service (`serve_isolated`) : `FileResponse` avec le type exact, `nosniff`, `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'`, `Cache-Control: private, no-store`, `Cross-Origin-Resource-Policy: same-origin`, nom échappé (RFC 6266). La vue `approvals:proof_file` vérifie `transport.view` et journalise toute consultation par une autre personne que le demandeur. La vue des liens signés (`core:private_file`) refuse tout chemin hors photos et logos.
+- Les fichiers ne suivent pas les transactions : `workflow.submit` supprime le fichier si l'envoi échoue après son écriture ; l'annulation immédiate d'un envoi le supprime après validation de la transaction.
+
+## Matériel (`apps/equipment`)
+
+Services sous verrou de l'équipement (`select_for_update`), historique `EquipmentEvent`, notifications, journal. Un seul détenteur garanti en base (L5-08). Les demandes de matériel sont un type du moteur commun (`EquipmentRequest`, `register_request_model`, `register_kind`) : valider, refuser, annuler et l'historique sont ceux du moteur ; l'écran `/materiel/` est celui de l'application (inclus avant les routes des demandes). Types « validés par les RH » (`hr_validated`) : transport et matériel, avec leurs propres actions de permission (`create_action`, `view_action`, `decide_action`).
+
+## Tâches quotidiennes
+
+`manage.py enqueue_daily_tasks` met en file, pour chaque entreprise active, la relance des abonnements annuels de transport (L5-12), exécutée par le travailleur. Le service `scheduler` du profil `taches` l'enchaîne avec `purge_task_results` une fois par jour ; en production, au lot 8.
+
 ## HTMX : modèles d'interaction
 
 | Interaction | Modèle |
@@ -149,7 +165,7 @@ Chaque export vérifie le périmètre côté serveur avec la même fonction que 
 | Recherche, filtres, tri, pagination | Formulaire `hx-get` sur la vue de liste, `hx-target="#results"`, `hx-push-url="true"`, `hx-trigger="input changed delay:300ms, submit"` (l'événement `input` couvre aussi les listes, les cases et les dates ; `change` en plus ajoutait une entrée d'historique en double). La vue renvoie le fragment `results` si `request.htmx`, la page entière sinon |
 | Fenêtre modale | `hx-get` vers une vue qui renvoie le fragment de la modale dans `#modal-root`, élément `<dialog>` ouvert par `ui.js` |
 | Envoi de formulaire | `hx-post` ; en cas d'erreur, la vue renvoie le formulaire avec les erreurs (statut 422 : HTMX 2 n'insère pas les réponses 4xx par défaut, configurer `htmx.config.responseHandling` dans `ui.js` pour insérer les 422) ; en cas de succès, en-tête `HX-Trigger` (`{"toast": {...}, "closeModal": true}`) et `HX-Redirect` ou nouveau rendu de la zone concernée |
-| Notifications visuelles | Événement `toast` déclenché par l'en-tête `HX-Trigger`, ou messages Django rendus dans `#toasts` pour les pages complètes |
+| Notifications visuelles | Événement `toast` déclenché par l'en-tête `HX-Trigger` (JSON en ASCII, L5-16), ou messages Django rendus dans `#toasts` pour les pages complètes |
 | Confirmation | Modale de confirmation commune (`components/confirm.html`), action en `hx-post` |
 | Annuler (undo) | Lien dans la notification visuelle, `hx-post` vers l'URL d'annulation signée et limitée dans le temps |
 | Lignes répétables (compte rendu d'intervention) | `hx-post` « ajouter une ligne » renvoyant un fragment de formulaire indexé ; suppression côté client et index recalculés à l'envoi |
@@ -162,10 +178,10 @@ Le jeton CSRF est transmis globalement : `<body hx-headers='{"X-CSRFToken": "{{ 
 
 - HTTPS partout, HSTS, cookies `Secure`, `HttpOnly`, `SameSite=Lax`.
 - CSP stricte (intégrée à Django 6, `SECURE_CSP`) **dès le lot 0** : scripts et styles servis par l'application ; le script de thème en ligne porte `nonce="{{ csp_nonce }}"` ; `htmx.config.includeIndicatorStyles = false` (styles des indicateurs dans `app.css`) ; attributs `hx-on` interdits (ils exigent `unsafe-eval`).
-- Fichiers déposés : analyse antivirus (ClamAV, à confirmer) avant de rendre le fichier accessible au valideur (lot 5).
+- Fichiers déposés : pas d'analyse antivirus au lot 5 (ni service ClamAV ni dépendance) ; les justificatifs ne sont jamais exécutés ni affichés comme une page (service isolé, L5-01). Décision à prendre au lot 8 (« Pour plus tard »).
 - Double authentification pour RH et Administrateur. Limitation des tentatives de connexion.
 - Mots de passe : validateurs Django, longueur minimale 12.
-- Fichiers téléversés : types et tailles contrôlés côté serveur (PDF, JPG, PNG ; 5 Mo), noms aléatoires, bucket privé, URL signées après contrôle de permission.
+- Fichiers téléversés : type réel et taille contrôlés côté serveur (PDF, JPG, PNG ; 5 Mo, lus par morceaux), images réencodées sans métadonnées, PDF chiffrés refusés (L5-03), noms aléatoires rangés par entreprise, bucket privé. Photos et logos : URL signées de 5 minutes (A2-07). Justificatifs : jamais de lien signé, servis par une vue qui vérifie la permission à chaque téléchargement, avec `nosniff`, `sandbox` et le type exact (L5-01).
 - Journal d'audit (`AuditLog`) pour : connexion d'un administrateur, changement de profil, modification de fiche, décision sur une demande, export, accès support.
 - Aucune donnée personnelle dans les journaux applicatifs ni dans Sentry (`send_default_pii=False`, filtrage).
 

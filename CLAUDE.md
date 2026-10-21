@@ -38,6 +38,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - E-mails (A3-04) : toujours par `apps/core/mail.py`, donc par une tâche ; aucune donnée sensible en clair dans les arguments d'une tâche (identifiants seulement, ou contenu chiffré avec `TASKS_ENCRYPTION_KEY`).
 - Planning et compteurs : règle de confidentialité L4-16 appliquée par une seule fonction, partout (vue, aperçu, exports, compteurs, tableau de bord).
 - Toute limite de fréquence passe par apps/core/ratelimit.py, jamais par le cache.
+- Fichiers déposés : type réel vérifié par `apps/core/files.clean_document` ; stockés sous `<company_id>/…` avec un nom aléatoire (jamais le nom d'origine) ; un justificatif est servi par `serve_isolated` après contrôle de la permission, jamais par lien signé.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes
