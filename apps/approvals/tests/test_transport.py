@@ -181,7 +181,7 @@ def test_file_access_by_profile(client_for, company_a):
     assert client_for(colleague).get(url).status_code == 404
     assert client_for(company_a.manager).get(url).status_code == 404  # son manager non plus
     response = client_for(company_a.hr).get(url)
-    assert response.status_code == 200 and b"".join(response.streaming_content) == PDF_BYTES
+    assert response.status_code == 200 and response.content == PDF_BYTES
 
 
 def test_file_is_served_isolated_with_escaped_name(client_for, company_a):

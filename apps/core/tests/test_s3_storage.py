@@ -74,7 +74,7 @@ def test_proofs_are_private_encrypted_and_served_after_permission_check(s3, clie
         urllib.request.urlopen(f"{os.environ['S3_TEST_ENDPOINT']}/{bucket}/{key}")  # noqa: S310
     assert anonymous.value.code == 403
     served = client_for(company_a.hr).get(f"/transport/{proof.public_id}/justificatif/")
-    assert b"".join(served.streaming_content) == PDF_BYTES
+    assert served.content == PDF_BYTES
     assert (
         client_for(company_a.manager).get(f"/transport/{proof.public_id}/justificatif/").status_code
         == 404
