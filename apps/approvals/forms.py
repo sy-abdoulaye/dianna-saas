@@ -7,10 +7,16 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from apps.approvals import rules
-from apps.approvals.models import LeaveRequest, OnCallDeclaration, SummerCampaign
+from apps.approvals.models import (
+    LeaveRequest,
+    OnCallDeclaration,
+    SummerCampaign,
+    TransportProof,
+)
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 TEXT = forms.Textarea(attrs={"rows": 3, "placeholder": _("Facultatif")})
@@ -240,4 +246,109 @@ class CampaignExportForm(forms.Form):
         return self.campaigns[self.cleaned_data["campagne"]]
 
 
-FORMS = {"telework": TeleworkForm, "leave": LeaveForm, "on_call": OnCallForm}
+class TransportForm(RequestForm):
+    """Justificatif de transport (fiche 05, section Transport). Les contrôles qui dépendent
+    des autres justificatifs (chevauchement) sont faits par le service (A3-02)."""
+
+    month = forms.DateField(
+        label=_("Mois concerné"),
+        input_formats=["%Y-%m"],
+        widget=forms.DateInput(attrs={"type": "month"}, format="%Y-%m"),
+        error_messages={"required": _("Choisissez le mois."), "invalid": _("Choisissez le mois.")},
+    )
+    ticket_type = forms.ChoiceField(
+        label=_("Type de titre"), choices=TransportProof.TicketType.choices
+    )
+    amount = forms.DecimalField(
+        label=_("Montant payé (€)"),
+        max_digits=7,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={"step": "0.01", "min": "0.01", "max": "1000"}),
+        error_messages={
+            "required": _("Indiquez un montant supérieur à 0."),
+            "invalid": _("Indiquez un montant supérieur à 0."),
+            "max_decimal_places": _("Indiquez un montant au centime près."),
+            "max_digits": _("Le montant semble trop élevé. Vérifiez la saisie."),
+            "max_whole_digits": _("Le montant semble trop élevé. Vérifiez la saisie."),
+        },
+    )
+    file = forms.FileField(
+        label=_("Justificatif (PDF, JPG ou PNG)"),
+        widget=forms.ClearableFileInput(attrs={"accept": ".pdf,image/png,image/jpeg"}),
+        error_messages={"required": _("Joignez le justificatif.")},
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["month"].initial = rules.today().replace(day=1)
+
+    def clean_month(self):
+        month = self.cleaned_data["month"].replace(day=1)
+        first, last = transport_months()
+        if not first <= month <= last:
+            raise forms.ValidationError(
+                _("Choisissez un mois entre %(a)s et %(b)s.")
+                % {"a": date_format(first, "F Y"), "b": date_format(last, "F Y")}
+            )
+        return month
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if amount <= 0:
+            raise forms.ValidationError(_("Indiquez un montant supérieur à 0."))
+        if amount > 1000:
+            raise forms.ValidationError(_("Le montant semble trop élevé. Vérifiez la saisie."))
+        return amount
+
+    def clean_file(self):
+        from django.core.exceptions import ValidationError
+
+        from apps.core.files import DOCUMENT_TYPES, clean_document
+
+        uploaded = self.cleaned_data["file"]
+        try:
+            content, extension = clean_document(uploaded)
+        except ValidationError as error:
+            raise forms.ValidationError(error.messages[0]) from error
+        self.document = (content, extension, DOCUMENT_TYPES[extension], uploaded.name)
+        return uploaded
+
+    def model_data(self):
+        content, extension, mime, original = self.document
+        content.name = f"justificatif.{extension}"
+        return {
+            "month": self.cleaned_data["month"],
+            "ticket_type": self.cleaned_data["ticket_type"],
+            "amount": self.cleaned_data["amount"],
+            "file": content,
+            "file_type": mime,
+            "original_name": safe_filename(original, extension),
+        }
+
+
+def transport_months():
+    """Mois acceptés : des 12 mois passés au mois prochain (L5-07)."""
+    current = rules.today().replace(day=1)
+    year, month = divmod(current.month - 1 - 12, 12)
+    first = current.replace(year=current.year + year, month=month + 1)
+    year, month = divmod(current.month, 12)
+    last = current.replace(year=current.year + year, month=month + 1)
+    return first, last
+
+
+def safe_filename(name: str, extension: str) -> str:
+    """Nom d'origine affiché et proposé au téléchargement (jamais utilisé pour le stockage) :
+    sans chemin ni caractère de contrôle, 120 caractères au plus, avec la bonne extension."""
+    import re
+
+    base = re.split(r"[\\/]", name or "")[-1]
+    base = re.sub(r"[\x00-\x1f\x7f]", "", base).strip().rsplit(".", 1)[0][:100]
+    return f"{base or 'justificatif'}.{extension}"
+
+
+FORMS = {
+    "telework": TeleworkForm,
+    "leave": LeaveForm,
+    "on_call": OnCallForm,
+    "transport": TransportForm,
+}

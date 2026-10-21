@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
-from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest
+from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest, TransportProof
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class Kind:
     icon: str
     column: str
     url_name: str
+    todo_tab: str = "a-valider"  # onglet « À valider » de l'écran du module
 
 
 KINDS = {
@@ -56,7 +57,24 @@ KINDS = {
         _("Astreinte"),
         "approvals:on_call",
     ),
+    "transport": Kind(
+        "transport",
+        TransportProof,
+        _("Justificatifs de transport"),
+        _("justificatif de transport"),
+        _("Abonnements de transport en commun, validés par les RH"),
+        _("Ajouter un justificatif"),
+        "ticket",
+        _("Justificatif"),
+        "approvals:transport",
+    ),
 }
+
+
+def register_kind(kind: Kind) -> Kind:
+    """Types de demande d'autres applications (matériel, L5-04)."""
+    KINDS[kind.key] = kind
+    return kind
 
 
 def kind_of(request) -> Kind:
@@ -94,8 +112,25 @@ def workdays(start, end) -> int:
     return count
 
 
+def euros(amount) -> str:
+    return f"{amount:.2f}".replace(".", ",") + "\u00a0€"
+
+
+SUMMARIES = {}  # type de demande → fonction de résumé (autres applications)
+
+
 def summary(request) -> str:
     """Résumé d'une ligne (tableaux, notifications, e-mails)."""
+    if request.request_type in SUMMARIES:
+        return SUMMARIES[request.request_type](request)
+    if isinstance(request, TransportProof):
+        return " · ".join(
+            [
+                request.get_ticket_type_display(),
+                date_format(request.month, "F Y"),
+                euros(request.amount),
+            ]
+        )
     if isinstance(request, TeleworkRequest):
         return full_date(request.date)
     if isinstance(request, LeaveRequest):

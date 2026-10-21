@@ -164,6 +164,67 @@ def on_call_month(viewer, month: date, fmt: str, *, request=None):
     return _file(fmt, _("Astreintes"), header, rows, f"astreintes-{first:%Y-%m}")
 
 
+# ---------- Transport (paie) ----------
+
+
+def transport_month(viewer, month: date, fmt: str, *, request=None):
+    """Justificatifs validés qui couvrent le mois, avec le montant du mois et le remboursement
+    estimé (L5-13) : 50 % des abonnements (article L3261-2 du Code du travail) ; un
+    abonnement annuel compte pour un douzième par mois ; un titre unique n'est pas concerné."""
+    from apps.approvals.kinds import euros
+    from apps.approvals.models import TransportProof
+
+    _check(viewer)
+    first, last = month_bounds(month)
+    proofs = (
+        TransportProof.objects.filter(
+            status=RequestStatus.APPROVED,
+            month__lte=last,
+            valid_until__gte=first,
+            requester__in=_people_ids(viewer),
+        )
+        .select_related("requester", "requester__service")
+        .order_by("requester__last_name", "requester__first_name", "month")
+    )
+    header = [
+        _("Collaborateur"),
+        _("Matricule"),
+        _("Service"),
+        _("Type de titre"),
+        _("Validité"),
+        _("Montant payé"),
+        _("Montant du mois"),
+        _("Remboursement estimé"),
+    ]
+    rows = []
+    for proof in proofs:
+        monthly = proof.amount / 12 if proof.ticket_type == "yearly" else proof.amount
+        monthly = monthly.quantize(Decimal("0.01"))
+        refund = (
+            euros((monthly / 2).quantize(Decimal("0.01")))
+            if proof.is_subscription
+            else _("Non concerné")
+        )
+        rows.append(
+            [
+                proof.requester.full_name,
+                proof.requester.registration_number,
+                proof.requester.service.name if proof.requester.service else "",
+                proof.get_ticket_type_display(),
+                _("du %(a)s au %(b)s")
+                % {
+                    "a": date_format(proof.month, "d/m/Y"),
+                    "b": date_format(proof.valid_until, "d/m/Y"),
+                },
+                euros(proof.amount),
+                euros(monthly),
+                refund,
+            ]
+        )
+    _log(viewer, _("Export paie des justificatifs de transport"), month_label(month), fmt, request)
+    return _file(fmt, _("Transport"), header, rows, f"transport-{first:%Y-%m}")
+
+
 # ---------- Synthèse de campagne ----------
 
 

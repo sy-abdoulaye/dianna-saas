@@ -45,6 +45,7 @@ from apps.approvals.models import (
     RequestStatus,
     SummerCampaign,
     TeleworkRequest,
+    TransportProof,
 )
 from apps.core import audit, notifications, permissions
 from apps.core.models import Notification
@@ -131,7 +132,10 @@ def has_hr_step(request) -> bool:
 
 def first_validators(request) -> list[Employee]:
     """Qui reçoit la demande à l'envoi : le manager direct, sinon les RH et administrateurs
-    autres que le demandeur (M-12, L3-02)."""
+    autres que le demandeur (M-12, L3-02). Types validés par les RH (transport, matériel,
+    L5-04) : les RH et administrateurs autres que le demandeur."""
+    if request.hr_validated:
+        return hr_validators(exclude=request.requester)
     manager = active_manager(request.requester)
     if manager is not None:
         return [manager]
@@ -144,6 +148,12 @@ def can_decide(employee, request) -> bool:
     et administrateurs. Personne ne décide pour soi-même."""
     if employee is None or employee.pk == request.requester_id:
         return False
+    if request.hr_validated:
+        return (
+            request.status == RequestStatus.PENDING
+            and is_hr_or_admin(employee)
+            and permissions.can(employee, request.decide_action, request)
+        )
     if request.status == RequestStatus.PENDING:
         manager = active_manager(request.requester)
         if manager is not None and manager.pk == employee.pk:
@@ -162,7 +172,7 @@ def can_cancel_approved(employee, request) -> bool:
 
 def acting_for(employee, request):
     """Manager remplacé quand un RH ou un administrateur décide à sa place (bandeau M-12)."""
-    if request.status != RequestStatus.PENDING:
+    if request.status != RequestStatus.PENDING or request.hr_validated:
         return None
     manager = active_manager(request.requester)
     if manager is not None and manager.pk != employee.pk and is_hr_or_admin(employee):
@@ -175,6 +185,16 @@ def to_validate(employee, model):
     seulement les personnes sans manager (M-12) et l'étape RH des congés d'été."""
     from django.db.models import Q
 
+    related = ("requester", "requester__service", "requester__manager")
+    if model.hr_validated:
+        # Transport, matériel : toutes les demandes en attente, pour les RH seulement.
+        if not is_hr_or_admin(employee):
+            return model.objects.none()
+        return (
+            model.objects.filter(status=RequestStatus.PENDING)
+            .exclude(requester=employee)
+            .select_related(*related)
+        )
     in_post_ids = Employee.objects.filter(status__in=IN_POST_STATUSES).values("pk")
     has_active_manager = Q(requester__manager_id__in=in_post_ids)
     condition = Q(status=RequestStatus.PENDING, requester__manager=employee) & has_active_manager
@@ -286,6 +306,8 @@ def check_request(request, *, campaign=None) -> dict:
         if rules.leave_overlaps(requester, request.start, request.end, exclude_pk=pk):
             return {"start": _("Cette période chevauche une de vos demandes existantes.")}
         return {}
+    if isinstance(request, TransportProof):
+        return _check_transport(request)
     if (
         isinstance(request, OnCallDeclaration)
         and request.kind == OnCallDeclaration.Kind.ON_CALL
@@ -295,6 +317,36 @@ def check_request(request, *, campaign=None) -> dict:
     return {}
 
 
+SUBSCRIPTIONS = (TransportProof.TicketType.MONTHLY, TransportProof.TicketType.YEARLY)
+
+
+def _check_transport(request) -> dict:
+    """Pas de chevauchement entre deux abonnements actifs (mensuel ou annuel, L5-06) ; un titre
+    unique reste toujours possible."""
+    if request.ticket_type not in SUBSCRIPTIONS:
+        return {}
+    request.compute_validity()
+    overlapping = (
+        TransportProof.objects.filter(
+            requester=request.requester,
+            ticket_type__in=SUBSCRIPTIONS,
+            status__in=ACTIVE_STATUSES,
+            month__lte=request.valid_until,
+            valid_until__gte=request.month,
+        )
+        .exclude(pk=request.pk)
+        .order_by("month")
+        .first()
+    )
+    if overlapping is None:
+        return {}
+    covered = max(overlapping.month, request.month)
+    return {
+        "month": _("Un justificatif de ce type couvre déjà %(month)s.")
+        % {"month": date_format(covered, "F Y")}
+    }
+
+
 def _save_checked(request, **kwargs):
     """Enregistre sous point de sauvegarde : une contrainte de base violée malgré tout
     (même jour) devient un message, jamais une erreur 500."""
@@ -302,7 +354,16 @@ def _save_checked(request, **kwargs):
         with transaction.atomic():
             request.save(**kwargs)
     except IntegrityError as exc:
+        _forget_file(request)
         raise RequestValidationError({"date": SAME_DAY}) from exc
+
+
+def _forget_file(request):
+    """Les fichiers ne suivent pas les transactions : un envoi annulé ne laisse pas de fichier
+    sans demande (L5-05)."""
+    field_file = getattr(request, request.file_field) if request.file_field else None
+    if field_file and field_file.name:
+        field_file.storage.delete(field_file.name)
 
 
 def sync_calendar(request):
@@ -356,7 +417,7 @@ def _notify_validators(request, validators) -> list[int]:
         _notify(
             v,
             text,
-            _module_url(request, "a-valider"),
+            _module_url(request, kind.todo_tab),
             Notification.Kind.REQUEST,
             email_subject=_("Demande à valider : %(kind)s") % {"kind": kind.lower},
             request=request,
@@ -409,8 +470,20 @@ def _audit(request, actor, action, verb, *, http_request=None, extra=""):
 # ---------- Transitions ----------
 
 
-@transaction.atomic
 def submit(model, requester: Employee, data: dict, *, http_request=None) -> TransitionResult:
+    """Envoi (voir `_submit`). Si l'envoi échoue après l'écriture du justificatif, la
+    transaction est annulée et le fichier supprimé."""
+    written = []
+    try:
+        return _submit(model, requester, data, http_request=http_request, written=written)
+    except Exception:
+        for request in written:
+            _forget_file(request)
+        raise
+
+
+@transaction.atomic
+def _submit(model, requester, data, *, http_request=None, written=()) -> TransitionResult:
     """Envoi. La fiche du demandeur est verrouillée, puis les contrôles métier sont faits
     (`check_request`) : deux envois simultanés ne peuvent ni dépasser le quota, ni créer deux
     demandes le même jour, ni deux absences ou astreintes qui se chevauchent. Lève
@@ -424,10 +497,14 @@ def submit(model, requester: Employee, data: dict, *, http_request=None) -> Tran
     if isinstance(request, LeaveRequest) and request.leave_type == LeaveRequest.LeaveType.SUMMER:
         campaign = rules.open_campaign()
         request.campaign = campaign
+    if isinstance(request, TransportProof):
+        request.compute_validity()
     errors = check_request(request, campaign=campaign)
     if errors:
         raise RequestValidationError(errors)
     _save_checked(request)
+    if request.file_field:
+        written.append(request)
     event_id = _event(request, requester, RequestEvent.Action.SUBMITTED)
     result = TransitionResult(request, previous_status="", event_id=event_id)
 
@@ -655,6 +732,9 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
             http_request=http_request,
         )
         request.delete()
+        if request.file_field:
+            # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
+            transaction.on_commit(lambda: _forget_file(request))
         return None
     previous = payload["previous"]
     expected = {

@@ -33,6 +33,10 @@
       {% translate "Modifiable par l'administrateur" as n3 %}
       {% include "components/kpi.html" with label=l3 value=rule_value note=n3 %}
     </div>
+  {% elif kind.key == "transport" %}
+    {% translate "Remboursement estimé : 50 % de l'abonnement." as transport_title %}
+    {% translate "L'employeur prend en charge la moitié du prix des abonnements de transport public entre le domicile et le lieu de travail (article L3261-2 du Code du travail) ; un titre unique n'est pas concerné. Cette estimation est à confirmer avec votre service paie : le remboursement lui-même n'est pas géré par Dianna." as transport_text %}
+    {% include "components/banner.html" with kind="info" title=transport_title text=transport_text %}
   {% elif kind.key == "leave" %}
     {% if campaign %}
       {% blocktranslate asvar campaign_title with label=campaign.label %}Campagne {{ label }}.{% endblocktranslate %}

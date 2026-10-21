@@ -4,7 +4,7 @@
 {% block modal_title %}{{ kind.new_label }}{% endblock %}
 {% block modal_content %}
   {% partialdef form inline %}
-    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]"{% if kind.key == "transport" %} hx-encoding="multipart/form-data"{% endif %} novalidate>
       <div class="modal-body">
         {% include "components/form_errors.html" %}
         {% if kind.key == "telework" %}
@@ -17,6 +17,17 @@
           </div>
           {% include "components/field.html" with field=form.leave_type %}
           {% include "components/field.html" with field=form.comment %}
+        {% elif kind.key == "equipment" %}
+          {% include "components/field.html" with field=form.kind %}
+          {% include "components/field.html" with field=form.reason %}
+        {% elif kind.key == "transport" %}
+          <div class="pair">
+            {% include "components/field.html" with field=form.month %}
+            {% include "components/field.html" with field=form.ticket_type %}
+          </div>
+          {% include "components/field.html" with field=form.amount %}
+          {% translate "PDF, JPG ou PNG · 5 Mo maximum" as file_hint %}
+          {% include "components/file_drop.html" with field=form.file hint=file_hint %}
         {% else %}
           {% include "components/field.html" with field=form.kind %}
           <div class="pair">
@@ -26,7 +37,11 @@
           {% include "components/field.html" with field=form.hours %}
           {% include "components/field.html" with field=form.description %}
         {% endif %}
-        {% translate "Votre demande est transmise à votre manager, ou à l'équipe RH si vous n'en avez pas. Vous pourrez l'annuler tant qu'elle est en attente." as help %}
+        {% if kind.model.hr_validated %}
+          {% translate "Votre demande est transmise à l'équipe RH. Vous pourrez l'annuler tant qu'elle est en attente." as help %}
+        {% else %}
+          {% translate "Votre demande est transmise à votre manager, ou à l'équipe RH si vous n'en avez pas. Vous pourrez l'annuler tant qu'elle est en attente." as help %}
+        {% endif %}
         {% include "components/banner.html" with kind="info" text=help %}
       </div>
       <footer class="modal-foot">

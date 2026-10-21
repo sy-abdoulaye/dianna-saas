@@ -21,7 +21,7 @@ from apps.approvals.forms import (
     MonthExportForm,
     ReasonForm,
 )
-from apps.approvals.kinds import KINDS, summary
+from apps.approvals.kinds import KINDS, euros, summary
 from apps.approvals.models import (
     REQUEST_MODELS,
     LeaveRequest,
@@ -83,7 +83,7 @@ def get_request(request, kind, public_id):
     me = request.employee
     if not (
         obj.requester_id == me.pk
-        or permissions.can(me, "requests.view", obj)
+        or permissions.can(me, model.view_action, obj)
         or workflow.can_decide(me, obj)
     ):
         raise Http404
@@ -100,12 +100,15 @@ def request_list(request, kind):
     meta = KINDS[kind]
     model = meta.model
     tabs = [(TAB_MINE, _("Mes demandes"), 0)]
-    todo = workflow.to_validate(me, model) if is_validator(me) else model.objects.none()
-    if is_validator(me):
+    # Types validés par les RH (transport) : ni « À valider » ni « Mon équipe » pour un
+    # manager, qui ne voit pas les justificatifs de son équipe (docs/04-permissions.md).
+    validator = workflow.is_hr_or_admin(me) if model.hr_validated else is_validator(me)
+    todo = workflow.to_validate(me, model) if validator else model.objects.none()
+    if validator:
         tabs.append((TAB_TODO, _("À valider"), todo.count()))
     if workflow.is_hr_or_admin(me):
         tabs.append((TAB_TEAM, _("Toutes les demandes"), 0))
-    elif me.has_reports:
+    elif me.has_reports and permissions.scope(me, model.view_action) != permissions.SELF:
         tabs.append((TAB_TEAM, _("Mon équipe"), 0))
     tab = request.GET.get("onglet", TAB_MINE)
     if tab not in {key for key, _label, _n in tabs}:
@@ -116,7 +119,7 @@ def request_list(request, kind):
     elif tab == TAB_TODO:
         rows = todo
     else:
-        rows = permissions.scope_queryset(me, model.objects.all(), "requests.view").exclude(
+        rows = permissions.scope_queryset(me, model.objects.all(), model.view_action).exclude(
             requester=me
         )
     rows = rows.select_related("requester", "requester__service", "requester__manager")
@@ -159,7 +162,7 @@ def request_list(request, kind):
         "can_export": permissions.can(me, "requests.export"),
         # Lien vers le planning (L3-18) : seulement si le module Planning est activé.
         "planning_url": reverse("planning:week")
-        if module_is_enabled(request, Module.PLANNING)
+        if module_is_enabled(request, Module.PLANNING) and model.calendar_kind
         else "",
     }
     context.update(_module_block(me, kind))
@@ -202,7 +205,7 @@ def _module_block(me, kind) -> dict:
 @module_view
 def new_request(request, kind):
     me = request.employee
-    require(request, "requests.create")
+    require(request, KINDS[kind].model.create_action)
     meta = KINDS[kind]
     form_class = FORMS[kind]
     template = "approvals/partials/form_modal.html"
@@ -211,7 +214,7 @@ def new_request(request, kind):
     if request.method == "GET":
         form = form_class(requester=me, initial=initial)
         return render(request, template, _form_context(meta, form, action_url))
-    form = form_class(request.POST, requester=me)
+    form = form_class(request.POST, request.FILES, requester=me)
     if form.is_valid():
         try:
             result = workflow.submit(meta.model, me, form.model_data(), http_request=request)
@@ -272,6 +275,9 @@ def detail(request, kind, public_id):
         "can_cancel_approved": workflow.can_cancel_approved(me, obj),
         "urls": _urls(kind, obj),
     }
+    if kind == "transport":
+        context["proof_url"] = reverse("approvals:proof_file", args=[obj.public_id])
+        context["refund"] = euros(obj.amount / 2)
     return render(request, "approvals/partials/detail_modal.html", context)
 
 
@@ -515,7 +521,40 @@ def campaign_status(request, pk, action):
     )
 
 
+# ---------- Justificatifs de transport (L5-01) ----------
+
+
+@require_GET
+def proof_file(request, public_id):
+    """Justificatif servi seulement à une personne connectée qui a la permission de le voir,
+    contrôlée à chaque téléchargement (jamais de lien signé). Fichier isolé : type exact,
+    `nosniff`, `sandbox`. Toute consultation par une autre personne que le demandeur (RH,
+    administrateur) est inscrite au journal d'audit, sans nom de fichier."""
+    from apps.core import audit
+    from apps.core.files import serve_isolated
+
+    if not module_is_enabled(request, Module.TRANSPORT):
+        raise Http404
+    obj = get_request(request, "transport", public_id)
+    if obj.requester_id != request.employee.pk:
+        audit.log(
+            "requests.proof_downloaded",
+            _("Justificatif de transport consulté"),
+            actor=request.employee,
+            target=obj,
+            request=request,
+        )
+    return serve_isolated(
+        obj.file,
+        content_type=obj.file_type,
+        filename=obj.original_name or "justificatif",
+        inline=request.GET.get("telecharger") != "1",
+    )
+
+
 # ---------- Exports RH (L3-08) ----------
+
+EXPORTABLE = {"telework", "on_call", "leave", "transport"}
 
 
 def _download(content, content_type, filename):
@@ -529,6 +568,8 @@ def _download(content, content_type, filename):
 def export_requests(request, kind):
     """« Exporter » des RH : récapitulatif du mois (télétravail, astreintes) ou synthèse de
     campagne (congés). Sans paramètre : la modale ; avec : le fichier (via HX-Redirect)."""
+    if kind not in EXPORTABLE:
+        raise Http404
     require(request, "requests.export")
     me = request.employee
     action_url = reverse("approvals:export", args=[kind])
@@ -556,6 +597,8 @@ def export_requests(request, kind):
         result = exports.telework_month(me, form.cleaned_data["mois"], fmt, request=request)
     elif kind == "on_call":
         result = exports.on_call_month(me, form.cleaned_data["mois"], fmt, request=request)
+    elif kind == "transport":
+        result = exports.transport_month(me, form.cleaned_data["mois"], fmt, request=request)
     else:
         result = exports.campaign_file(me, form.cleaned_data["campagne"], fmt, request=request)
     return _download(*result)
@@ -591,7 +634,13 @@ def campaign_summary(request, pk):
 
 # ---------- Compteurs du menu et fiche annuaire ----------
 
-NAV_KEYS = {"telework": "telework", "leave": "summer_leave", "on_call": "on_call"}
+NAV_KEYS = {
+    "telework": "telework",
+    "leave": "summer_leave",
+    "on_call": "on_call",
+    "transport": "transport",
+    "equipment": "equipment",
+}
 
 
 def menu_counts(request) -> dict:

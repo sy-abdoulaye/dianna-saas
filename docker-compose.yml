@@ -57,7 +57,7 @@ services:
     command:
       - sh
       - -c
-      - while true; do python manage.py purge_task_results; sleep 86400; done
+      - while true; do python manage.py purge_task_results; python manage.py enqueue_daily_tasks; sleep 86400; done
 
 volumes:
   pgdata:
