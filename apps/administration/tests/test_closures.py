@@ -164,3 +164,92 @@ def test_undo_of_a_cancellation_is_refused_on_a_new_closure(company_a, submit):
         with pytest.raises(workflow.WorkflowError) as error:
             workflow.undo(TeleworkRequest, cancelled.undo_payload("cancel"), company_a.employee)
     assert "fermée" in str(error.value.message)
+
+
+# ---------- Contrôles dans le service, sous verrou (A3-02) ----------
+
+
+def test_service_refuses_past_dates_and_duplicates(company_a):
+    from apps.administration import services
+
+    with tenant_context(company_a.company):
+        with pytest.raises(services.ClosureError) as past:
+            services.add_closure(
+                day=date(2020, 1, 6), label="Ancien", site=None, actor=company_a.admin
+            )
+        closure = company_a.requests["closure"]
+        with pytest.raises(services.ClosureError) as twice:
+            services.add_closure(
+                day=closure.date, label="Doublon", site=None, actor=company_a.admin
+            )
+    assert str(past.value.message) == "La date est passée."
+    assert str(twice.value.message) == "Une fermeture existe déjà ce jour-là pour ce périmètre."
+
+
+def test_integrity_error_becomes_a_message(company_a, monkeypatch):
+    """Si le doublon échappe au contrôle (course), la contrainte de base devient un message."""
+    from django.db.models import QuerySet
+
+    from apps.administration import services
+
+    closure = company_a.requests["closure"]
+    with tenant_context(company_a.company):
+        monkeypatch.setattr(QuerySet, "exists", lambda self: False)
+        with pytest.raises(services.ClosureError) as error:
+            services.add_closure(
+                day=closure.date, label="Doublon", site=None, actor=company_a.admin
+            )
+        monkeypatch.undo()
+        assert Closure.objects.filter(date=closure.date).count() == 1
+    assert str(error.value.message) == "Une fermeture existe déjà ce jour-là pour ce périmètre."
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_simultaneous_closures_for_the_same_day(company_a):
+    import threading
+
+    from django.db import connection
+
+    from apps.administration import services
+    from apps.core.models import Company
+    from apps.people.models import Employee
+
+    company = Company.objects.get(pk=company_a.company.pk)
+    admin = Employee.all_companies.get(pk=company_a.admin.pk)
+    day = future_weekday(40)
+    barrier = threading.Barrier(2)
+    outcomes = []
+
+    def add():
+        try:
+            with tenant_context(company):
+                barrier.wait()
+                services.add_closure(day=day, label="Pont", site=None, actor=admin)
+                outcomes.append("ok")
+        except services.ClosureError as error:
+            outcomes.append(str(error.message))
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=add) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["Une fermeture existe déjà ce jour-là pour ce périmètre.", "ok"]
+    assert Closure.all_companies.filter(company=company, date=day).count() == 1
+
+
+def test_hr_list_is_computed_with_the_closure(company_a):
+    """La liste envoyée aux RH est celle des demandes présentes au moment de l'ajout."""
+    from apps.administration import services
+
+    day = future_weekday()
+    with tenant_context(company_a.company):
+        TeleworkRequest.objects.create(
+            requester=company_a.employee, date=day, submitted_at=timezone.now()
+        )
+        _closure, concerned = services.add_closure(
+            day=day, label="Pont", site=None, actor=company_a.admin
+        )
+    assert [r.requester_id for r in concerned] == [company_a.employee.pk]

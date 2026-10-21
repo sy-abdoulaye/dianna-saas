@@ -341,13 +341,17 @@ def closure_add(request):
     if request.method == "POST":
         if not form.is_valid():
             return render(request, f"{template}#form", context, status=422)
-        closure, concerned = services.add_closure(
-            day=form.cleaned_data["date"],
-            label=form.cleaned_data["label"],
-            site=form.cleaned_data["site"],
-            actor=request.employee,
-            request=request,
-        )
+        try:
+            closure, concerned = services.add_closure(
+                day=form.cleaned_data["date"],
+                label=form.cleaned_data["label"],
+                site=form.cleaned_data["site"],
+                actor=request.employee,
+                request=request,
+            )
+        except services.ClosureError as error:
+            form.add_error(error.field, error.message)
+            return render(request, f"{template}#form", context, status=422)
         message = closure.label
         if concerned:
             message = _(

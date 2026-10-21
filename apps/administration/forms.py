@@ -125,7 +125,8 @@ class JournalFilterForm(forms.Form):
 
 
 class ClosureForm(forms.Form):
-    """Fermeture d'un jour : toute l'entreprise ou un site (T-16)."""
+    """Fermeture d'un jour : toute l'entreprise ou un site (T-16). Le formulaire ne vérifie que
+    ses champs ; le doublon est contrôlé par le service, sous verrou (A3-02)."""
 
     date = forms.DateField(
         label=_("Date"),
@@ -159,12 +160,3 @@ class ClosureForm(forms.Form):
 
     def clean_site(self):
         return self.sites.get(self.cleaned_data.get("site") or "")
-
-    def clean(self):
-        from apps.agenda.models import Closure
-
-        cleaned = super().clean()
-        day, site = cleaned.get("date"), cleaned.get("site")
-        if day and Closure.objects.filter(date=day, site=site).exists():
-            self.add_error("date", _("Une fermeture existe déjà ce jour-là pour ce périmètre."))
-        return cleaned

@@ -171,6 +171,15 @@ def export_journal_csv(*, q, start, end, actor, request=None) -> str:
 
 # ---------- Fermetures (T-16) ----------
 
+CLOSURE_PAST = gettext_lazy("La date est passée.")
+CLOSURE_DUPLICATE = gettext_lazy("Une fermeture existe déjà ce jour-là pour ce périmètre.")
+
+
+class ClosureError(AdministrationError):
+    def __init__(self, field, message):
+        super().__init__(message)
+        self.field = field
+
 
 def affected_telework(closure):
     """Demandes de télétravail en attente ou validées le jour d'une fermeture (L4-03)."""
@@ -192,16 +201,29 @@ def closure_scope(closure) -> str:
 
 @transaction.atomic
 def add_closure(*, day, label, site, actor, request=None):
-    """Ajoute une fermeture. Les demandes de télétravail déjà faites ce jour-là restent telles
-    quelles (L4-03) : les RH sont prévenus avec leur liste."""
+    """Ajoute une fermeture. Contrôles (date passée, doublon) faits ici, sous verrou de
+    l'entreprise : deux ajouts simultanés passent l'un après l'autre (A3-02). Les demandes de
+    télétravail déjà faites ce jour-là restent telles quelles (L4-03) ; leur liste, calculée
+    sous le même verrou, est envoyée aux RH."""
+    from django.db import IntegrityError
     from django.urls import reverse
     from django.utils.formats import date_format
 
     from apps.agenda.models import Closure
     from apps.core import notifications
+    from apps.core.tenancy import get_current_company
     from apps.people.models import IN_POST_STATUSES, Role
 
-    closure = Closure.objects.create(date=day, label=label, site=site)
+    Company.objects.select_for_update().get(pk=get_current_company().pk)
+    if day < timezone.localdate():
+        raise ClosureError("date", CLOSURE_PAST)
+    if Closure.objects.filter(date=day, site=site).exists():
+        raise ClosureError("date", CLOSURE_DUPLICATE)
+    try:
+        with transaction.atomic():
+            closure = Closure.objects.create(date=day, label=label, site=site)
+    except IntegrityError as exc:
+        raise ClosureError("date", CLOSURE_DUPLICATE) from exc
     when = date_format(day, "j F Y")
     audit.log(
         "company.closure_added",
