@@ -51,7 +51,7 @@ En développement, `DEMO_DISABLE_2FA=True` dispense les comptes RH et Admin de d
 Déploiement (même image Docker pour le serveur et le travailleur) :
 
 1. `python manage.py migrate`, puis `python manage.py createcachetable` (cache partagé de la limitation des tentatives).
-2. Serveur web : la commande par défaut de l'image (Gunicorn).
+2. Serveur web : la commande par défaut de l'image (Gunicorn, 3 processus, délai de 30 s par requête : `--timeout 30`, `--graceful-timeout 30` ; le plus gros export autorisé prend environ 2 s).
 3. Travailleur des tâches, dans un conteneur séparé : `python manage.py db_worker`. Sans lui, aucun e-mail ne part (invitations, mot de passe oublié, demandes).
 4. Purge des résultats de tâches, une fois par jour : `python manage.py purge_task_results` (échecs de plus de 7 jours ; les tâches réussies sont supprimées dès leur fin). Les lignes de tâches ne contiennent ni lien ni texte d'e-mail en clair (A3-04).
    Pour le développement et les essais seulement : `docker compose --profile taches up -d` démarre la base `db`, applique les migrations (service `migrate`), puis le travailleur (`worker`) et la purge quotidienne (`scheduler`). Ces services utilisent les réglages de développement (`config.settings.dev` et ses clés publiques) et la base `db` de `docker-compose.yml` ; le `.env` créé par `make install` suffit et n'a pas à être modifié. En développement, les e-mails s'affichent dans le journal du travailleur : `docker compose logs -f worker`. Le déploiement en production du travailleur et de la purge est prévu au lot 8.

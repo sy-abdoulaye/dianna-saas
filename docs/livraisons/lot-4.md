@@ -53,16 +53,27 @@ Date : 21 octobre 2026. Branche : `lot-4`.
 
 ## Performance
 
-200 personnes sur un mois, mesuré sur la machine de développement (budget 300 ms) :
+200 personnes sur un mois, mesuré sur la machine de développement après l'audit (budget 300 ms) :
 
 | Mesure | Temps | Requêtes |
 |---|---|---|
-| Vue mois (page de 50) | environ 150 ms | constantes |
-| Export CSV du mois | environ 50 ms | constantes |
-| Export Excel du mois | environ 200 ms | constantes |
-| Calcul de la grille sans pagination (200 lignes) | environ 30 ms | constantes |
+| Vue mois (page de 50) | 160 à 200 ms | constantes (29) |
+| Export CSV du mois | environ 70 ms | constantes (16) |
+| Export Excel du mois | 145 à 180 ms | constantes (16) |
+| Calcul de la grille sans pagination (200 lignes) | environ 40 ms | constantes |
 
-Le test (`apps/planning/tests/test_performance.py`) vérifie le budget de 300 ms et un nombre de requêtes identique pour 20 et 200 personnes. Il s'exécute dans un second passage de `make test`, sans mesure de couverture.
+La règle de confidentialité (L4-16) avait ralenti la vue mois (environ 210 ms) et l'Excel (environ 250 ms). Deux optimisations ont rendu de la marge : la case du planning est rendue en ligne, sans inclusion de gabarit par case, et chaque cellule Excel reçoit un seul style nommé au lieu de trois affectations.
+
+**PDF au maximum autorisé (L4-17) : 50 personnes sur un mois, 5 pages.**
+
+| Où | Temps | Mémoire |
+|---|---|---|
+| Image Docker (HarfBuzz-Subset présent) | environ 1,7 s | 148 Mo de mémoire résidente maximale pour le processus (92 Mo avant le rendu) |
+| Machine de développement (sous-ensemble de polices par fontTools) | 1,6 à 1,9 s | pic de 44 Mio d'allocations Python (tracemalloc) |
+
+Le test `test_largest_allowed_pdf_50_people_over_a_month` vérifie un budget de 5 s et 200 Mio. Gunicorn arrête une requête au-delà de 30 s.
+
+Les tests de performance s'exécutent dans un second passage de `make test`, sans mesure de couverture.
 
 ## Image Docker
 
@@ -87,12 +98,24 @@ L'intégration continue vérifie que WeasyPrint produit un PDF dans l'image et a
 
 La liste des dépendances transitives est dans `00-decisions.md`.
 
+## Corrections de l'audit du lot 4 (21 oct. 2026)
+
+- **Coût des exports (L4-17).**
+  - Le PDF est limité à une page du planning (50 personnes, la page affichée quand l'export part du planning) et à un mois. Au-delà : « Pour plus de personnes ou une période plus longue, utilisez l'export Excel. ».
+  - Chaque personne a droit à 10 exports par tranche de 10 minutes, tous exports confondus (`apps/core/ratelimit.py`).
+  - Gunicorn a un délai explicite : `--timeout 30` et `--graceful-timeout 30`.
+- **Confidentialité du planning (L4-16).** Un collègue voit « Absent » pour tout congé, « Télétravail » et l'astreinte, et seulement ce qui est validé. Le manager pour son équipe directe, les RH et l'administrateur voient le type exact et les demandes en attente ; chacun voit tout de lui-même. La règle s'applique à la vue, à l'aperçu, au CSV, à l'Excel, à l'iCalendar et au PDF.
+- **Dates extrêmes (L4-18).** Les dates vont de 2000 à 2100. Hors bornes, le planning revient à aujourd'hui et un export donne une erreur de formulaire, jamais une erreur 500.
+- **iCalendar.** Les événements sont coupés à la période demandée.
+- **Fermetures (A3-02).** La date passée et le doublon sont contrôlés dans `add_closure`, sous verrou de l'entreprise. Une `IntegrityError` devient un message. La liste envoyée aux RH est calculée sous le même verrou. Un test de concurrence à deux connexions le vérifie.
+- Tests : `apps/planning/tests/test_audit.py` et `apps/administration/tests/test_closures.py`.
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 524 tests (couverture 95 %), puis 4 tests de performance |
+| `make test` | 552 tests (couverture 96 %), puis 5 tests de performance |
 | `make e2e` | 38 parcours, dont le parcours 1 depuis le planning, l'export CSV et le tableau de bord |
 | `make check` | aucune alerte, dont `--deploy` |
 
@@ -114,5 +137,6 @@ Les dates des tests ne dépendent plus du jour d'exécution : `next_weekday` cho
   - L4-01 : repère « A » visible le week-end ;
   - L4-13 : colonnes de l'export, jours ouvrés seulement ;
   - L4-14 : récapitulatif du télétravail avec les personnes à 0 ;
-  - L4-15 : calcul des jours d'astreinte à cheval sur deux mois.
+  - L4-15 : calcul des jours d'astreinte à cheval sur deux mois ;
+  - L4-19 à L4-23 : choix faits pendant l'audit (lettre « Ab », demandes en attente des collègues, compteur d'exports, page du PDF, bloc « Aujourd'hui »).
 - L'abonnement iCalendar par URL reste au lot 8.

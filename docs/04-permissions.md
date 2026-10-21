@@ -58,6 +58,16 @@ Personne ne décide pour soi-même ni n'annule sa propre demande validée (`SELF
 | Exporter le planning (CSV, Excel, iCalendar, PDF) | Son service | Son service et son équipe directe | Oui, entreprise ou un service | Comme RH |
 | Voir les fermetures et jours fériés | Non | Non | Oui (lecture) | Oui |
 
+**Ce que montre une case (L4-16, minimisation).**
+
+| Qui regarde | Ses propres journées | Son équipe directe (manager) | Toute personne du périmètre (RH, administrateur) | Un collègue du périmètre |
+|---|---|---|---|---|
+| Congés | Type exact, en attente compris | Type exact, en attente compris | Type exact, en attente compris | « Absent », validés seulement |
+| Télétravail | En attente compris | En attente compris | En attente compris | Validé seulement |
+| Astreinte (repère « A ») | En attente compris | En attente compris | En attente compris | Validée seulement |
+
+La règle vaut pour la vue, l'aperçu de l'export et les fichiers CSV, Excel, iCalendar et PDF. Le bloc « Aujourd'hui » du tableau de bord ne montre que des nombres.
+
 Le filtre de service n'est proposé qu'aux RH et administrateurs ; pour les autres, un service passé dans l'URL ne fait que restreindre leur périmètre, et un périmètre d'export hors de leurs choix est refusé (400). Chaque export est inscrit au journal d'audit (L4-12).
 
 Exports RH des demandes (`requests.export`, L4-09) : récapitulatif mensuel du télétravail, export paie des astreintes, synthèse de campagne. Salarié et manager : non ; RH et administrateur : oui.
