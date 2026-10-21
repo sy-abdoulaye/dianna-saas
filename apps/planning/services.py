@@ -278,25 +278,34 @@ def _cell(person, day, kinds, offs, can_declare, today, full=True):
     return cell
 
 
-def present_today(people, today) -> int:
-    """Personnes du périmètre filtré sur site aujourd'hui (pied du planning, tableau de bord)."""
-    return count_today(people, today)[SITE]
+def present_today(people, today, viewer=None) -> int:
+    """Personnes du périmètre filtré sur site aujourd'hui (pied du planning)."""
+    return count_today(people, today, viewer)[SITE]
 
 
-def count_today(people, today) -> dict:
-    """Répartition du jour : sur site, télétravail, congés, astreinte (3 requêtes)."""
-    people = list(people.values_list("pk", "site_id", "arrival_date"))
+def count_today(people, today, viewer=None) -> dict:
+    """Répartition du jour : sur site, télétravail, congés, astreinte (3 requêtes).
+
+    Même règle que les cases (L4-16, L4-20, `sees_details`) : pour une personne dont le
+    regardeur ne voit pas le détail, seules les demandes validées comptent."""
+    people = list(people.values_list("pk", "site_id", "arrival_date", "manager_id"))
     counts = {SITE: 0, TELEWORK: 0, LEAVE: 0, "on_call": 0}
     if not people:
         return counts
     kinds = {}
-    for employee_id, kind in CalendarEvent.objects.filter(
+    for employee_id, kind, status in CalendarEvent.objects.filter(
         employee_id__in=[p[0] for p in people], start__lte=today, end__gte=today
-    ).values_list("employee_id", "kind"):
-        kinds.setdefault(employee_id, set()).add(kind)
+    ).values_list("employee_id", "kind", "status"):
+        kinds.setdefault(employee_id, {})[kind] = status
     offs = DayOffs(today, today)
-    for pk, site_id, arrival in people:
-        mine = kinds.get(pk, set())
+    for pk, site_id, arrival, manager_id in people:
+        person = Employee(pk=pk, manager_id=manager_id)
+        full = sees_details(viewer, person)
+        mine = {
+            kind
+            for kind, status in kinds.get(pk, {}).items()
+            if full or status == CalendarEvent.Status.APPROVED
+        }
         if CalendarEvent.Kind.ON_CALL in mine:
             counts["on_call"] += 1
         if (arrival and today < arrival) or today.weekday() >= 5 or offs.get(today, site_id):
@@ -324,7 +333,7 @@ def grid(viewer, *, view, anchor, page=1, q="", service=None, site=None, can_dec
         shown, first, last, viewer=viewer, can_declare=can_declare, today=today
     )
     result.total = page_obj.paginator.count + (1 if me is not None else 0)
-    result.present_today = present_today(people, today)
+    result.present_today = present_today(people, today, viewer)
     return result
 
 

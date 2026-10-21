@@ -33,7 +33,7 @@ def _today_mix(request, me, today):
     if not module_is_enabled(request, Module.PLANNING):
         return None
     people = planning.people_in_scope(me)
-    counts = planning.count_today(people, today)
+    counts = planning.count_today(people, today, me)
     company_wide = permissions.scope(me, "planning.view") == permissions.ALL
     return {
         "counts": counts,

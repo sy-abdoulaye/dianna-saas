@@ -316,3 +316,79 @@ def test_ics_events_are_cut_to_the_requested_period(client_for, company_a, nina)
     assert f"DTSTART;VALUE=DATE:{first:%Y%m%d}" in content
     assert f"DTEND;VALUE=DATE:{last + timedelta(days=1):%Y%m%d}" in content
     assert f"{monday:%Y%m%d}" not in content
+
+
+# ---------- Compteurs du jour : même règle que les cases (L4-16, L4-20, L4-23) ----------
+
+
+def _kpis(content):
+    import re
+
+    pattern = r'<span class="kpi-label">([^<]+)</span>\s*<b class="kpi-value">([^<]+)</b>'
+    return {unescape(k): unescape(v) for k, v in re.findall(pattern, content)}
+
+
+def _footer(content):
+    import re
+
+    return re.search(r"(\d+) sur site aujourd", unescape(content)).group(1)
+
+
+def test_pending_leave_of_a_colleague_changes_neither_cells_nor_counters(
+    client_for, company_a, monkeypatch
+):
+    day = next_weekday(weekday=2)
+    monkeypatch.setattr(timezone, "localdate", lambda *args, **kwargs: day)
+    with tenant_context(company_a.company):
+        bruno = EmployeeFactory(
+            company=company_a.company, service=company_a.service, first_name="Bruno"
+        )
+        nina = EmployeeFactory(
+            company=company_a.company,
+            service=company_a.service,
+            site=company_a.site,
+            manager=bruno,
+            first_name="Nina",
+            last_name="Petit",
+        )
+    viewers = {"employee": company_a.employee, "manager": company_a.manager, "bruno": bruno}
+
+    def snapshot():
+        result = {}
+        for name, person in viewers.items():
+            client = client_for(person)
+            planning = client.get(f"/planning/?date={day.isoformat()}").content.decode()
+            result[name] = (_footer(planning), _kpis(client.get("/").content.decode()))
+        return result
+
+    before = snapshot()
+    with tenant_context(company_a.company):
+        from apps.approvals import workflow
+
+        leave = LeaveRequest.objects.create(
+            requester=nina,
+            leave_type=LeaveRequest.LeaveType.OTHER,
+            start=day,
+            end=day,
+            submitted_at=timezone.now(),
+        )  # en attente
+        workflow.sync_calendar(leave)
+    after = snapshot()
+    # Salarié et manager qui n'est pas le sien : rien ne change.
+    for name in ("employee", "manager"):
+        assert after[name] == before[name], name
+    with tenant_context(company_a.company):
+        from apps.planning import services
+
+        employee = services.Employee.objects.get(pk=company_a.employee.pk)
+        cell = services.build_rows([nina], day, day, viewer=employee)[0].cells[0]
+    assert cell.state == "site" and not cell.pending
+    # Son manager compte la demande en attente : un de moins sur site.
+    assert int(after["bruno"][0]) == int(before["bruno"][0]) - 1
+    with tenant_context(company_a.company):
+        counts = services.count_today(
+            services.people_in_scope(company_a.hr),
+            day,
+            services.Employee.objects.get(pk=company_a.hr.pk),
+        )
+    assert counts["cp"] == 1  # RH : demande en attente comptée
