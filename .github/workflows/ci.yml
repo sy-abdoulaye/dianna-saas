@@ -50,7 +50,20 @@ jobs:
       - run: uv sync --frozen
       # Exports PDF (WeasyPrint) : bibliothèques natives.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
+      # Stockage S3 des justificatifs (L5-02) : MinIO, chiffrement côté serveur activé.
+      # Les images officielles de MinIO ne sont plus publiées : image Bitnami figée.
+      - name: MinIO
+        run: |
+          docker run -d --name minio -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER=dianna -e MINIO_ROOT_PASSWORD=dianna-secret \
+            -e MINIO_KMS_SECRET_KEY="dianna-key:$(openssl rand -base64 32)" \
+            -e MINIO_DEFAULT_BUCKETS=dianna-ci bitnamilegacy/minio:2025.7.23
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 2; done
       - run: make test
+        env:
+          S3_TEST_ENDPOINT: http://127.0.0.1:9000
+          S3_TEST_ACCESS_KEY: dianna
+          S3_TEST_SECRET_KEY: dianna-secret
       - run: uv run playwright install --with-deps chromium
       - run: make e2e
       - uses: actions/upload-artifact@v4

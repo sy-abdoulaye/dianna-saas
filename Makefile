@@ -82,7 +82,7 @@ format: ## Formate le code Python et les templates
 
 check: ## Vérifications Django (dont la configuration de production)
 	$(MANAGE) check
-	DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") MFA_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") TASKS_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") ALLOWED_HOSTS=example.com $(MANAGE) check --deploy --fail-level WARNING
+	DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") MFA_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") TASKS_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") ALLOWED_HOSTS=example.com S3_BUCKET=verification S3_ENDPOINT_URL=https://s3.fr-par.scw.cloud S3_ACCESS_KEY=verification S3_SECRET_KEY=verification $(MANAGE) check --deploy --fail-level WARNING
 
 seed: ## Charge l'entreprise de démonstration « Exemple SAS » (disponible au lot 1)
 	@if $(MANAGE) help seed_demo >/dev/null 2>&1; then $(MANAGE) seed_demo; \

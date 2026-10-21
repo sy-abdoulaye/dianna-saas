@@ -171,6 +171,15 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # URL signée après contrôle d'accès (apps.core.files). Stockage objet S3 en production (T-12).
 PRIVATE_MEDIA_ROOT = env.path("PRIVATE_MEDIA_ROOT", default=BASE_DIR / "private_media")
 PRIVATE_FILE_URL_SECONDS = 5 * 60
+# Stockage des fichiers privés (T-12, L5-02) : « filesystem » (développement, tests) ou « s3 »
+# (Scaleway Object Storage fr-par en production, MinIO dans l'intégration continue).
+PRIVATE_STORAGE_BACKEND = env("PRIVATE_STORAGE_BACKEND", default="filesystem")
+S3_BUCKET = env("S3_BUCKET", default="")
+S3_ENDPOINT_URL = env("S3_ENDPOINT_URL", default="")
+S3_REGION = env("S3_REGION", default="fr-par")
+S3_ACCESS_KEY = env("S3_ACCESS_KEY", default="")
+S3_SECRET_KEY = env("S3_SECRET_KEY", default="")
+S3_SERVER_SIDE_ENCRYPTION = env("S3_SERVER_SIDE_ENCRYPTION", default="")
 DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024
 

@@ -24,6 +24,10 @@ SITE_SCHEME = "https"
 # Obligatoire en production (pas de valeur par défaut) : voir .env.example.
 MFA_ENCRYPTION_KEY = env("MFA_ENCRYPTION_KEY")
 TASKS_ENCRYPTION_KEY = env("TASKS_ENCRYPTION_KEY")
+# Fichiers privés sur S3 (Scaleway Object Storage fr-par, L5-02) ; vérifié par
+# `manage.py check --deploy` (dianna.E009).
+PRIVATE_STORAGE_BACKEND = env("PRIVATE_STORAGE_BACKEND", default="s3")
+S3_SERVER_SIDE_ENCRYPTION = env("S3_SERVER_SIDE_ENCRYPTION", default="AES256")
 
 # Cookies préfixés __Host- : sans Domain, Path=/ et Secure (point 5g de l'audit du lot 1).
 SESSION_COOKIE_NAME = "__Host-sessionid"

@@ -68,7 +68,13 @@ def private_file(request, token):
     if company is None or data.get("c") != str(company.pk):
         raise Http404
     name = data["n"]
-    if not name.startswith(f"{company.pk}/") or ".." in name or not private_storage.exists(name):
+    if not name.startswith(f"{company.pk}/") or ".." in name:
+        raise Http404
+    # Justificatifs : jamais par lien signé (L5-01), seulement par la vue qui vérifie la
+    # permission à chaque téléchargement.
+    if not name.startswith((f"{company.pk}/photos/", f"{company.pk}/logo/")):
+        raise Http404
+    if not private_storage.exists(name):
         raise Http404
     content_type = "image/png" if name.endswith(".png") else "image/jpeg"
     response = FileResponse(private_storage.open(name, "rb"), content_type=content_type)

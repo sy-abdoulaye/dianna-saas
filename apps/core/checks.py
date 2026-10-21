@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.checks import Error, register
+from django.core.checks import Error, Tags, Warning, register
 
 
 @register()
@@ -54,4 +54,34 @@ def encryption_keys(app_configs, **kwargs):
                 errors.append(
                     Error(f"{setting} n'est pas une clé Fernet valide.", hint=hint, id=invalid_id)
                 )
+    return errors
+
+
+@register(Tags.security, deploy=True)
+def private_storage(app_configs, **kwargs):
+    """Fichiers privés en production : S3 configuré, chiffrement côté serveur (L5-02)."""
+    if settings.PRIVATE_STORAGE_BACKEND != "s3":
+        return [
+            Warning(
+                "Les fichiers privés sont stockés sur disque.",
+                hint="PRIVATE_STORAGE_BACKEND=s3 en production (voir .env.example).",
+                id="dianna.W009",
+            )
+        ]
+    missing = [
+        name
+        for name in ("S3_BUCKET", "S3_ENDPOINT_URL", "S3_ACCESS_KEY", "S3_SECRET_KEY")
+        if not getattr(settings, name, "")
+    ]
+    errors = [
+        Error(f"{name} est obligatoire avec PRIVATE_STORAGE_BACKEND=s3.", id="dianna.E009")
+        for name in missing
+    ]
+    if not settings.S3_SERVER_SIDE_ENCRYPTION:
+        errors.append(
+            Warning(
+                "Chiffrement côté serveur désactivé (S3_SERVER_SIDE_ENCRYPTION).",
+                id="dianna.W010",
+            )
+        )
     return errors
