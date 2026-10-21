@@ -66,7 +66,7 @@ Personne ne décide pour soi-même ni n'annule sa propre demande validée (`SELF
 | Télétravail | En attente compris | En attente compris | En attente compris | Validé seulement |
 | Astreinte (repère « A ») | En attente compris | En attente compris | En attente compris | Validée seulement |
 
-La règle vaut pour la vue, l'aperçu de l'export et les fichiers CSV, Excel, iCalendar et PDF. Le bloc « Aujourd'hui » du tableau de bord ne montre que des nombres.
+La règle vaut pour la vue, l'aperçu de l'export et les fichiers CSV, Excel, iCalendar et PDF, ainsi que pour les compteurs du jour (pied du planning « sur site aujourd'hui », bloc « Aujourd'hui » du tableau de bord), qui ne montrent que des nombres : pour un collègue, seules les absences validées comptent ; pour son équipe directe (manager), et pour les RH et l'administrateur, les demandes en attente comptent aussi (L4-23). Une seule fonction applique la règle partout : `apps/planning/services.sees_details`.
 
 Le filtre de service n'est proposé qu'aux RH et administrateurs ; pour les autres, un service passé dans l'URL ne fait que restreindre leur périmètre, et un périmètre d'export hors de leurs choix est refusé (400). Chaque export est inscrit au journal d'audit (L4-12).
 

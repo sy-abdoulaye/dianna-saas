@@ -11,7 +11,7 @@ Route : `/planning/`. Actions : « Exporter », « Déclarer du télétravail »
 - **Confidentialité (L4-16) :** chacun voit tout ce qui le concerne ; le manager pour son équipe directe, les RH et l'administrateur voient le type exact d'absence (« Congés d'été », « Autre absence ») et les demandes en attente ; un collègue du périmètre ne voit que les demandes validées, « Absent » pour tout congé (lettre « Ab » en vue mois), « Télétravail » et l'astreinte. Même règle pour l'aperçu et les quatre formats d'export (voir `04-permissions.md`).
 - **Dates (L4-18) :** de 2000 à 2100 ; une date hors bornes dans l'URL ramène à aujourd'hui.
 - **Interaction :** cliquer sur une de ses propres journées « Sur site » à venir ouvre la modale de télétravail pré-remplie.
-- **Pied :** nombre de personnes, nombre sur site aujourd'hui ; lien « Fermetures et jours fériés » pour les RH et administrateurs.
+- **Pied :** nombre de personnes, nombre sur site aujourd'hui, calculé avec la règle de confidentialité (L4-23 : un congé ou un télétravail en attente d'un collègue ne compte pas, sauf pour son manager direct, les RH et l'administrateur) ; lien « Fermetures et jours fériés » pour les RH et administrateurs.
 - **Grand effectif (L4-07) :** 50 personnes par page dans les deux vues, filtres conservés, la personne connectée en tête de chaque page.
 - **Périmètre :** salarié : son service ; manager (personne qui a des collaborateurs directs) : son service plus les membres de son équipe rattachés à d'autres services (L1-06) ; RH et Admin : toute l'entreprise.
 - **Performance :** une requête pour les événements de la période (pas de requête par case) ; 200 personnes × 31 jours en moins de 300 ms côté serveur.

@@ -36,6 +36,8 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export. Excel : toujours par `apps/core/xlsx_export.py` (même neutralisation, cellules texte enregistrées comme texte). PDF : toujours par `apps/core/pdf.py` (récupérateur d'URL fermé : jamais de `weasyprint.HTML` direct). Chaque export vérifie le périmètre côté serveur et s'inscrit au journal d'audit sans nom de personne.
 - Contrôles métier (A3-02) : les vérifications qui dépendent d'autres données (quota, doublon, chevauchement, période) et les verrous (`select_for_update`) sont dans le service, jamais dans la vue ni dans le formulaire ; le formulaire ne vérifie que ses champs, la vue appelle le service et affiche ses erreurs. Une `IntegrityError` devient un message, jamais une erreur 500. Seule exception : `seed_demo` crée sans `check_request` les demandes de démonstration déjà passées (dates antérieures au jour du chargement).
 - E-mails (A3-04) : toujours par `apps/core/mail.py`, donc par une tâche ; aucune donnée sensible en clair dans les arguments d'une tâche (identifiants seulement, ou contenu chiffré avec `TASKS_ENCRYPTION_KEY`).
+- Planning et compteurs : règle de confidentialité L4-16 appliquée par une seule fonction, partout (vue, aperçu, exports, compteurs, tableau de bord).
+- Toute limite de fréquence passe par apps/core/ratelimit.py, jamais par le cache.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes

@@ -64,14 +64,15 @@ Date : 21 octobre 2026. Branche : `lot-4`.
 
 La règle de confidentialité (L4-16) avait ralenti la vue mois (environ 210 ms) et l'Excel (environ 250 ms). Deux optimisations ont rendu de la marge : la case du planning est rendue en ligne, sans inclusion de gabarit par case, et chaque cellule Excel reçoit un seul style nommé au lieu de trois affectations.
 
-**PDF au maximum autorisé (L4-17) : 50 personnes sur un mois, 5 pages.**
+**PDF au maximum autorisé (L4-17) : 50 personnes sur un mois, 5 pages, 137 Kio.**
 
-| Où | Temps | Mémoire |
-|---|---|---|
-| Image Docker (HarfBuzz-Subset présent) | environ 1,7 s | 148 Mo de mémoire résidente maximale pour le processus (92 Mo avant le rendu) |
-| Machine de développement (sous-ensemble de polices par fontTools) | 1,6 à 1,9 s | pic de 44 Mio d'allocations Python (tracemalloc) |
+| Mesure | Résultat |
+|---|---|
+| Temps de la requête complète, machine de développement | 1,6 à 1,9 s |
+| Temps du rendu, image Docker (HarfBuzz-Subset présent) | environ 1,7 s |
+| Mémoire résidente réelle d'un processus qui ne fait que ce rendu (module resource, `ru_maxrss`, bibliothèques natives comprises) | 92 Mio avant le rendu, 146 Mio au maximum : +54 Mio (machine de développement ; 92 et 148 Mo dans l'image Docker) |
 
-Le test `test_largest_allowed_pdf_50_people_over_a_month` vérifie un budget de 5 s et 200 Mio. Gunicorn arrête une requête au-delà de 30 s.
+Ce qui est mesuré : le pic de mémoire résidente du processus, et non plus seulement les allocations Python (tracemalloc, environ 44 Mio). Le processus de mesure est séparé et lancé par un shell intermédiaire. En effet, le pic du processus de test est déjà atteint par la création de la base, et `ru_maxrss` survit au fork et à l'exec sous Linux. Tests : `apps/planning/tests/test_pdf_memory.py`, budgets de 5 s et de +200 Mio.
 
 Les tests de performance s'exécutent dans un second passage de `make test`, sans mesure de couverture.
 
@@ -110,12 +111,21 @@ La liste des dépendances transitives est dans `00-decisions.md`.
 - **Fermetures (A3-02).** La date passée et le doublon sont contrôlés dans `add_closure`, sous verrou de l'entreprise. Une `IntegrityError` devient un message. La liste envoyée aux RH est calculée sous le même verrou. Un test de concurrence à deux connexions le vérifie.
 - Tests : `apps/planning/tests/test_audit.py` et `apps/administration/tests/test_closures.py`.
 
+## Derniers points de la vérification (21 oct. 2026)
+
+- **Compteurs du jour (L4-23).** Le pied « sur site aujourd'hui » et le bloc « Aujourd'hui » du tableau de bord appliquent la règle des cases, avec la même fonction `sees_details`. Un congé en attente d'un collègue ne change ni sa case ni les compteurs vus par un salarié ou par un manager qui n'est pas le sien.
+- **Limite de fréquence en base (L1-16).**
+  - `RateLimitCounter` est incrémenté en une seule requête PostgreSQL atomique. Il sert aux exports et à la vitrine. Les clés sont des empreintes HMAC, et les fenêtres expirées sont supprimées par `purge_task_results`.
+  - Tests : 30 exports simultanés depuis des connexions réelles donnent 10 acceptés et 20 refusés ; 400 autres clés n'effacent pas un compteur.
+- **Mémoire du PDF.** C'est maintenant la mémoire résidente réelle (module resource), voir « Performance ».
+- **CLAUDE.md.** Deux règles ajoutées : une seule fonction de confidentialité, et toute limite de fréquence passe par `apps/core/ratelimit.py`.
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 552 tests (couverture 96 %), puis 5 tests de performance |
+| `make test` | 558 tests (couverture 96 %), puis 6 tests de performance |
 | `make e2e` | 38 parcours, dont le parcours 1 depuis le planning, l'export CSV et le tableau de bord |
 | `make check` | aucune alerte, dont `--deploy` |
 
