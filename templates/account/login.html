@@ -3,7 +3,7 @@
 {% block title %}{% translate "Connexion" %} · Dianna{% endblock %}
 {% block content %}
   <div class="flex flex-col gap-2">
-    {% if request.company.logo %}<img class="company-logo self-start" src="{{ request.company.logo|private_url }}" alt="{{ request.company.name }}">{% endif %}
+    {% if request.company.logo %}<img class="company-logo self-start" src="{{ request.company.logo|private_url }}" alt="{{ request.company.name }}" data-fallback>{% endif %}
     <h1 class="h1">{% translate "Connexion" %}</h1>
     {% if request.company %}<p class="meta">{% blocktranslate with company=request.company.name %}Espace {{ company }}{% endblocktranslate %}</p>{% endif %}
   </div>

@@ -1,0 +1,10 @@
+{% extends "layouts/app.html" %}
+{% load i18n %}
+{% block title %}{% translate "Stockage indisponible" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Stockage indisponible" as title %}
+    {% translate "Retour au tableau de bord" as action %}
+    {% include "components/empty_state.html" with heading="h1" icon="alert" title=title text=message action_label=action action_url="/" %}
+  </div>
+{% endblock %}

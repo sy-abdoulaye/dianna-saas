@@ -296,8 +296,22 @@ function showServerError(elt) {
 }
 
 document.body.addEventListener("htmx:responseError", (event) => {
-  if (event.detail.xhr.status >= 500) showServerError(event.detail.elt);
+  // Une réponse d'erreur qui porte sa propre notification (HX-Trigger, ex. stockage
+  // indisponible, 503) n'affiche pas en plus le message générique.
+  const xhr = event.detail.xhr;
+  if (xhr.status >= 500 && !xhr.getResponseHeader("HX-Trigger")) showServerError(event.detail.elt);
 });
+
+// Image privée qui ne se charge pas (stockage indisponible, L5-17) : l'avatar garde ses
+// initiales, le logo est masqué ; la page reste utilisable.
+document.addEventListener(
+  "error",
+  (event) => {
+    const img = event.target;
+    if (img instanceof HTMLImageElement && img.hasAttribute("data-fallback")) img.remove();
+  },
+  true,
+);
 document.body.addEventListener("htmx:sendError", (event) => showServerError(event.detail.elt));
 
 document.body.addEventListener("htmx:afterRequest", (event) => {

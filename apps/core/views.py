@@ -56,9 +56,9 @@ def private_file(request, token):
     l'entreprise propriétaire du fichier. La signature prouve que la vue qui l'a générée a
     vérifié la permission ; la page de connexion l'utilise pour le logo."""
     from django.core import signing
-    from django.http import FileResponse, Http404
+    from django.http import Http404, HttpResponse
 
-    from apps.core.files import private_storage, read_token
+    from apps.core.files import StorageUnavailableError, read_private, read_token
 
     try:
         data = read_token(token)
@@ -74,10 +74,14 @@ def private_file(request, token):
     # permission à chaque téléchargement.
     if not name.startswith((f"{company.pk}/photos/", f"{company.pk}/logo/")):
         raise Http404
-    if not private_storage.exists(name):
-        raise Http404
+    # Pas d'exists() : un seul appel au stockage. Fichier absent ou stockage indisponible :
+    # 404 rapide ; la page affiche les initiales ou masque le logo (L5-17).
+    try:
+        data = read_private(name)
+    except StorageUnavailableError as exc:
+        raise Http404 from exc
     content_type = "image/png" if name.endswith(".png") else "image/jpeg"
-    response = FileResponse(private_storage.open(name, "rb"), content_type=content_type)
+    response = HttpResponse(data, content_type=content_type)
     response["Cache-Control"] = "private, max-age=300"
     response["Content-Disposition"] = "inline"
     return response

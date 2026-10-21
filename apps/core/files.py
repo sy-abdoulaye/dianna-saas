@@ -21,8 +21,10 @@ d'environnement.
 """
 
 import io
+import re
 import uuid
 import warnings
+from contextlib import contextmanager
 
 from django.conf import settings
 from django.core import signing
@@ -35,6 +37,38 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 SALT = "dianna.private-file"
+
+# Appels au stockage S3 (L5-17) : délais et essais explicites, pour qu'un stockage qui ne
+# répond pas ne bloque jamais un processus Gunicorn (délai de 30 s par requête).
+S3_CONNECT_TIMEOUT = 3  # secondes
+S3_READ_TIMEOUT = 10  # secondes
+S3_MAX_ATTEMPTS = 2  # essais au total, mode « standard » de botocore
+STORAGE_UNAVAILABLE = gettext_lazy(
+    "Le stockage des fichiers est momentanément indisponible. Réessayez dans quelques minutes."
+)
+
+
+class StorageUnavailableError(Exception):
+    """Le stockage n'a pas répondu ou a renvoyé une erreur : rien n'est enregistré en base."""
+
+
+def storage_errors() -> tuple:
+    """Exceptions d'un stockage qui ne répond pas : disque (OSError) ou S3 (botocore)."""
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    return (OSError, BotoCoreError, ClientError)
+
+
+def s3_client_config():
+    from botocore.config import Config
+
+    return Config(
+        connect_timeout=S3_CONNECT_TIMEOUT,
+        read_timeout=S3_READ_TIMEOUT,
+        # « total_max_attempts » compte le premier essai (« max_attempts » ne compte que les
+        # nouvelles tentatives) : 2 essais au plus en tout.
+        retries={"total_max_attempts": S3_MAX_ATTEMPTS, "mode": "standard"},
+    )
 
 
 class PrivateStorage(LazyObject):
@@ -52,6 +86,7 @@ class PrivateStorage(LazyObject):
                 "querystring_auth": True,  # jamais d'URL publique ; et aucune URL n'est donnée
                 "file_overwrite": False,
                 "object_parameters": {},
+                "client_config": s3_client_config(),
             }
             if settings.S3_SERVER_SIDE_ENCRYPTION:
                 options["object_parameters"]["ServerSideEncryption"] = (
@@ -164,8 +199,18 @@ def _check_pdf(data: bytes) -> None:
     valides sont acceptés : la protection repose sur le service isolé du fichier."""
     if not data.startswith(b"%PDF-") or b"%%EOF" not in data[-2048:]:
         raise ValidationError(NOT_A_DOCUMENT)
-    if b"/Encrypt" in data:
+    if any(pdf_name(token) == b"/Encrypt" for token in PDF_NAME.findall(data)):
         raise ValidationError(ENCRYPTED_PDF)
+
+
+# Nom PDF : « / » suivi de caractères réguliers ; « #xx » y code un octet en hexadécimal
+# (ISO 32000, 7.3.5) : /Encr#79pt vaut /Encrypt.
+PDF_NAME = re.compile(rb"/(?:[^\x00\t\n\x0c\r ()<>\[\]{}/%#]|#[0-9A-Fa-f]{2})*")
+PDF_NAME_ESCAPE = re.compile(rb"#([0-9A-Fa-f]{2})")
+
+
+def pdf_name(token: bytes) -> bytes:
+    return PDF_NAME_ESCAPE.sub(lambda m: bytes([int(m.group(1), 16)]), token)
 
 
 def clean_document(uploaded, *, max_bytes: int = DOCUMENT_MAX_BYTES) -> tuple[ContentFile, str]:
@@ -188,14 +233,100 @@ def clean_document(uploaded, *, max_bytes: int = DOCUMENT_MAX_BYTES) -> tuple[Co
     return image, extension
 
 
+def read_private(name: str) -> bytes:
+    """Lit un fichier privé entier (5 Mo au plus) ; une panne du stockage devient
+    StorageUnavailableError avant tout envoi de réponse (pas de réponse coupée en cours)."""
+    try:
+        with private_storage.open(name, "rb") as handle:
+            return handle.read()
+    except storage_errors() as exc:
+        raise StorageUnavailableError(name) from exc
+
+
+def write_private(name: str, content) -> str:
+    """Écrit un fichier privé et renvoie le nom réellement enregistré."""
+    try:
+        return private_storage.save(name, content)
+    except storage_errors() as exc:
+        raise StorageUnavailableError(name) from exc
+
+
+def delete_private(name: str) -> None:
+    """Suppression best-effort (nettoyage) : une panne du stockage ne masque pas l'erreur
+    d'origine ; le fichier orphelin éventuel relève de la purge (lot 8)."""
+    if not name:
+        return
+    try:
+        private_storage.delete(name)
+    except storage_errors():
+        pass
+
+
+class FileWrites:
+    """Écritures de fichiers d'une opération (L5-18) : chaque nom est inscrit dans la liste de
+    nettoyage avant l'écriture ; si l'opération échoue (INSERT refusé, erreur ensuite), tous
+    les fichiers écrits sont supprimés. Les anciens fichiers remplacés ne sont supprimés
+    qu'après la validation de la transaction.
+
+        with file_writes() as files, transaction.atomic():
+            files.save(employee.photo, photo)
+            employee.save()
+    """
+
+    def __init__(self):
+        self.names = []
+
+    def save(self, field_file, content) -> str:
+        field = field_file.field
+        target = field.generate_filename(field_file.instance, content.name)
+        self.names.append(target)
+        stored = write_private(target, content)
+        if stored != target:
+            self.names.append(stored)
+        setattr(field_file.instance, field.attname, stored)
+        return stored
+
+    def discard(self):
+        for name in self.names:
+            delete_private(name)
+
+
+@contextmanager
+def file_writes():
+    writes = FileWrites()
+    try:
+        yield writes
+    except BaseException:
+        writes.discard()
+        raise
+
+
+def delete_after_commit(name: str) -> None:
+    """Ancien fichier remplacé ou retiré : supprimé seulement si la transaction aboutit."""
+    from django.db import transaction
+
+    if name:
+        transaction.on_commit(lambda: delete_private(name))
+
+
+def storage_unavailable_response(request):
+    """Page 503 « Le stockage des fichiers est momentanément indisponible »."""
+    from django.shortcuts import render
+
+    return render(
+        request, "pages/storage_unavailable.html", {"message": STORAGE_UNAVAILABLE}, status=503
+    )
+
+
 def serve_isolated(field_file, *, content_type: str, filename: str, inline: bool):
     """Réponse de téléchargement isolée : type exact, `nosniff`, politique `sandbox` (aucun
-    script, aucune page), pas de cache partagé ; nom d'origine échappé (RFC 6266)."""
-    from django.http import FileResponse
+    script, aucune page), pas de cache partagé ; nom d'origine échappé (RFC 6266). Le fichier
+    est lu entièrement d'abord : lève StorageUnavailableError si le stockage ne répond pas."""
+    from django.http import HttpResponse
     from django.utils.http import content_disposition_header
 
-    field_file.open("rb")
-    response = FileResponse(field_file, content_type=content_type)
+    data = read_private(field_file.name)
+    response = HttpResponse(data, content_type=content_type)
     response["Content-Disposition"] = content_disposition_header(not inline, filename)
     response["X-Content-Type-Options"] = "nosniff"
     response["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'"

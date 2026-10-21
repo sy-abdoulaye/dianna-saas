@@ -1,8 +1,10 @@
 {% load ui %}
 {% comment %}
   Avatar : photo si disponible, sinon initiales. size : "" (32 px), "m" (40 px), "l" (72 px).
+  Les initiales sont toujours présentes sous la photo : si le stockage ne répond pas, ui.js
+  retire l'image (data-fallback) et les initiales restent visibles (L5-17).
   Décoratif : le nom de la personne est toujours écrit à côté.
 {% endcomment %}
 <span class="avatar{% if size %} avatar-{{ size }}{% endif %}" aria-hidden="true">
-  {% if photo_url %}<img src="{{ photo_url }}" alt="">{% else %}{{ person|initials }}{% endif %}
+  {{ person|initials }}{% if photo_url %}<img src="{{ photo_url }}" alt="" data-fallback>{% endif %}
 </span>

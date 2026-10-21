@@ -31,6 +31,11 @@ from apps.approvals.models import (
 )
 from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
+from apps.core.files import (
+    STORAGE_UNAVAILABLE,
+    StorageUnavailableError,
+    storage_unavailable_response,
+)
 from apps.core.htmx import Toast, is_htmx, toast_response, trigger
 from apps.core.models import Module
 from apps.core.ratelimit import (
@@ -218,6 +223,9 @@ def new_request(request, kind):
     if form.is_valid():
         try:
             result = workflow.submit(meta.model, me, form.model_data(), http_request=request)
+        except StorageUnavailableError:
+            # Stockage indisponible : rien n'est enregistré, la modale reste ouverte (L5-17).
+            return toast_response(Toast(title=str(STORAGE_UNAVAILABLE), kind="err"), status=503)
         except workflow.RequestValidationError as error:
             for name, message in error.errors.items():
                 form.add_error(name if name in form.fields else None, message)
@@ -536,6 +544,15 @@ def proof_file(request, public_id):
     if not module_is_enabled(request, Module.TRANSPORT):
         raise Http404
     obj = get_request(request, "transport", public_id)
+    try:
+        response = serve_isolated(
+            obj.file,
+            content_type=obj.file_type,
+            filename=obj.original_name or "justificatif",
+            inline=request.GET.get("telecharger") != "1",
+        )
+    except StorageUnavailableError:
+        return storage_unavailable_response(request)
     if obj.requester_id != request.employee.pk:
         audit.log(
             "requests.proof_downloaded",
@@ -544,12 +561,7 @@ def proof_file(request, public_id):
             target=obj,
             request=request,
         )
-    return serve_isolated(
-        obj.file,
-        content_type=obj.file_type,
-        filename=obj.original_name or "justificatif",
-        inline=request.GET.get("telecharger") != "1",
-    )
+    return response
 
 
 # ---------- Exports RH (L3-08) ----------
