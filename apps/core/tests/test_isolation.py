@@ -38,7 +38,12 @@ from tests.factories import PASSWORD, EmployeeFactory
 from tests.isolation import ISOLATION_CASES, NOT_TENANT_OBJECTS
 
 # Modèles sans entreprise, par construction.
-NOT_TENANT_MODELS = {Company, apps.get_model("accounts", "User")}
+NOT_TENANT_MODELS = {
+    Company,
+    apps.get_model("accounts", "User"),
+    # Compteur technique de limite de fréquence : clé en empreinte HMAC, sans donnée métier.
+    apps.get_model("core", "RateLimitCounter"),
+}
 
 
 def project_models():

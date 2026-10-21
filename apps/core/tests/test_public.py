@@ -80,13 +80,18 @@ def test_limit_per_real_client_ip_behind_trusted_proxy(company_a, settings):
     assert other_client.status_code == 200
 
 
-def test_typed_address_is_not_stored_in_clear_in_the_cache(company_a):
+def test_typed_address_and_ip_are_not_stored_in_clear(company_a):
+    """Compteurs en base (L1-16) : seules des empreintes HMAC sont enregistrées."""
+    from apps.core import ratelimit
     from apps.core.forms import email_digest
+    from apps.core.models import RateLimitCounter
 
     post(company_a.employee.email)
     key = f"space-access:email:{email_digest(company_a.employee.email)}"
-    assert cache.get(key) == 1
-    assert company_a.employee.email not in key
+    assert ratelimit.current(key, 10 * 60) == 1
+    stored = list(RateLimitCounter.objects.values_list("key", flat=True))
+    assert len(stored) == 2  # adresse IP et adresse saisie
+    assert all(len(k) == 64 and "@" not in k and "." not in k for k in stored)
 
 
 @pytest.mark.parametrize(
