@@ -55,12 +55,31 @@ Date : 21 octobre 2026. Branche : `lot-5`.
 
 **Correctif transversal (L5-16).** L'en-tête `HX-Trigger` est désormais écrit en JSON ASCII. Un « € » dans une notification visuelle le rendait illisible pour htmx : Django encode les caractères hors Latin-1 selon la RFC 2047.
 
+## Corrections de l'audit du lot 5 (21 oct. 2026)
+
+- **Stockage indisponible (L5-17).**
+  - Délais explicites : connexion 3 s, lecture 10 s, 2 essais au total. Attention : dans botocore, `max_attempts` ne compte que les nouvelles tentatives ; c'est `total_max_attempts` qui compte tous les essais.
+  - Dépôt d'un justificatif : 503 avec le message, rien n'est enregistré.
+  - Téléchargement : page 503.
+  - Photos et logo : plus d'`exists()` ; si le stockage échoue, l'avatar garde ses initiales et le logo est masqué.
+  - Test réel avec un stockage injoignable : l'annuaire et une photo répondent en 6,6 s au total, sans erreur 500.
+- **Fichiers orphelins (L5-18).**
+  - Le nom du fichier est inscrit dans la liste de nettoyage avant l'écriture, et le fichier est écrit avant l'INSERT puis supprimé si l'opération échoue.
+  - Une DataError à l'INSERT donne un message, sans laisser de fichier.
+  - Même règle pour les photos et le logo : l'ancien fichier n'est supprimé qu'après la validation. La règle est ajoutée à CLAUDE.md.
+- **PDF chiffrés.** Les échappements `#xx` des noms PDF sont décodés : `/Encr#79pt` est reconnu (L5-03).
+- **Contrôles dans le service (L5-19).**
+  - La fenêtre de mois et les bornes du montant sont vérifiées par le service.
+  - Chaque IntegrityError est traduite selon la contrainte en cause, pour les demandes comme pour le matériel.
+- **Numéro de série (L5-09).** Normalisé dans le service (NFKC, sans espaces ni espaces insécables, majuscules), avec une contrainte unique sur la valeur normalisée et une migration de normalisation.
+- **Intégration continue.** L'image MinIO est épinglée par son empreinte. Son remplacement est noté pour le lot 8, de même que l'analyse antivirus au dépôt, avant l'enregistrement.
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 638 tests (couverture 95 %), dont le test S3 sauté sans MinIO local et exécuté dans l'intégration continue ; puis 6 tests de performance |
+| `make test` | 651 tests (couverture 95 %), dont le test S3 sauté sans MinIO local et exécuté dans l'intégration continue ; puis 6 tests de performance |
 | `make e2e` | 40 parcours, dont le dépôt d'un justificatif puis sa validation par les RH (téléchargement du fichier), et l'attribution d'un équipement puis « Annuler » |
 | `make check` | aucune alerte, dont `--deploy` (configuration S3 vérifiée) |
 
@@ -85,6 +104,5 @@ Couverture des nouveaux modules : `apps/equipment` de 91 à 100 %, `apps/core/fi
 - Décisions « À confirmer » :
   - L5-02, pour l'image MinIO de l'intégration continue : les images officielles de MinIO ne sont plus publiées, d'où `bitnamilegacy/minio:2025.7.23` ;
   - L5-10 : réparation ;
-  - L5-13 : export paie ;
   - L5-15 : signalements.
 - L'analyse antivirus (ClamAV), notée « à confirmer » pour le lot 5 dans `02-architecture.md`, n'est pas faite. Elle est reportée au lot 8 dans « Pour plus tard », avec la création du compte Scaleway, le mode de chiffrement à vérifier, la purge à 3 ans et les limites internes d'allauth.

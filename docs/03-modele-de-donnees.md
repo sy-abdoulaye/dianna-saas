@@ -80,7 +80,7 @@ Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme
 
 ## Matériel (`equipment`)
 
-**EquipmentItem** (T) : `public_id`, `kind` (laptop, screen, headset, phone, other), `model`, `serial_number` (en majuscules sans espaces, unique par entreprise sans tenir compte de la casse), `status` (in_stock, assigned, repair, retired), `holder` (Employee, nul), `assigned_at`. Contrainte : « assigned » ⇒ détenteur ; « in_stock » et « retired » ⇒ aucun détenteur ; « repair » : avec ou sans (L5-10).
+**EquipmentItem** (T) : `public_id`, `kind` (laptop, screen, headset, phone, other), `model`, `serial_number` (normalisé par le service : Unicode NFKC, sans aucun espace, en majuscules ; unique par entreprise sur la valeur normalisée, contrainte `equipment_serial_unique`), `status` (in_stock, assigned, repair, retired), `holder` (Employee, nul), `assigned_at`. Contrainte : « assigned » ⇒ détenteur ; « in_stock » et « retired » ⇒ aucun détenteur ; « repair » : avec ou sans (L5-10).
 **EquipmentAssignment** (T) : historique : `item`, `employee`, `assigned_at`, `returned_at`, `assigned_by`, `request` (EquipmentRequest, nul). Index unique partiel : une seule attribution ouverte (`returned_at` nul) par équipement ; une attribution au plus par demande (L5-08).
 **EquipmentIssue** (T) : `item`, `reported_by`, `description`, `status` (open, closed), `closed_by`, `closed_at`, `resolution`.
 **EquipmentEvent** (T) : historique complet par équipement : `item`, `action` (added, assigned, returned, repair, back, issue, issue_closed, retired, undone), `actor`, `employee`, `comment`.

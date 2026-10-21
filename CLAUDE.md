@@ -39,6 +39,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Planning et compteurs : règle de confidentialité L4-16 appliquée par une seule fonction, partout (vue, aperçu, exports, compteurs, tableau de bord).
 - Toute limite de fréquence passe par apps/core/ratelimit.py, jamais par le cache.
 - Fichiers déposés : type réel vérifié par `apps/core/files.clean_document` ; stockés sous `<company_id>/…` avec un nom aléatoire (jamais le nom d'origine) ; un justificatif est servi par `serve_isolated` après contrôle de la permission, jamais par lien signé.
+- Écriture d'un fichier (justificatif, photo, logo et tout futur dépôt) : son nom est inscrit dans la liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit explicitement avant l'INSERT ou l'UPDATE, et il est supprimé si l'opération échoue (`apps/core/files.file_writes`, `workflow.submit`) ; l'ancien fichier remplacé n'est supprimé qu'après la validation de la transaction. Jamais de `FieldFile.save()` direct dans un service. Une panne du stockage (`StorageUnavailableError`) donne un message, jamais une erreur 500.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes
