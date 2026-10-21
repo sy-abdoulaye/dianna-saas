@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "apps.people",
     "apps.agenda",
     "apps.approvals",
+    "apps.planning",
     "apps.dashboard",
     "apps.administration",
 ]
@@ -234,5 +235,8 @@ LOGGING = {
     "loggers": {
         # Les requêtes refusées contiennent des URL et des en-têtes : niveau ERROR seulement.
         "django.request": {"level": "ERROR", "propagate": True},
+        # Exports PDF : la progression de WeasyPrint n'apporte rien au journal.
+        "weasyprint": {"level": "WARNING", "propagate": True},
+        "fontTools": {"level": "WARNING", "propagate": True},
     },
 }

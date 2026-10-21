@@ -446,12 +446,26 @@ class Command(BaseCommand):
             EmployeeChange.objects.create(
                 employee=people["p1"], actor=helene, kind="updated", fields=["office", "phone"]
             )
+            self._seed_closures(sites)
             self._seed_requests(people)
             audit.log("platform.demo_loaded", "Données de démonstration chargées")
+
+    def _seed_closures(self, sites):
+        """Fermeture du site de Lyon le 24 décembre (annonce du prototype), T-16."""
+        from apps.agenda.models import Closure
+
+        today = timezone.localdate()
+        christmas_eve = date(today.year, 12, 24)
+        if christmas_eve < today:
+            christmas_eve = date(today.year + 1, 12, 24)
+        Closure.objects.create(
+            date=christmas_eve, label="Fermeture du site de Lyon", site=sites["Lyon"]
+        )
 
     def _seed_requests(self, people):
         """Demandes du prototype (prototype-donnees-demo.js, seedRequests), dates recalculées
         par rapport au lundi de la semaine du chargement. Écrites sans e-mail."""
+        from apps.agenda.days import day_off
         from apps.approvals import workflow
         from apps.approvals.models import (
             ACTIVE_STATUSES,
@@ -480,6 +494,10 @@ class Command(BaseCommand):
             counter["n"] += 1
             submitted = timezone.now() - timedelta(days=2 + counter["n"] % 9)
             requester = people[key]
+            if model is TeleworkRequest:
+                # Jour férié ou fermé (selon la date du chargement) : jour ouvré suivant.
+                while data["date"].weekday() >= 5 or day_off(data["date"], requester.site_id):
+                    data["date"] += timedelta(days=1)
             request = model(requester=requester, submitted_at=submitted, status=status, **data)
             # Contrôles métier du service (A3-02), sauf pour une demande déjà passée : ses
             # dates sont antérieures à aujourd'hui (seule exception, CLAUDE.md).

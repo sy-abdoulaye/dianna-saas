@@ -1,0 +1,75 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Export du planning" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ planning_url }}">{% translate "Planning" %}</a> › {% translate "Export" %}</div>
+      <h1 class="h1">{% translate "Export du planning" %}</h1>
+      <p class="sub">{% translate "Choisissez la période, le périmètre et le format." %}</p>
+    </div>
+  </div>
+  <form class="card card-body stack" method="get" action="{% url 'planning:export' %}" hx-get="{% url 'planning:export' %}" hx-target="#export-result" hx-push-url="true" novalidate>
+    <div id="export-result" class="stack">
+      {% partialdef result inline %}
+        {% include "components/form_errors.html" %}
+        <div class="form-grid">
+          {% include "components/field.html" with field=form.periode %}
+          {% include "components/field.html" with field=form.perimetre %}
+          {% include "components/field.html" with field=form.debut %}
+          {% include "components/field.html" with field=form.fin %}
+        </div>
+        {{ form.page }}
+        <fieldset class="field"{% if form.format.errors %} aria-describedby="export-format-error"{% endif %}>
+          <legend class="label">{{ form.format.label }}</legend>
+          <div class="flex flex-wrap gap-4">
+            {% for choice in form.format %}
+              <label class="checkbox" for="{{ choice.id_for_label }}">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
+            {% endfor %}
+          </div>
+          <span class="hint">{% translate "PDF : une page du planning (50 personnes) et un mois au plus." %}</span>
+          {% if form.format.errors %}<p class="field-error" id="export-format-error">{% icon "alert" 16 %}{{ form.format.errors|first }}</p>{% endif %}
+        </fieldset>
+        <div class="flex justify-end gap-2">
+          {% button _("Retour au planning") variant="ghost" href=planning_url %}
+          {% button _("Générer l'export") variant="primary" type="submit" %}
+        </div>
+        {% if download_url %}
+          <section class="stack border-t border-line pt-4" aria-labelledby="h-preview">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2 class="h2" id="h-preview">{% translate "Aperçu de l'export" %}</h2>
+              <span class="meta">{% blocktranslate count n=people_count with days=days_count start=first|date:"j F Y" end=last|date:"j F Y" %}{{ n }} personne · {{ days }} jours ouvrés · du {{ start }} au {{ end }}{% plural %}{{ n }} personnes · {{ days }} jours ouvrés · du {{ start }} au {{ end }}{% endblocktranslate %}</span>
+            </div>
+            {% if preview_rows %}
+              <div class="table-wrap">
+                <table class="table">
+                  <caption class="sr-only">{% translate "Aperçu : 6 premières lignes et 5 premiers jours" %}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{% translate "Collaborateur" %}</th>
+                      {% for day in preview_days %}<th scope="col">{{ day|date:"D j"|capfirst }}</th>{% endfor %}
+                      {% if more_days %}<th scope="col">…</th>{% endif %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for person, cells in preview_rows %}
+                      <tr>
+                        <td>{{ person.full_name }}</td>
+                        {% for cell in cells %}<td><span class="cell wk k-{{ cell.state }}{% if cell.pending %} pend{% endif %}">{% if cell.state == "we" %}{% elif cell.state == "none" %}—{% else %}{{ cell.state_label }}{% endif %}{% if cell.on_call %}<span class="cell-oncall{% if cell.on_call_pending %} pend{% endif %}" aria-hidden="true">A</span><span class="sr-only">, {% translate "astreinte" %}</span>{% endif %}</span></td>{% endfor %}
+                        {% if more_days %}<td class="text-ink-3">…</td>{% endif %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+            <div class="flex justify-end">
+              {% blocktranslate asvar download_label with fmt=format_label %}Télécharger le fichier {{ fmt }}{% endblocktranslate %}
+              {% button download_label variant="primary" icon="dl" href=download_url %}
+            </div>
+          </section>
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </form>
+{% endblock %}

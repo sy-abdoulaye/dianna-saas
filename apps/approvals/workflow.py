@@ -33,6 +33,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
+from apps.agenda.days import day_off, day_off_message
 from apps.agenda.models import CalendarEvent
 from apps.approvals import rules
 from apps.approvals.kinds import kind_of, summary
@@ -235,6 +236,10 @@ def check_request(request, *, campaign=None) -> dict:
     elle est exclue des comptes (annulation immédiate)."""
     requester, pk = request.requester, request.pk
     if isinstance(request, TeleworkRequest):
+        # Jours fériés et fermetures : pas de télétravail ces jours-là (T-16, L3-12).
+        off = day_off(request.date, requester.site_id)
+        if off is not None:
+            return {"date": day_off_message(request.date, off)}
         same_day = TeleworkRequest.objects.filter(
             requester=requester,
             date=request.date,

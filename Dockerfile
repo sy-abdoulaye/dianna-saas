@@ -19,8 +19,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" \
-    DJANGO_SETTINGS_MODULE=config.settings.prod
+    DJANGO_SETTINGS_MODULE=config.settings.prod \
+    XDG_CACHE_HOME=/tmp
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /usr/local/bin/uv
+# Exports PDF (WeasyPrint, L4-06) : Pango et HarfBuzz. Les polices viennent de static/fonts.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev --no-install-project
@@ -34,5 +39,9 @@ RUN SECRET_KEY=build-only \
 USER dianna
 EXPOSE 8000
 # Journal d'accès sans query string ni adresse IP : les recherches contiennent des noms (règle 5).
+# Délai explicite (L4-17) : une requête qui dépasse 30 s arrête son processus (le plus gros
+# export autorisé, un PDF de 50 personnes sur un mois, prend environ 2 s) ; 30 s de grâce
+# à l'arrêt pour finir les requêtes en cours.
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", \
+     "--timeout", "30", "--graceful-timeout", "30", \
      "--access-logfile", "-", "--access-logformat", "%(t)s \"%(m)s %(U)s\" %(s)s %(B)s %(M)sms"]

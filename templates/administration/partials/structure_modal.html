@@ -8,10 +8,11 @@
       <div class="modal-body">
         {% include "components/form_errors.html" %}
         {% include "components/field.html" with field=form.name %}
+        {% if form.alsace_moselle %}{% include "components/field.html" with field=form.alsace_moselle %}{% endif %}
       </div>
       <footer class="modal-foot">
         {% button _("Annuler") data_modal_close=True %}
-        {% if is_rename %}{% button _("Renommer") variant="primary" type="submit" %}{% else %}{% button _("Ajouter") variant="primary" icon="plus" type="submit" %}{% endif %}
+        {% if is_rename and form.alsace_moselle %}{% button _("Enregistrer") variant="primary" type="submit" %}{% elif is_rename %}{% button _("Renommer") variant="primary" type="submit" %}{% else %}{% button _("Ajouter") variant="primary" icon="plus" type="submit" %}{% endif %}
       </footer>
     </form>
   {% endpartialdef %}

@@ -9,7 +9,7 @@ from django.test import Client
 from django.urls import URLPattern, URLResolver, get_resolver
 
 from apps.accounts.models import Invitation
-from apps.agenda.models import CalendarEvent
+from apps.agenda.models import CalendarEvent, Closure
 from apps.approvals.models import (
     LeaveRequest,
     OnCallDeclaration,
@@ -38,7 +38,12 @@ from tests.factories import PASSWORD, EmployeeFactory
 from tests.isolation import ISOLATION_CASES, NOT_TENANT_OBJECTS
 
 # Modèles sans entreprise, par construction.
-NOT_TENANT_MODELS = {Company, apps.get_model("accounts", "User")}
+NOT_TENANT_MODELS = {
+    Company,
+    apps.get_model("accounts", "User"),
+    # Compteur technique de limite de fréquence : clé en empreinte HMAC, sans donnée métier.
+    apps.get_model("core", "RateLimitCounter"),
+}
 
 
 def project_models():
@@ -178,6 +183,7 @@ TENANT_ROWS = {
     SummerCampaign: lambda d: d.requests["campaign"],
     RequestEvent: lambda d: d.requests["event"],
     CalendarEvent: lambda d: d.requests["calendar"],
+    Closure: lambda d: d.requests["closure"],
     CompanyModule: lambda d: CompanyModule.all_companies.filter(company=d.company).first(),
 }
 

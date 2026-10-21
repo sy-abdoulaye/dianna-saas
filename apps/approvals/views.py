@@ -7,14 +7,20 @@ from functools import wraps
 
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from apps.approvals import rules, workflow
-from apps.approvals.forms import FORMS, CampaignForm, ReasonForm
+from apps.approvals import exports, rules, workflow
+from apps.approvals.forms import (
+    FORMS,
+    CampaignExportForm,
+    CampaignForm,
+    MonthExportForm,
+    ReasonForm,
+)
 from apps.approvals.kinds import KINDS, summary
 from apps.approvals.models import (
     REQUEST_MODELS,
@@ -27,6 +33,12 @@ from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
 from apps.core.htmx import Toast, is_htmx, toast_response, trigger
 from apps.core.models import Module
+from apps.core.ratelimit import (
+    EXPORT_LIMIT_MESSAGE,
+    export_allowed,
+    export_limited_response,
+    record_export,
+)
 
 CHANGED = "requestsChanged"
 TAB_MINE, TAB_TODO, TAB_TEAM = "mes-demandes", "a-valider", "equipe"
@@ -144,6 +156,11 @@ def request_list(request, kind):
         "status": status,
         "new_url": reverse("approvals:new", args=[kind]),
         "is_hr": workflow.is_hr_or_admin(me),
+        "can_export": permissions.can(me, "requests.export"),
+        # Lien vers le planning (L3-18) : seulement si le module Planning est activé.
+        "planning_url": reverse("planning:week")
+        if module_is_enabled(request, Module.PLANNING)
+        else "",
     }
     context.update(_module_block(me, kind))
     if is_htmx(request) and request.htmx.target == "results":
@@ -495,6 +512,80 @@ def campaign_status(request, pk, action):
     title = _("Campagne ouverte") if action == "ouvrir" else _("Campagne close")
     return trigger(
         toast_response(Toast(title=title, message=campaign.label)), **{CAMPAIGNS_CHANGED: True}
+    )
+
+
+# ---------- Exports RH (L3-08) ----------
+
+
+def _download(content, content_type, filename):
+    response = HttpResponse(content, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@require_GET
+@module_view
+def export_requests(request, kind):
+    """« Exporter » des RH : récapitulatif du mois (télétravail, astreintes) ou synthèse de
+    campagne (congés). Sans paramètre : la modale ; avec : le fichier (via HX-Redirect)."""
+    require(request, "requests.export")
+    me = request.employee
+    action_url = reverse("approvals:export", args=[kind])
+    if kind == "leave":
+        form = CampaignExportForm(request.GET if "format" in request.GET else None)
+    else:
+        form = MonthExportForm(request.GET if "format" in request.GET else None)
+    context = {"form": form, "action_url": action_url, "kind": KINDS[kind]}
+    template = "approvals/partials/export_modal.html"
+    if "format" not in request.GET:
+        return render(request, template, context)
+    # Modale : message dans le formulaire ; téléchargement direct : page « Trop d'exports ».
+    if is_htmx(request) and form.is_valid() and not export_allowed(me):
+        form.add_error(None, EXPORT_LIMIT_MESSAGE)
+    if not form.is_valid():
+        return render(request, f"{template}#form", context, status=422)
+    if is_htmx(request):
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = f"{action_url}?{request.GET.urlencode()}"
+        return response
+    if not record_export(me):
+        return export_limited_response(request, reverse(KINDS[kind].url_name))
+    fmt = form.cleaned_data["format"]
+    if kind == "telework":
+        result = exports.telework_month(me, form.cleaned_data["mois"], fmt, request=request)
+    elif kind == "on_call":
+        result = exports.on_call_month(me, form.cleaned_data["mois"], fmt, request=request)
+    else:
+        result = exports.campaign_file(me, form.cleaned_data["campagne"], fmt, request=request)
+    return _download(*result)
+
+
+@require_GET
+def campaign_summary(request, pk):
+    blocked = _campaign_module(request)
+    if blocked:
+        return blocked
+    require(request, "requests.export")
+    campaign = get_object_or_404(SummerCampaign, pk=pk)
+    fmt = request.GET.get("format")
+    if fmt in exports.FORMAT_LABELS:
+        if not record_export(request.employee):
+            return export_limited_response(request, request.path)
+        return _download(*exports.campaign_file(request.employee, campaign, fmt, request=request))
+    mondays, summaries = exports.campaign_summary(campaign)
+    return render(
+        request,
+        "approvals/campaign_summary.html",
+        {
+            "campaign": campaign,
+            "mondays": mondays,
+            "summaries": summaries,
+            "campaigns_url": reverse("approvals:campaigns"),
+            "planning_url": reverse("planning:week")
+            if module_is_enabled(request, Module.PLANNING)
+            else "",
+        },
     )
 
 

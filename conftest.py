@@ -53,8 +53,9 @@ def build_requests(employee) -> dict:
         SummerCampaign,
         TeleworkRequest,
     )
+    from apps.approvals.tests.conftest import free_monday
 
-    monday = timezone.localdate() + timedelta(days=7 - timezone.localdate().weekday())
+    monday = free_monday()
     now = timezone.now()
     campaign = SummerCampaign.objects.create(
         label="Été 2027",
@@ -85,6 +86,9 @@ def build_requests(employee) -> dict:
         source_type="telework",
         source_id=telework.pk,
     )
+    from apps.agenda.models import Closure
+
+    closure = Closure.objects.create(date=date(2030, 12, 24), label="Fermeture de fin d'année")
     return {
         "telework": telework,
         "leave": leave,
@@ -92,6 +96,7 @@ def build_requests(employee) -> dict:
         "campaign": campaign,
         "event": event,
         "calendar": calendar,
+        "closure": closure,
     }
 
 
@@ -254,3 +259,13 @@ def submit():
             return workflow.submit(model, employee, data)
 
     return _submit
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Limites de fréquence (exports, vitrine) : chaque test part d'un cache vide."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()

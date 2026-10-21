@@ -1,0 +1,135 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Planning" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Planning" %}</h1>
+      {% if scope_label %}<p class="sub">{{ scope_label }}</p>{% endif %}
+    </div>
+    <div class="actions">
+      {% button _("Exporter") icon="dl" href=export_url %}
+      {% if can_declare %}
+        {% button _("Déclarer du télétravail") variant="primary" icon="plus" hx_get=new_telework_url hx_target="#modal-root" %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <form id="planning-filters" class="filters" method="get" action="{{ list_url }}" role="search" hx-get="{{ list_url }}" hx-target="#planning-results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
+      {% translate "Semaine" as week_label %}{% translate "Mois" as month_label %}
+      <div class="field">
+        <span class="label" aria-hidden="true">{% translate "Vue" %}</span>
+        <fieldset class="segmented">
+          <legend class="sr-only">{% translate "Vue" %}</legend>
+          <label><input type="radio" name="vue" value="semaine" {% if view == "semaine" %}checked{% endif %}><span>{{ week_label }}</span></label>
+          <label><input type="radio" name="vue" value="mois" {% if view == "mois" %}checked{% endif %}><span>{{ month_label }}</span></label>
+        </fieldset>
+      </div>
+      <div class="field grow">
+        <label class="label" for="planning-q">{% translate "Recherche" %}</label>
+        <div class="search-input">
+          {% icon "search" %}
+          <input class="input" id="planning-q" type="search" name="q" value="{{ query }}" placeholder="{% translate 'Filtrer par nom' %}">
+        </div>
+      </div>
+      {% if company_wide %}
+        <div class="field">
+          <label class="label" for="planning-service">{% translate "Service" %}</label>
+          <span class="select-wrap">
+            <select class="select" id="planning-service" name="service">
+              <option value="">{% translate "Tous les services" %}</option>
+              {% for item in services %}<option value="{{ item.pk }}" {% if item.pk == service %}selected{% endif %}>{{ item.name }}</option>{% endfor %}
+            </select>
+          </span>
+        </div>
+      {% endif %}
+      <div class="field">
+        <label class="label" for="planning-site">{% translate "Site" %}</label>
+        <span class="select-wrap">
+          <select class="select" id="planning-site" name="site">
+            <option value="">{% translate "Tous les sites" %}</option>
+            {% for item in sites %}<option value="{{ item.pk }}" {% if item.pk == site %}selected{% endif %}>{{ item.name }}</option>{% endfor %}
+          </select>
+        </span>
+      </div>
+      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
+    </form>
+    <div class="legend px-4 pb-3 pt-3" aria-label="{% translate 'Légende' %}">
+      <span><i class="k-site"></i>{% translate "Sur site" context "planning" %}</span>
+      <span><i class="k-tt"></i>{% translate "Télétravail" context "planning" %}</span>
+      <span><i class="k-cp"></i>{% translate "Congés" context "planning" %}</span>
+      <span><i class="k-as"></i>{% translate "Astreinte" %}</span>
+      <span><i class="k-site pend"></i>{% translate "En attente" %}</span>
+      <span><i class="k-off"></i>{% translate "Férié ou fermeture" %}</span>
+    </div>
+    <div id="planning-results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="requestsChanged from:body" hx-target="this" hx-disinherit="*">
+      {% partialdef results inline %}
+        <input type="hidden" id="planning-date" name="date" value="{{ grid.first|date:'Y-m-d' }}" form="planning-filters">
+        <div class="plan-nav">
+          <a class="btn btn-secondary btn-icon" href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#planning-results" hx-push-url="true" aria-label="{% translate 'Période précédente' %}">{% icon "left" %}</a>
+          <a class="btn btn-secondary" href="{{ today_url }}" hx-get="{{ today_url }}" hx-target="#planning-results" hx-push-url="true">{% translate "Aujourd'hui" %}</a>
+          <a class="btn btn-secondary btn-icon" href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#planning-results" hx-push-url="true" aria-label="{% translate 'Période suivante' %}">{% icon "right" %}</a>
+          <h2 class="plan-title">{{ title }}</h2>
+        </div>
+        {% if grid.rows %}
+          <div class="plan" tabindex="0" aria-label="{% translate 'Grille du planning' %}">
+            <table class="plan-{{ view }}">
+              <caption class="sr-only">{% blocktranslate %}Planning {{ title }}{% endblocktranslate %}</caption>
+              <colgroup><col class="col-nm">{% for day in grid.days %}<col>{% endfor %}</colgroup>
+              <thead>
+                <tr>
+                  <th class="nm" scope="col">{% translate "Collaborateur" %}</th>
+                  {% for day in grid.days %}
+                    <th scope="col" class="{% if day == today %}today{% endif %}"{% if day == today %} aria-current="date"{% endif %}>
+                      {% if view == "mois" %}{{ day|date:"D"|first|upper }}<br>{{ day|date:"j" }}{% else %}{{ day|date:"D j"|capfirst }}{% endif %}
+                    </th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in grid.rows %}
+                  <tr>
+                    <th class="nm" scope="row">
+                      <div class="who">
+                        {% include "components/avatar.html" with person=row.employee %}
+                        <span class="who-text"><b>{{ row.employee.full_name }}{% if row.is_me %} <span class="meta">{% translate "(vous)" %}</span>{% endif %}</b><span class="who-sub">{{ row.employee.site.name|default:"" }}</span></span>
+                      </div>
+                    </th>
+                    {% for cell in row.cells %}{# Case en ligne : une inclusion par case coûtait cher sur un grand effectif. #}
+                      {% with label=cell.label day_text=cell.day|date:"l j F"|capfirst %}
+<td class="{% if cell.state == 'we' %}we{% endif %}{% if cell.day == today %} today{% endif %}" title="{{ row.employee.full_name }} · {{ day_text }} · {{ label|default:_('Week-end') }}">
+  {% if cell.clickable %}
+    <button class="plan-cell" type="button" hx-get="{{ new_telework_url }}?date={{ cell.day|date:'Y-m-d' }}" hx-target="#modal-root" aria-label="{% blocktranslate %}{{ day_text }} : {{ label }}. Déclarer du télétravail{% endblocktranslate %}">
+  {% else %}
+    <span class="sr-only">{{ day_text }} : {{ label|default:_("Week-end") }}</span>
+  {% endif %}
+  {% if cell.state != "we" %}
+    <span class="cell {% if view == 'mois' %}m{% else %}wk{% endif %} k-{{ cell.state }}{% if cell.pending %} pend{% endif %}" aria-hidden="true">{% if view == "mois" %}{{ cell.letter }}{% elif cell.state == "off" %}{{ cell.day_off_label }}{% elif cell.state == "none" %}—{% else %}{{ cell.state_label }}{% endif %}{% if cell.on_call %}<span class="cell-oncall{% if cell.on_call_pending %} pend{% endif %}">A</span>{% endif %}</span>
+  {% elif cell.on_call %}
+    <span class="cell {% if view == 'mois' %}m{% else %}wk{% endif %} k-we" aria-hidden="true"><span class="cell-oncall{% if cell.on_call_pending %} pend{% endif %}">A</span></span>
+  {% endif %}
+  {% if cell.clickable %}</button>{% endif %}
+</td>
+{% endwith %}
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <span>{% blocktranslate count n=grid.total with present=grid.present_today %}{{ n }} personne · {{ present }} sur site aujourd'hui{% plural %}{{ n }} personnes · {{ present }} sur site aujourd'hui{% endblocktranslate %}</span>
+            {% if can_declare %}<span class="meta">{% translate "Cliquez sur l'une de vos journées sur site pour déclarer du télétravail." %}</span>{% endif %}
+            {% if can_see_closures %}<a class="link" href="{% url 'administration:closures' %}">{% translate "Fermetures et jours fériés" %}</a>{% endif %}
+          </div>
+          {% if grid.page_obj.paginator.num_pages > 1 %}{% pagination grid.page_obj "#planning-results" %}{% endif %}
+        {% else %}
+          {% translate "Personne à afficher" as empty_title %}
+          {% translate "Aucun collaborateur ne correspond aux filtres." as empty_text %}
+          {% include "components/empty_state.html" with icon="cal" title=empty_title text=empty_text action_label=_("Réinitialiser les filtres") action_url=reset_url %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}

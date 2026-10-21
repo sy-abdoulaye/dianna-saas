@@ -66,6 +66,8 @@ RULES: dict[str, tuple] = {
     "interventions.decide":             (NONE,    TEAM,    ALL,     ALL),
     # Administration
     "admin.manage":                     (NONE,    NONE,    NONE,    ALL),
+    "closures.view":                    (NONE,    NONE,    ALL,     ALL),
+    "closures.manage":                  (NONE,    NONE,    NONE,    ALL),
 }  # fmt: skip
 
 # Personne ne valide sa propre demande ni n'évalue son propre entretien.

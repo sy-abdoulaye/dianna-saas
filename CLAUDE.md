@@ -1,6 +1,6 @@
 # CLAUDE.md : Dianna
 
-**Langue.** Toutes les réponses à Leo, les notes de livraison, la documentation et les descriptions de demandes de fusion sont en français. Les noms dans le code (variables, fonctions, commits) restent en anglais.
+**Langue.** Toutes les réponses à Leo, les notes de livraison, la documentation, les descriptions de demandes de fusion et les messages de commit sont en français (commits au présent). Seuls les noms dans le code (variables, fonctions, classes, branches) restent en anglais.
 
 Dianna est un SaaS B2B multi-entreprise (multi-tenant) de gestion RH et d'organisation du travail, destiné aux PME et ETI françaises (50 à 1 000 salariés). Chaque entreprise cliente dispose d'un espace isolé et active les modules dont elle a besoin.
 
@@ -33,9 +33,11 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Changements d'état (valider, refuser, envoyer, signer) : une fonction de service par transition, qui vérifie l'état de départ, écrit l'historique, crée la notification et l'entrée du journal d'audit.
 - Templates : `templates/<app>/` pour les pages, `templates/<app>/partials/` pour les fragments HTMX, `templates/components/` pour les composants communs.
 - Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français.
-- Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export.
+- Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export. Excel : toujours par `apps/core/xlsx_export.py` (même neutralisation, cellules texte enregistrées comme texte). PDF : toujours par `apps/core/pdf.py` (récupérateur d'URL fermé : jamais de `weasyprint.HTML` direct). Chaque export vérifie le périmètre côté serveur et s'inscrit au journal d'audit sans nom de personne.
 - Contrôles métier (A3-02) : les vérifications qui dépendent d'autres données (quota, doublon, chevauchement, période) et les verrous (`select_for_update`) sont dans le service, jamais dans la vue ni dans le formulaire ; le formulaire ne vérifie que ses champs, la vue appelle le service et affiche ses erreurs. Une `IntegrityError` devient un message, jamais une erreur 500. Seule exception : `seed_demo` crée sans `check_request` les demandes de démonstration déjà passées (dates antérieures au jour du chargement).
 - E-mails (A3-04) : toujours par `apps/core/mail.py`, donc par une tâche ; aucune donnée sensible en clair dans les arguments d'une tâche (identifiants seulement, ou contenu chiffré avec `TASKS_ENCRYPTION_KEY`).
+- Planning et compteurs : règle de confidentialité L4-16 appliquée par une seule fonction, partout (vue, aperçu, exports, compteurs, tableau de bord).
+- Toute limite de fréquence passe par apps/core/ratelimit.py, jamais par le cache.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
 
 ## Commandes

@@ -280,6 +280,8 @@ class CompanyModule(TenantModel):
 class Site(TenantModel):
     name = models.CharField(_("nom"), max_length=80)
     address = models.CharField(_("adresse"), max_length=255, blank=True)
+    # Jours fériés d'Alsace-Moselle (Vendredi saint, 26 décembre), L4-02.
+    alsace_moselle = models.BooleanField(_("jours fériés d'Alsace-Moselle"), default=False)
 
     class Meta:
         verbose_name = _("site")
@@ -386,3 +388,26 @@ def check_m2m_same_company(sender, instance, action, reverse, model, pk_set, **k
     foreign = model.all_companies.filter(pk__in=pk_set).exclude(company_id=instance.company_id)
     if foreign.exists():
         raise ValidationError(_("Cet élément n'appartient pas à la même entreprise."))
+
+
+class RateLimitCounter(models.Model):
+    """Compteur de limite de fréquence (L4-17, L1-16) : une ligne par clé et par fenêtre.
+
+    Modèle technique de la plateforme, sans entreprise : la clé est une empreinte HMAC (jamais
+    une adresse IP ni une adresse e-mail en clair). Incrémenté en une seule requête atomique
+    (apps/core/ratelimit.py) ; les fenêtres expirées sont purgées par `purge_task_results`."""
+
+    key = models.CharField(_("clé (empreinte)"), max_length=64)
+    window_start = models.DateTimeField(_("début de la fenêtre"))
+    count = models.PositiveIntegerField(_("nombre"), default=0)
+
+    class Meta:
+        verbose_name = _("compteur de limite")
+        verbose_name_plural = _("compteurs de limite")
+        constraints = [
+            models.UniqueConstraint(fields=["key", "window_start"], name="core_ratelimit_unique")
+        ]
+        indexes = [models.Index(fields=["window_start"], name="core_ratelimit_window")]
+
+    def __str__(self):
+        return f"{self.key[:8]}… {self.count}"

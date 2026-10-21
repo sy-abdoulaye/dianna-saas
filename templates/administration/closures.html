@@ -1,0 +1,57 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <div id="closures" class="stack" hx-get="{% url 'administration:closures' %}" hx-trigger="closuresChanged from:body" hx-target="this" hx-disinherit="*">
+    {% partialdef lists inline %}
+      <section class="card" aria-labelledby="h-closures">
+        <div class="card-body flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="h2" id="h-closures">{% translate "Fermetures à venir" %}</h2>
+            <p class="meta">{% translate "Pas de télétravail ces jours-là. Les jours fériés sont ajoutés automatiquement." %}</p>
+          </div>
+          {% if can_manage %}
+            {% url "administration:closure_add" as add_url %}
+            {% button _("Ajouter une fermeture") variant="primary" icon="plus" hx_get=add_url hx_target="#modal-root" %}
+          {% endif %}
+        </div>
+        {% if upcoming %}
+          <ul class="rows px-6 pb-5">
+            {% for item in upcoming %}
+              <li id="fermeture-{{ item.pk }}" class="flex-wrap">
+                <span>
+                  <b class="font-medium">{{ item.date|date:"l j F Y"|capfirst }}</b> · {{ item.label }}
+                  <span class="meta">· {{ item.scope|capfirst }}</span>
+                  {% if item.concerned %}
+                    <span class="meta block">
+                      {% blocktranslate count n=item.concerned|length %}{{ n }} demande de télétravail concernée :{% plural %}{{ n }} demandes de télétravail concernées :{% endblocktranslate %}
+                      {% for req in item.concerned %}{{ req.requester.full_name }} ({{ req.get_status_display|lower }}){% if not forloop.last %}, {% endif %}{% endfor %}
+                    </span>
+                  {% endif %}
+                </span>
+                {% if can_manage %}
+                  {% url "administration:closure_delete" item.pk as delete_url %}
+                  {% blocktranslate asvar delete_label with label=item.label %}Supprimer la fermeture {{ label }}{% endblocktranslate %}
+                  <button class="btn btn-ghost btn-sm text-err-ink" type="button" hx-get="{{ delete_url }}" hx-target="#modal-root" aria-label="{{ delete_label }}">{% translate "Supprimer" %}</button>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          {% translate "Aucune fermeture à venir" as empty_title %}
+          {% translate "Les jours fériés sont pris en compte sans saisie." as empty_text %}
+          {% include "components/empty_state.html" with icon="cal" title=empty_title text=empty_text %}
+        {% endif %}
+      </section>
+      {% if past %}
+        <section class="card" aria-labelledby="h-past-closures">
+          <div class="card-body"><h2 class="h2" id="h-past-closures">{% translate "Fermetures passées (12 derniers mois)" %}</h2></div>
+          <ul class="rows px-6 pb-5">
+            {% for item in past %}
+              <li><span>{{ item.date|date:"j F Y" }} · {{ item.label }} <span class="meta">· {{ item.scope|capfirst }}</span></span></li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+    {% endpartialdef %}
+  </div>
+{% endblock %}

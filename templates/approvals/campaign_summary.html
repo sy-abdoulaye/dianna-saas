@@ -1,0 +1,52 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% blocktranslate with label=campaign.label %}Synthèse {{ label }}{% endblocktranslate %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ campaigns_url }}">{% translate "Campagnes" %}</a> › {% translate "Synthèse" %}</div>
+      <h1 class="h1">{% blocktranslate with label=campaign.label %}Synthèse de la campagne {{ label }}{% endblocktranslate %}</h1>
+      <p class="sub">{% blocktranslate with start=campaign.period_start|date:"j F" end=campaign.period_end|date:"j F Y" threshold=campaign.conflict_threshold %}Du {{ start }} au {{ end }} · seuil d'alerte {{ threshold }} % du service{% endblocktranslate %}</p>
+    </div>
+    <div class="actions">
+      {% if planning_url %}{% button _("Voir le planning") icon="cal" href=planning_url %}{% endif %}
+      {% url "approvals:campaign_summary" campaign.pk as summary_url %}
+      {% with csv_url=summary_url|add:"?format=csv" xlsx_url=summary_url|add:"?format=xlsx" %}
+        {% button _("Exporter en CSV") icon="dl" href=csv_url %}
+        {% button _("Exporter en Excel") variant="primary" icon="dl" href=xlsx_url %}
+      {% endwith %}
+    </div>
+  </div>
+  <div class="card">
+    {% if summaries %}
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">{% translate "Absents par service et par semaine" %}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{% translate "Service" %}</th>
+              <th scope="col" class="num">{% translate "Effectif" %}</th>
+              <th scope="col" class="num">{% translate "Vœux" %}</th>
+              {% for monday in mondays %}<th scope="col" class="num">{{ monday|date:"j N" }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in summaries %}
+              <tr>
+                <th scope="row" class="font-medium">{{ item.service.name }}</th>
+                <td class="num">{{ item.size }}</td>
+                <td class="num">{{ item.wishes }}</td>
+                {% for week, count, percent, alert in item.weeks %}
+                  <td class="num{% if alert %} text-err-ink font-medium{% endif %}">{% if count %}{{ count }} <span class="meta">({{ percent }} %)</span>{% if alert %} <span class="sr-only">{% translate "seuil dépassé" %}</span>{% icon "alert" 16 %}{% endif %}{% else %}<span class="text-ink-3">0</span>{% endif %}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {% translate "Aucun service" as empty_title %}
+      {% include "components/empty_state.html" with icon="sun" title=empty_title %}
+    {% endif %}
+  </div>
+{% endblock %}

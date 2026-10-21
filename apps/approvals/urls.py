@@ -25,6 +25,7 @@ urlpatterns = [
     path("demandes/annuler/<str:token>/", views.undo_transition, name="undo"),
     path("conges/campagnes/", views.campaigns, name="campaigns"),
     path("conges/campagnes/nouvelle/", views.new_campaign, name="new_campaign"),
+    path("conges/campagnes/<int:pk>/synthese/", views.campaign_summary, name="campaign_summary"),
     path("conges/campagnes/<int:pk>/<str:action>/", views.campaign_status, name="campaign_status"),
     # Entrées du menu (noms utilisés par apps.core.navigation).
     path("teletravail/", views.request_list, {"kind": "telework"}, name="telework"),
@@ -32,6 +33,7 @@ urlpatterns = [
     path("astreintes/", views.request_list, {"kind": "on_call"}, name="on_call"),
     path("<kind:kind>/", views.request_list, name="list"),
     path("<kind:kind>/nouvelle/", views.new_request, name="new"),
+    path("<kind:kind>/export/", views.export_requests, name="export"),
     path("<kind:kind>/<uuid:public_id>/", views.detail, name="detail"),
     path("<kind:kind>/<uuid:public_id>/valider/", views.approve, name="approve"),
     path("<kind:kind>/<uuid:public_id>/refuser/", views.refuse, name="refuse"),

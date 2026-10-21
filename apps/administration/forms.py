@@ -62,12 +62,19 @@ class StructureForm(forms.Form):
     """Service ou site : nom unique dans l'entreprise, sans tenir compte de la casse."""
 
     name = forms.CharField(label=_("Nom"), max_length=80)
+    alsace_moselle = forms.BooleanField(
+        label=_("Jours fériés d'Alsace-Moselle"),
+        required=False,
+        help_text=_("Vendredi saint et 26 décembre fériés pour les personnes de ce site."),
+    )
 
     def __init__(self, *args, model=None, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.model = model
         self.instance = instance
         self.fields["name"].error_messages["required"] = _("Indiquez un nom.")
+        if not hasattr(model, "alsace_moselle"):
+            del self.fields["alsace_moselle"]
 
     def clean_name(self):
         name = self.cleaned_data["name"].strip()
@@ -115,3 +122,41 @@ class JournalFilterForm(forms.Form):
         end = data.get("au") or timezone.localdate()
         start = data.get("du") or end - timedelta(days=30)
         return start, end
+
+
+class ClosureForm(forms.Form):
+    """Fermeture d'un jour : toute l'entreprise ou un site (T-16). Le formulaire ne vérifie que
+    ses champs ; le doublon est contrôlé par le service, sous verrou (A3-02)."""
+
+    date = forms.DateField(
+        label=_("Date"),
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        error_messages={"required": _("Choisissez la date.")},
+    )
+    label = forms.CharField(
+        label=_("Libellé"),
+        max_length=80,
+        widget=forms.TextInput(attrs={"placeholder": _("Ex. pont de l'Ascension")}),
+        error_messages={"required": _("Indiquez un libellé.")},
+    )
+    site = forms.ChoiceField(label=_("Périmètre"), required=False)
+
+    def __init__(self, *args, **kwargs):
+        from apps.core.models import Site
+
+        super().__init__(*args, **kwargs)
+        self.sites = {str(site.pk): site for site in Site.objects.order_by("name")}
+        self.fields["site"].choices = [("", _("Toute l'entreprise"))] + [
+            (pk, _("Site de %(name)s") % {"name": site.name}) for pk, site in self.sites.items()
+        ]
+
+    def clean_date(self):
+        from django.utils import timezone
+
+        day = self.cleaned_data["date"]
+        if day < timezone.localdate():
+            raise forms.ValidationError(_("La date est passée."))
+        return day
+
+    def clean_site(self):
+        return self.sites.get(self.cleaned_data.get("site") or "")

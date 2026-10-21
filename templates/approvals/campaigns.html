@@ -38,7 +38,10 @@
                 <td class="num">{{ campaign.conflict_threshold }} %</td>
                 <td class="num">{{ campaign.request_count }}</td>
                 <td>{% status_badge "campaign" campaign.status %}</td>
-                <td class="end">
+                <td class="end whitespace-nowrap">
+                  {% url "approvals:campaign_summary" campaign.pk as summary_url %}
+                  {% blocktranslate asvar summary_label with label=campaign.label %}Synthèse de {{ label }}{% endblocktranslate %}
+                  <a class="btn btn-ghost btn-sm" href="{{ summary_url }}" aria-label="{{ summary_label }}">{% translate "Synthèse" %}</a>
                   {% if campaign.status == "draft" and not has_open %}
                     {% url "approvals:campaign_status" campaign.pk "ouvrir" as open_url %}
                     {% button _("Ouvrir") variant="primary" size="sm" hx_post=open_url hx_swap="none" %}

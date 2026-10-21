@@ -31,6 +31,13 @@ urlpatterns = [
         views.structure_delete,
         name="structure_delete",
     ),
+    path("administration/fermetures/", views.closures, name="closures"),
+    path("administration/fermetures/ajouter/", views.closure_add, name="closure_add"),
+    path(
+        "administration/fermetures/<int:pk>/supprimer/",
+        views.closure_delete,
+        name="closure_delete",
+    ),
     path("administration/modules/", views.modules, name="modules"),
     path("administration/modules/<str:module>/", views.toggle_module, name="toggle_module"),
     path("administration/journal/", views.journal, name="journal"),
