@@ -24,7 +24,7 @@
             <a href="{% url 'core:notification_open' notification.pk %}">
               {% if notification.is_unread %}<span class="sr-only">{% translate "Non lue :" %}</span>{% endif %}
               <span>{{ notification.text }}</span>
-              <span class="hint">{{ notification.created_at|date:"j F Y à H:i" }}</span>
+              <span class="hint">{{ notification.created_at|fr_date:"long_time" }}</span>
             </a>
           </li>
         {% endfor %}

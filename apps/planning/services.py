@@ -21,7 +21,6 @@ from datetime import date, timedelta
 
 from django.core.paginator import Paginator
 from django.db.models import Case, IntegerField, Q, Value, When
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext_lazy
 
@@ -29,6 +28,7 @@ from apps.agenda.days import DayOffs, days
 from apps.agenda.models import CalendarEvent
 from apps.approvals.models import LeaveRequest
 from apps.core import permissions
+from apps.core.dates import format_date
 from apps.people.models import IN_POST_STATUSES, Employee, Role
 
 PER_PAGE = 50
@@ -135,10 +135,10 @@ def shift(anchor: date, view: str, step: int) -> date:
 
 def period_title(view: str, first: date, last: date) -> str:
     if view == "mois":
-        return date_format(first, "F Y")
+        return format_date(first, "month")
     return _("Semaine du %(start)s au %(end)s") % {
-        "start": date_format(first, "j N"),
-        "end": date_format(last, "j F Y"),
+        "start": format_date(first, "short"),
+        "end": format_date(last, "long"),
     }
 
 
@@ -357,7 +357,7 @@ def export_rows(viewer, first, last, *, service=None, people=None):
     working = [day for day in days(first, last) if day.weekday() < 5]
     rows = build_rows(people, first, last, viewer=viewer)
     header = [_("Collaborateur"), _("Service"), _("Site")] + [
-        date_format(day, "D j/m") for day in working
+        format_date(day, "weekday_numeric") for day in working
     ]
     lines = []
     for row in rows:

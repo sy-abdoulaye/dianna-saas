@@ -3,12 +3,12 @@
 Le périmètre est celui de la vue (services.people_in_scope) ; l'export est journalisé avec la
 période, le format et le périmètre, sans nom de personne (CLAUDE.md, règle 5)."""
 
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
 from apps.agenda.models import CalendarEvent
 from apps.core import audit
 from apps.core.csv_export import csv_content
+from apps.core.dates import format_date
 from apps.core.ics_export import ICS_CONTENT_TYPE, IcsEvent, ics_content
 from apps.core.pdf import PDF_CONTENT_TYPE, render_pdf
 from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Styled, xlsx_content
@@ -26,8 +26,8 @@ STATE_TOKENS = {
 
 def period_text(first, last) -> str:
     return _("du %(start)s au %(end)s") % {
-        "start": date_format(first, "j F Y"),
-        "end": date_format(last, "j F Y"),
+        "start": format_date(first, "long"),
+        "end": format_date(last, "long"),
     }
 
 

@@ -5,8 +5,9 @@ from datetime import timedelta
 from django.db import transaction
 from django.tasks import task
 from django.utils import timezone
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
+
+from apps.core.dates import format_date
 
 REMINDER_DAYS = 15
 
@@ -53,7 +54,7 @@ def remind_expiring_transport(company_id: int) -> int:
                         "Votre abonnement annuel de transport se termine le %(day)s. Pensez à "
                         "déposer le justificatif du nouvel abonnement."
                     )
-                    % {"day": date_format(proof.valid_until, "j F Y")},
+                    % {"day": format_date(proof.valid_until, "long")},
                     url="/transport/",
                     email_subject=_("Votre abonnement de transport se termine bientôt"),
                 )

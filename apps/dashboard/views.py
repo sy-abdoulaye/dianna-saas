@@ -7,7 +7,6 @@ leurs lots. Les compteurs « à traiter » sont ceux du menu (même fonction).""
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
@@ -17,6 +16,7 @@ from apps.approvals.models import LeaveRequest, RequestStatus, TeleworkRequest
 from apps.approvals.views import is_validator, menu_counts
 from apps.core import permissions
 from apps.core.access import enabled_modules, module_is_enabled
+from apps.core.dates import format_date
 from apps.core.models import AuditLog, Module, Service
 from apps.people.models import IN_POST_STATUSES, Employee, EmployeeStatus, Role
 from apps.planning import services as planning
@@ -119,9 +119,8 @@ def indicators(request, me, today, todo_count, mix) -> list[tuple[str, object]]:
             .order_by("start")
             .first()
         )
-        kpis.append(
-            (_("Mes prochains congés"), date_format(upcoming.start, "j F") if upcoming else "—")
-        )
+        next_leave = format_date(upcoming.start, "day_month") if upcoming else "—"
+        kpis.append((_("Mes prochains congés"), next_leave))
     if mix and len(kpis) < 4:
         kpis.append((_("Sur site aujourd'hui"), f"{mix['counts']['site']} / {mix['total']}"))
     return kpis

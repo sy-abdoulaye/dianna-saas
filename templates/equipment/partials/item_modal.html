@@ -7,7 +7,7 @@
   <dl class="dl">
     <dt>{% translate "N° de série" %}</dt><dd class="font-mono">{{ item.serial_number }}</dd>
     <dt>{% translate "État" %}</dt><dd>{% status_badge "equipment" item.status %}</dd>
-    <dt>{% translate "Détenteur" %}</dt><dd>{% if item.holder %}{{ item.holder.full_name }}{% if item.assigned_at %} <span class="meta">{% blocktranslate with day=item.assigned_at|date:"j F Y" %}depuis le {{ day }}{% endblocktranslate %}</span>{% endif %}{% else %}—{% endif %}</dd>
+    <dt>{% translate "Détenteur" %}</dt><dd>{% if item.holder %}{{ item.holder.full_name }}{% if item.assigned_at %} <span class="meta">{% blocktranslate with day=item.assigned_at|fr_date:"long" %}depuis le {{ day }}{% endblocktranslate %}</span>{% endif %}{% else %}—{% endif %}</dd>
   </dl>
   <div>
     <h3 class="h3 mb-2">{% translate "Historique" %}</h3>
@@ -16,7 +16,7 @@
         {% for event in events %}
           <li>
             <span>{{ event.get_action_display }}{% if event.employee %} · {{ event.employee.full_name }}{% endif %}{% if event.comment %} : « {{ event.comment|truncatechars:120 }} »{% endif %}{% if event.actor %} <span class="meta">{% blocktranslate with name=event.actor.full_name %}par {{ name }}{% endblocktranslate %}</span>{% endif %}</span>
-            <span class="meta whitespace-nowrap">{{ event.created_at|date:"j N Y à H:i" }}</span>
+            <span class="meta whitespace-nowrap">{{ event.created_at|fr_date:"short_year_time" }}</span>
           </li>
         {% endfor %}
       </ul>

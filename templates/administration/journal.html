@@ -14,7 +14,7 @@
     <div id="results" aria-live="polite">
       {% partialdef results inline %}
         <div class="filters justify-between">
-          <span class="meta">{% blocktranslate with start=start|date:"j F Y" end=end|date:"j F Y" %}Du {{ start }} au {{ end }}{% endblocktranslate %}</span>
+          <span class="meta">{% blocktranslate with start=start|fr_date:"long" end=end|fr_date:"long" %}Du {{ start }} au {{ end }}{% endblocktranslate %}</span>
           {% button _("Exporter en CSV") size="sm" icon="dl" href=export_url %}
         </div>
         {% if page_obj.paginator.count %}
@@ -22,7 +22,7 @@
             {% for entry in page_obj.object_list %}
               <li>
                 <span><b class="font-medium">{% if entry.actor %}{{ entry.actor.full_name }}{% else %}{% translate "Dianna" %}{% endif %}</b> · {{ entry.summary }}</span>
-                <span class="meta whitespace-nowrap">{{ entry.created_at|date:"j N Y à H:i" }}</span>
+                <span class="meta whitespace-nowrap">{{ entry.created_at|fr_date:"short_year_time" }}</span>
               </li>
             {% endfor %}
           </ul>

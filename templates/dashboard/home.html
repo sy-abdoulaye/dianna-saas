@@ -5,7 +5,7 @@
   <div class="page-head">
     <div>
       <h1 class="h1">{% blocktranslate with name=current_employee.first_name %}Bonjour {{ name }}{% endblocktranslate %}</h1>
-      <p class="sub">{{ today|date:"l j F Y"|capfirst }} · {{ current_employee.get_role_display }} · {{ current_company.name }}</p>
+      <p class="sub">{{ today|fr_date:"full"|capfirst }} · {{ current_employee.get_role_display }} · {{ current_company.name }}</p>
     </div>
     <div class="actions">
       {% if is_admin %}

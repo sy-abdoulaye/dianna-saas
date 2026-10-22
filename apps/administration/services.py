@@ -222,10 +222,10 @@ def add_closure(*, day, label, site, actor, request=None):
     sous le même verrou, est envoyée aux RH."""
     from django.db import IntegrityError
     from django.urls import reverse
-    from django.utils.formats import date_format
 
     from apps.agenda.models import Closure
     from apps.core import notifications
+    from apps.core.dates import format_date
     from apps.core.tenancy import get_current_company
     from apps.people.models import IN_POST_STATUSES, Role
 
@@ -239,7 +239,7 @@ def add_closure(*, day, label, site, actor, request=None):
             closure = Closure.objects.create(date=day, label=label, site=site)
     except IntegrityError as exc:
         raise ClosureError("date", CLOSURE_DUPLICATE) from exc
-    when = date_format(day, "j F Y")
+    when = format_date(day, "long")
     audit.log(
         "company.closure_added",
         _("Fermeture ajoutée : %(label)s, le %(day)s (%(scope)s)")
@@ -273,11 +273,11 @@ def add_closure(*, day, label, site, actor, request=None):
 
 @transaction.atomic
 def delete_closure(closure, *, actor, request=None):
-    from django.utils.formats import date_format
+    from apps.core.dates import format_date
 
     summary = _("Fermeture supprimée : %(label)s, le %(day)s (%(scope)s)") % {
         "label": closure.label,
-        "day": date_format(closure.date, "j F Y"),
+        "day": format_date(closure.date, "long"),
         "scope": closure_scope(closure),
     }
     closure.delete()

@@ -17,7 +17,7 @@
         <tr>
           {% if not mine %}<td>{{ row.requester.full_name }}</td>{% endif %}
           <td class="min-w-56"><button class="row-link text-left" type="button" hx-get="{{ detail_url }}" hx-target="#modal-root">{{ row.summary }}</button></td>
-          <td class="text-ink-2">{{ row.submitted_at|date:"j N" }}</td>
+          <td class="text-ink-2">{{ row.submitted_at|fr_date:"weekday_short" }}</td>
           <td>{% status_badge "request" row.status %}</td>
           <td class="end whitespace-nowrap">
             {% if row.can_decide %}

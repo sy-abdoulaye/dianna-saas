@@ -82,7 +82,7 @@
                   <th class="nm" scope="col">{% translate "Collaborateur" %}</th>
                   {% for day in grid.days %}
                     <th scope="col" class="{% if day == today %}today{% endif %}"{% if day == today %} aria-current="date"{% endif %}>
-                      {% if view == "mois" %}{{ day|date:"D"|first|upper }}<br>{{ day|date:"j" }}{% else %}{{ day|date:"D j"|capfirst }}{% endif %}
+                      {% if view == "mois" %}{{ day|date:"D"|first|upper }}<br>{{ day|date:"j" }}{% else %}{{ day|fr_date:"weekday_short" }}{% endif %}
                     </th>
                   {% endfor %}
                 </tr>
@@ -97,7 +97,7 @@
                       </div>
                     </th>
                     {% for cell in row.cells %}{# Case en ligne : une inclusion par case coûtait cher sur un grand effectif. #}
-                      {% with label=cell.label day_text=cell.day|date:"l j F"|capfirst %}
+                      {% with label=cell.label day_text=cell.day|fr_date:"weekday_day_month"|capfirst %}
 <td class="{% if cell.state == 'we' %}we{% endif %}{% if cell.day == today %} today{% endif %}" title="{{ row.employee.full_name }} · {{ day_text }} · {{ label|default:_('Week-end') }}">
   {% if cell.clickable %}
     <button class="plan-cell" type="button" hx-get="{{ new_telework_url }}?date={{ cell.day|date:'Y-m-d' }}" hx-target="#modal-root" aria-label="{% blocktranslate %}{{ day_text }} : {{ label }}. Déclarer du télétravail{% endblocktranslate %}">

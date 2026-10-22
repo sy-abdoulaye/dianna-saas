@@ -40,7 +40,7 @@
   {% elif kind.key == "leave" %}
     {% if campaign %}
       {% blocktranslate asvar campaign_title with label=campaign.label %}Campagne {{ label }}.{% endblocktranslate %}
-      {% blocktranslate asvar campaign_text with deadline=campaign.deadline|date:"j F Y" start=campaign.period_start|date:"j F" end=campaign.period_end|date:"j F Y" %}Déposez vos vœux avant le {{ deadline }}, pour des congés compris entre le {{ start }} et le {{ end }}. Votre manager arbitre en tenant compte des absences du service.{% endblocktranslate %}
+      {% blocktranslate asvar campaign_text with deadline=campaign.deadline|fr_date:"long" start=campaign.period_start|fr_date:"day_month" end=campaign.period_end|fr_date:"long" %}Déposez vos vœux avant le {{ deadline }}, pour des congés compris entre le {{ start }} et le {{ end }}. Votre manager arbitre en tenant compte des absences du service.{% endblocktranslate %}
       {% include "components/banner.html" with kind="info" title=campaign_title text=campaign_text %}
       {% if planning_url %}<p class="meta"><a class="link" href="{{ planning_url }}">{% translate "Voir les absences du service au planning" %}</a></p>{% endif %}
     {% else %}
@@ -54,15 +54,14 @@
   <div class="card">
     <form class="filters" method="get" action="{{ list_url }}" role="search" hx-get="{{ list_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
       <input type="hidden" name="onglet" value="{{ tab }}">
-      {% if tab != "mes-demandes" %}
-        <div class="field grow">
-          <label class="label" for="request-q">{% translate "Recherche" %}</label>
-          <div class="search-input">
-            {% icon "search" %}
-            <input class="input" id="request-q" type="search" name="q" value="{{ query }}" placeholder="{% translate 'Nom du collaborateur' %}">
-          </div>
+      <div class="field grow">
+        <label class="label" for="request-q">{% translate "Recherche" %}</label>
+        <div class="search-input">
+          {% icon "search" %}
+          {% if tab == "mes-demandes" %}{% translate "Rechercher dans mes demandes" as placeholder %}{% else %}{% translate "Nom du collaborateur" as placeholder %}{% endif %}
+          <input class="input" id="request-q" type="search" name="q" value="{{ query }}" placeholder="{{ placeholder }}">
         </div>
-      {% endif %}
+      </div>
       <div class="field">
         <label class="label" for="request-status">{% translate "Statut" %}</label>
         <span class="select-wrap">
@@ -106,7 +105,7 @@
                         <div class="meta text-warn-ink">{% blocktranslate count n=row.conflict.count %}{{ n }} absence dans le service sur la période{% plural %}{{ n }} absences dans le service sur la période{% endblocktranslate %}</div>
                       {% endif %}
                     </td>
-                    <td class="text-ink-2">{{ row.submitted_at|date:"j N" }}</td>
+                    <td class="text-ink-2">{{ row.submitted_at|fr_date:"weekday_short" }}</td>
                     <td>{% status_badge "request" row.status %}</td>
                     <td class="end whitespace-nowrap">
                       {% if row.can_decide %}

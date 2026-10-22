@@ -33,8 +33,8 @@
             {% for campaign in campaigns %}
               <tr>
                 <td><b class="font-medium">{{ campaign.label }}</b></td>
-                <td>{{ campaign.period_start|date:"j N" }} – {{ campaign.period_end|date:"j N Y" }}</td>
-                <td>{{ campaign.deadline|date:"j F Y" }}</td>
+                <td>{{ campaign.period_start|fr_date:"short" }} – {{ campaign.period_end|fr_date:"short_year" }}</td>
+                <td>{{ campaign.deadline|fr_date:"long" }}</td>
                 <td class="num">{{ campaign.conflict_threshold }} %</td>
                 <td class="num">{{ campaign.request_count }}</td>
                 <td>{% status_badge "campaign" campaign.status %}</td>

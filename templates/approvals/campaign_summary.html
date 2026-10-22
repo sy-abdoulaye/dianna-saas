@@ -6,7 +6,7 @@
     <div>
       <div class="crumbs"><a href="{{ campaigns_url }}">{% translate "Campagnes" %}</a> › {% translate "Synthèse" %}</div>
       <h1 class="h1">{% blocktranslate with label=campaign.label %}Synthèse de la campagne {{ label }}{% endblocktranslate %}</h1>
-      <p class="sub">{% blocktranslate with start=campaign.period_start|date:"j F" end=campaign.period_end|date:"j F Y" threshold=campaign.conflict_threshold %}Du {{ start }} au {{ end }} · seuil d'alerte {{ threshold }} % du service{% endblocktranslate %}</p>
+      <p class="sub">{% blocktranslate with start=campaign.period_start|fr_date:"day_month" end=campaign.period_end|fr_date:"long" threshold=campaign.conflict_threshold %}Du {{ start }} au {{ end }} · seuil d'alerte {{ threshold }} % du service{% endblocktranslate %}</p>
     </div>
     <div class="actions">
       {% if planning_url %}{% button _("Voir le planning") icon="cal" href=planning_url %}{% endif %}
@@ -27,7 +27,7 @@
               <th scope="col">{% translate "Service" %}</th>
               <th scope="col" class="num">{% translate "Effectif" %}</th>
               <th scope="col" class="num">{% translate "Vœux" %}</th>
-              {% for monday in mondays %}<th scope="col" class="num">{{ monday|date:"j N" }}</th>{% endfor %}
+              {% for monday in mondays %}<th scope="col" class="num">{{ monday|fr_date:"short" }}</th>{% endfor %}
             </tr>
           </thead>
           <tbody>

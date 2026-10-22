@@ -14,7 +14,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Q
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
 from apps.approvals.models import (
@@ -26,6 +25,7 @@ from apps.approvals.models import (
 )
 from apps.core import audit, permissions
 from apps.core.csv_export import csv_content
+from apps.core.dates import format_date
 from apps.core.models import Service
 from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Styled, xlsx_content
 from apps.people.models import IN_POST_STATUSES, Employee
@@ -49,7 +49,7 @@ def month_bounds(month: date) -> tuple[date, date]:
 
 
 def month_label(month: date) -> str:
-    return date_format(month, "F Y")
+    return format_date(month, "month")
 
 
 def _file(fmt, title, header, rows, stem):
@@ -104,7 +104,7 @@ def telework_month(viewer, month: date, fmt: str, *, request=None):
             person.registration_number,
             person.service.name if person.service else "",
             len(by_person.get(person.pk, [])),
-            ", ".join(date_format(d, "d/m") for d in sorted(by_person.get(person.pk, []))),
+            ", ".join(format_date(d, "day_numeric") for d in sorted(by_person.get(person.pk, []))),
         ]
         for person in people
     ]
@@ -213,8 +213,8 @@ def transport_month(viewer, month: date, fmt: str, *, request=None):
                 proof.get_ticket_type_display(),
                 _("du %(a)s au %(b)s")
                 % {
-                    "a": date_format(proof.month, "d/m/Y"),
-                    "b": date_format(proof.valid_until, "d/m/Y"),
+                    "a": format_date(proof.month, "numeric"),
+                    "b": format_date(proof.valid_until, "numeric"),
                 },
                 euros(proof.amount),
                 euros(monthly),
@@ -285,7 +285,7 @@ def campaign_file(viewer, campaign, fmt: str, *, request=None):
     _check(viewer)
     mondays, summaries = campaign_summary(campaign)
     header = [_("Service"), _("Effectif"), _("Vœux")] + [
-        _("Semaine du %(day)s") % {"day": date_format(m, "d/m")} for m in mondays
+        _("Semaine du %(day)s") % {"day": format_date(m, "day_numeric")} for m in mondays
     ]
     rows = []
     for item in summaries:
