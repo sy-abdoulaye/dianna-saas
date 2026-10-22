@@ -31,7 +31,6 @@ from decimal import Decimal
 from django.db import DataError, IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
 from apps.agenda.days import day_off, day_off_message
@@ -49,6 +48,7 @@ from apps.approvals.models import (
     TransportProof,
 )
 from apps.core import audit, notifications, permissions
+from apps.core.dates import format_date
 from apps.core.files import delete_private, write_private
 from apps.core.models import Notification
 from apps.people.models import IN_POST_STATUSES, Employee, Role
@@ -280,7 +280,7 @@ def check_request(request, *, campaign=None) -> dict:
                 )
                 % {
                     "n": used,
-                    "week": date_format(rules.monday_of(request.date), "j N"),
+                    "week": format_date(rules.monday_of(request.date), "short"),
                     "quota": quota,
                 }
             }
@@ -302,8 +302,8 @@ def check_request(request, *, campaign=None) -> dict:
                     )
                     % {
                         "label": campaign.label,
-                        "a": date_format(campaign.period_start, "j F Y"),
-                        "b": date_format(campaign.period_end, "j F Y"),
+                        "a": format_date(campaign.period_start, "long"),
+                        "b": format_date(campaign.period_end, "long"),
                     }
                 }
         if rules.leave_overlaps(requester, request.start, request.end, exclude_pk=pk):
@@ -333,7 +333,7 @@ def _check_transport(request) -> dict:
     if request.month is None or not first <= request.month.replace(day=1) <= last:
         return {
             "month": _("Choisissez un mois entre %(a)s et %(b)s.")
-            % {"a": date_format(first, "F Y"), "b": date_format(last, "F Y")}
+            % {"a": format_date(first, "month"), "b": format_date(last, "month")}
         }
     if request.amount is None or not Decimal("0") < Decimal(request.amount) <= Decimal("1000"):
         return {"amount": AMOUNT_RANGE}
@@ -357,7 +357,7 @@ def _check_transport(request) -> dict:
     covered = max(overlapping.month, request.month)
     return {
         "month": _("Un justificatif de ce type couvre déjà %(month)s.")
-        % {"month": date_format(covered, "F Y")}
+        % {"month": format_date(covered, "month")}
     }
 
 
@@ -647,7 +647,10 @@ def approve(request, actor: Employee, *, comment: str = "", http_request=None) -
 
 
 def _substitution(request, actor, first_step) -> str:
-    """Trace d'un remplacement du manager par un RH ou un administrateur (M-12)."""
+    """Trace d'un remplacement du manager par un RH ou un administrateur (M-12). Jamais pour
+    les types validés par les RH, dont ils sont les valideurs prévus (L5-04)."""
+    if request.hr_validated:
+        return ""
     manager = active_manager(request.requester)
     if first_step and manager is not None and manager.pk != actor.pk:
         return _("à la place de %(name)s") % {"name": manager.full_name}

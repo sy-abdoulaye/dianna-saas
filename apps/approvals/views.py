@@ -130,7 +130,12 @@ def request_list(request, kind):
     rows = rows.select_related("requester", "requester__service", "requester__manager")
     q = request.GET.get("q", "").strip()
     status = request.GET.get("statut", "")
-    if q:
+    if q and tab == TAB_MINE:
+        # « Rechercher dans mes demandes » : dans le résumé affiché (dates, type, montant),
+        # comme le prototype. Les demandes d'une personne sont peu nombreuses.
+        needle = q.casefold()
+        rows = rows.filter(pk__in=[row.pk for row in rows if needle in summary(row).casefold()])
+    elif q:
         rows = rows.filter(
             Q(requester__first_name__icontains=q) | Q(requester__last_name__icontains=q)
         )
@@ -247,6 +252,10 @@ def _submit_toast(result) -> Toast:
             title=_("Demande validée"),
             message=_("%(summary)s : validée automatiquement.") % {"summary": summary(req)},
         )
+    if req.hr_validated:
+        # Justificatifs et matériel : validés par les RH (L5-04).
+        message = _("%(summary)s transmise aux RH.") % {"summary": summary(req)}
+        return Toast(title=_("Demande envoyée"), message=message, emphasis=summary(req))
     manager = workflow.active_manager(req.requester)
     dest = manager.full_name if manager else _("l'équipe RH")
     message = _("%(summary)s transmise à %(dest)s.") % {"summary": summary(req), "dest": dest}

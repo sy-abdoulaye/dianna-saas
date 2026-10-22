@@ -13,8 +13,10 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from apps.approvals import workflow
+from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus, TransportProof
 from apps.approvals.tests.conftest import next_weekday  # noqa: F401
+from apps.core.dates import format_date
 from apps.core.models import AuditLog, Notification
 from apps.core.tenancy import tenant_context
 from apps.people.models import Employee
@@ -308,3 +310,90 @@ def test_hr_sees_all_proofs_but_manager_only_his_own(client_for, company_a):
     assert company_a.employee.full_name in hr
     employee = Employee.all_companies.get(pk=company_a.employee.pk)
     assert employee.full_name
+
+
+def test_reminder_writes_1er_for_the_first_day_of_the_month(company_a, monkeypatch):
+    """La relance utilise le format commun : « le 1er novembre 2026 »."""
+    from apps.approvals import tasks
+
+    monkeypatch.setattr(tasks.timezone, "localdate", lambda: date(2026, 10, 20))
+    with tenant_context(company_a.company):
+        TransportProof.objects.create(
+            requester=company_a.employee,
+            month=date(2025, 11, 1),
+            ticket_type="yearly",
+            amount="800",
+            file_type="application/pdf",
+            status=RequestStatus.APPROVED,
+            submitted_at=timezone.now(),
+            file=f"{company_a.company.pk}/transport/x.pdf",
+            valid_until=date(2026, 11, 1),  # fixée à la main : le calcul donne une fin de mois
+        )
+    assert tasks.remind_expiring_transport.call(company_a.company.pk) == 1
+    notification = Notification.all_companies.get(
+        recipient=company_a.employee, text__startswith="Votre abonnement annuel"
+    )
+    assert "se termine le 1er novembre 2026." in notification.text
+
+
+# ---------- Montant saisi en texte (L5-20) ----------
+
+
+@pytest.mark.parametrize("typed", ["2,15", "2.15", " 2,15 ", "2 ,15"])
+def test_amount_accepts_a_comma_or_a_dot(client_for, company_a, typed):
+    assert send(client_for(company_a.employee), amount=typed).status_code == 204
+    assert proof_of(company_a.employee).amount == Decimal("2.15")
+
+
+@pytest.mark.parametrize("typed", ["2;15", "abc", "2,15 €", "1e3", "2,155", "-5", "1.000,50"])
+def test_amount_refuses_other_formats(client_for, company_a, typed):
+    response = send(client_for(company_a.employee), amount=typed)
+    assert response.status_code == 422
+    assert "Saisissez un montant comme 84,10." in response.content.decode()
+
+
+def test_amount_is_a_text_field_with_a_decimal_keyboard(client_for, company_a):
+    page = client_for(company_a.employee).get("/transport/nouvelle/").content.decode()
+    assert 'name="amount"' in page and 'inputmode="decimal"' in page
+    assert 'type="number"' not in page
+
+
+# ---------- Types validés par les RH (L5-04) ----------
+
+
+def test_hr_validated_kinds_say_sent_to_hr_and_never_write_instead_of(client_for, company_a):
+    """Le salarié a un manager, mais les RH sont les valideurs prévus : le message dit
+    « transmise aux RH » et le journal n'écrit jamais « à la place de »."""
+    client = client_for(company_a.employee)
+    response = send(client)
+    assert "transmise aux RH" in toast(response)["message"]
+    assert company_a.manager.full_name not in toast(response)["message"]
+    approved = proof_of(company_a.employee)
+    send(client, ticket="single", month=this_month())
+    refused = proof_of(company_a.employee, ticket_type="single")
+    with tenant_context(company_a.company):
+        workflow.approve(approved, company_a.hr)
+        workflow.refuse(refused, company_a.hr, reason="Illisible")
+        logs = AuditLog.objects.filter(target_type="approvals.transportproof")
+        summaries = list(logs.values_list("summary", flat=True))
+    assert len(summaries) >= 2
+    assert not any("à la place de" in text for text in summaries)
+
+
+def test_summary_follows_the_prototype_order_with_the_file_name(client_for, company_a):
+    send(client_for(company_a.employee), amount="84,10")
+    proof = proof_of(company_a.employee)
+    month = format_date(this_month(), "month")
+    assert summary(proof) == f"{month} · Abonnement mensuel · 84,10 € · abonnement.pdf"
+
+
+def test_search_in_my_requests_looks_in_the_summary(client_for, company_a):
+    """« Rechercher dans mes demandes » (prototype), sur les quatre modules."""
+    client = client_for(company_a.employee)
+    send(client, amount="84,10")
+    send(client, ticket="single", amount="2,15", name="ticket.pdf")
+    found = client.get("/transport/?onglet=mes-demandes&q=TICKET").content.decode()
+    assert "ticket.pdf" in found and "84,10" not in found
+    for url in ("/teletravail/", "/conges/", "/astreintes/", "/transport/"):
+        page = client.get(url).content.decode()
+        assert 'placeholder="Rechercher dans mes demandes"' in page, url

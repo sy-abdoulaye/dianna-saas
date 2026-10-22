@@ -28,24 +28,33 @@ def test_employee_uploads_a_proof_and_hr_validates_it(browser, urls, company_a, 
     expect(page.get_by_text("article L3261-2 du Code du travail")).to_be_visible()
     page.get_by_role("button", name="Ajouter un justificatif").click()
     dialog = page.locator("dialog[open]")
-    dialog.get_by_label("Montant payé (€)").fill("84.10")
+    # Montant saisi avec une virgule (L5-20) : enregistré 2,15 €.
+    dialog.get_by_label("Montant payé (€)").fill("2,15")
     dialog.locator("input[type=file]").set_input_files(str(proof))
     dialog.get_by_role("button", name="Envoyer la demande").click()
-    expect(page.locator("#toasts .toast").last).to_contain_text("Demande envoyée")
+    expect(page.locator("#toasts .toast").last).to_contain_text("transmise aux RH")
     employee.close()
+    from apps.approvals.models import TransportProof
+
+    saved = TransportProof.all_companies.filter(requester=company_a.employee).latest("pk")
+    assert str(saved.amount) == "2.15"
 
     hr = browser.new_context(locale="fr-FR", accept_downloads=True)
     page = hr.new_page()
     sign_in(page, urls, company_a.hr)
     page.goto(urls("/transport/?onglet=a-valider"))
     from django.utils import timezone, translation
-    from django.utils.formats import date_format
+
+    from apps.core.dates import format_date
 
     with translation.override("fr"):
-        month = date_format(timezone.localdate(), "F Y")
-    page.get_by_role("button", name=re.compile(f"Abonnement mensuel · {month}")).click()
+        month = format_date(timezone.localdate(), "month")
+    # Résumé dans l'ordre du prototype : mois · type · montant · nom du fichier.
+    summary = re.compile(f"{month} · Abonnement mensuel · 2,15\\s€ · abonnement.pdf")
+    page.get_by_role("button", name=summary).click()
     dialog = page.locator("dialog[open]")
-    expect(dialog.get_by_text("abonnement.pdf")).to_be_visible()
+    expect(dialog.get_by_text("abonnement.pdf").first).to_be_visible()
+    expect(dialog.get_by_text("2,15\u00a0€").first).to_be_visible()
     with page.expect_download() as info:
         dialog.get_by_role("link", name="Télécharger").click()
     assert info.value.suggested_filename == "abonnement.pdf"
