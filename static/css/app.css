@@ -382,7 +382,9 @@
   .avatar-l { width: 72px; height: 72px; font: 600 24px/32px var(--font-display); }
 
   /* ---------- Tableaux ---------- */
-  .table-wrap { overflow-x: auto; }
+  /* position: relative : le texte sr-only (position absolue) des tableaux reste dans le
+     conteneur qui défile, au lieu d'élargir la page sur mobile. */
+  .table-wrap { position: relative; overflow-x: auto; }
   .table { width: 100%; border-collapse: collapse; }
   .table th { text-align: left; font: 500 12px/16px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); padding: 12px 16px; background: var(--subtle); border-bottom: 1px solid var(--line); white-space: nowrap; }
   .table td { padding: 10px 16px; height: 56px; border-top: 1px solid var(--line); vertical-align: middle; font-variant-numeric: tabular-nums; }
@@ -407,7 +409,7 @@
   .pager a:hover { background: var(--subtle); }
   .pager a[aria-current="page"] { background: var(--sel-bg); color: var(--sel-ink); }
   .pager .page-off { opacity: 0.45; }
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tabs { position: relative; display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
   .tabs a { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-bottom: 2px solid transparent; margin-bottom: -1px; font: 500 14px/20px var(--font-sans); color: var(--ink-2); text-decoration: none; white-space: nowrap; }
   .tabs a:hover { color: var(--ink); }
   .tabs a[aria-current="page"] { color: var(--sel-ink); border-bottom-color: var(--brand); }
@@ -443,7 +445,7 @@
   .skeleton .sk-block { height: 320px; }
 
   /* ---------- Étapes ---------- */
-  .stepper { display: flex; align-items: flex-start; overflow-x: auto; padding-bottom: 4px; }
+  .stepper { position: relative; display: flex; align-items: flex-start; overflow-x: auto; padding-bottom: 4px; }
   .step { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 150px; text-align: center; flex: none; }
   .step b { font: 500 13px/16px var(--font-sans); }
   .step .step-meta { font-size: 12px; line-height: 16px; color: var(--ink-3); }
@@ -555,7 +557,7 @@
   .rows > li:last-child { padding-bottom: 0; }
 
   /* Planning (prototype : .plan, .cell, .k-*, .legend). Jetons site, tel, cng, ast. */
-  .plan { overflow: auto; max-height: 620px; border-top: 1px solid var(--line); }
+  .plan { position: relative; overflow: auto; max-height: 620px; border-top: 1px solid var(--line); }
   .plan table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
   .plan th, .plan td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; text-align: center; background: var(--surface); }
   .plan thead th { position: sticky; top: 0; z-index: 2; background: var(--subtle); font: 500 12px/16px var(--font-sans); color: var(--ink-3); padding: 8px 4px; min-width: 34px; }
