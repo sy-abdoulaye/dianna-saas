@@ -244,3 +244,62 @@ def test_the_database_refuses_a_second_identical_normalized_serial(company_a):
 def test_ci_minio_image_is_pinned_by_digest():
     ci = (Path(django_settings.BASE_DIR) / ".github" / "workflows" / "ci.yml").read_text()
     assert "bitnamilegacy/minio@sha256:" in ci
+
+
+# ---------- f. Coupe-circuit (L5-21) ----------
+
+
+def test_twelve_avatars_with_s3_down_make_a_single_storage_call(
+    client_for, company_a, settings, monkeypatch
+):
+    """S3 injoignable : la première photo tente le stockage (un appel, au plus S3_MAX_ATTEMPTS
+    envois réseau selon la configuration botocore), les onze suivantes échouent aussitôt."""
+    from botocore.httpsession import URLLib3Session
+
+    from apps.core.files import signed_url
+    from tests.factories import EmployeeFactory
+
+    settings.PRIVATE_STORAGE_BACKEND = "s3"
+    settings.S3_BUCKET, settings.S3_ENDPOINT_URL = "dianna", "http://127.0.0.1:1"
+    settings.S3_ACCESS_KEY, settings.S3_SECRET_KEY = "k", "s"
+    files.private_storage._wrapped = empty
+    sends, opens = [], []
+    real_send, real_open = URLLib3Session.send, files.private_storage.open
+
+    def counting_send(self, request):
+        sends.append(request.url)
+        return real_send(self, request)
+
+    def counting_open(*args, **kwargs):
+        opens.append(args)
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(URLLib3Session, "send", counting_send)
+    monkeypatch.setattr(files.private_storage, "open", counting_open)
+    with tenant_context(company_a.company):
+        people = [
+            EmployeeFactory(
+                company=company_a.company, photo=f"{company_a.company.pk}/photos/{n}.jpg"
+            )
+            for n in range(12)
+        ]
+    client = client_for(company_a.hr)
+    start = time.perf_counter()
+    statuses = [client.get(signed_url(person.photo)).status_code for person in people]
+    elapsed = time.perf_counter() - start
+    assert statuses == [404] * 12
+    assert len(opens) == 1  # une seule tentative auprès du stockage
+    assert 1 <= len(sends) <= files.S3_MAX_ATTEMPTS
+    assert elapsed < 15
+
+
+def test_the_circuit_closes_again_after_30_seconds(monkeypatch):
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(files.time, "monotonic", lambda: clock["now"])
+    files._storage_failed(OSError("injoignable"))
+    with pytest.raises(files.StorageUnavailableError):
+        files.read_private("x")
+    clock["now"] += files.CIRCUIT_BREAKER_SECONDS + 1
+    with pytest.raises(files.StorageUnavailableError):  # fichier absent : nouvel essai réel
+        files.read_private("absent/x.jpg")
+    assert files._circuit["open_until"] <= clock["now"]  # un fichier absent n'ouvre pas

@@ -5,7 +5,7 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.files import private_storage, random_name
+from apps.core.files import get_private_storage, random_name
 from apps.core.models import TenantModel
 
 
@@ -70,7 +70,7 @@ class Employee(TenantModel):
     photo = models.ImageField(
         _("photo"),
         upload_to=employee_photo_path,
-        storage=private_storage,
+        storage=get_private_storage,
         blank=True,
     )
     phone = models.CharField(_("téléphone"), max_length=30, blank=True)

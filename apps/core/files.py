@@ -22,6 +22,7 @@ d'environnement.
 
 import io
 import re
+import time
 import uuid
 import warnings
 from contextlib import contextmanager
@@ -50,6 +51,40 @@ STORAGE_UNAVAILABLE = gettext_lazy(
 
 class StorageUnavailableError(Exception):
     """Le stockage n'a pas répondu ou a renvoyé une erreur : rien n'est enregistré en base."""
+
+
+# Coupe-circuit par processus (L5-21) : après une panne du stockage, les appels suivants
+# échouent aussitôt pendant CIRCUIT_BREAKER_SECONDS, sans contacter le stockage. Une page
+# avec douze avatars ne fait donc qu'un seul appel quand S3 est injoignable. Un fichier
+# simplement absent n'ouvre pas le circuit.
+CIRCUIT_BREAKER_SECONDS = 30
+_circuit = {"open_until": 0.0}
+
+
+def reset_circuit() -> None:
+    _circuit["open_until"] = 0.0
+
+
+def _check_circuit(name: str) -> None:
+    if time.monotonic() < _circuit["open_until"]:
+        raise StorageUnavailableError(name)
+
+
+def _storage_failed(exc) -> None:
+    if not _is_missing(exc):
+        _circuit["open_until"] = time.monotonic() + CIRCUIT_BREAKER_SECONDS
+
+
+def _is_missing(exc) -> bool:
+    """Fichier absent (disque ou S3) : ce n'est pas une panne du stockage."""
+    from botocore.exceptions import ClientError
+
+    if isinstance(exc, FileNotFoundError):
+        return True
+    if isinstance(exc, ClientError):
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        return code in {"404", "NoSuchKey", "NotFound"}
+    return False
 
 
 def storage_errors() -> tuple:
@@ -98,6 +133,12 @@ class PrivateStorage(LazyObject):
 
 
 private_storage = PrivateStorage()
+
+
+def get_private_storage():
+    """Stockage privé des champs fichier : passé par une fonction (`storage=get_private_storage`)
+    pour que les migrations ne figent ni le disque ni S3 (le choix dépend de l'environnement)."""
+    return private_storage
 
 
 def random_name(prefix: str, filename: str) -> str:
@@ -236,30 +277,34 @@ def clean_document(uploaded, *, max_bytes: int = DOCUMENT_MAX_BYTES) -> tuple[Co
 def read_private(name: str) -> bytes:
     """Lit un fichier privé entier (5 Mo au plus) ; une panne du stockage devient
     StorageUnavailableError avant tout envoi de réponse (pas de réponse coupée en cours)."""
+    _check_circuit(name)
     try:
         with private_storage.open(name, "rb") as handle:
             return handle.read()
     except storage_errors() as exc:
+        _storage_failed(exc)
         raise StorageUnavailableError(name) from exc
 
 
 def write_private(name: str, content) -> str:
     """Écrit un fichier privé et renvoie le nom réellement enregistré."""
+    _check_circuit(name)
     try:
         return private_storage.save(name, content)
     except storage_errors() as exc:
+        _storage_failed(exc)
         raise StorageUnavailableError(name) from exc
 
 
 def delete_private(name: str) -> None:
     """Suppression best-effort (nettoyage) : une panne du stockage ne masque pas l'erreur
     d'origine ; le fichier orphelin éventuel relève de la purge (lot 8)."""
-    if not name:
+    if not name or time.monotonic() < _circuit["open_until"]:
         return
     try:
         private_storage.delete(name)
-    except storage_errors():
-        pass
+    except storage_errors() as exc:
+        _storage_failed(exc)
 
 
 class FileWrites:

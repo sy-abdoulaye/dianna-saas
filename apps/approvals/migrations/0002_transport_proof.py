@@ -3,13 +3,13 @@
 import uuid
 from decimal import Decimal
 
-import django.core.files.storage
 import django.core.validators
 import django.db.models.deletion
 import django.db.models.manager
 from django.db import migrations, models
 
 import apps.approvals.models
+import apps.core.files
 
 
 class Migration(migrations.Migration):
@@ -85,9 +85,7 @@ class Migration(migrations.Migration):
                 (
                     "file",
                     models.FileField(
-                        storage=django.core.files.storage.FileSystemStorage(
-                            base_url=None, location="/home/abdou/devs/dianna/private_media"
-                        ),
+                        storage=apps.core.files.get_private_storage,
                         upload_to=apps.approvals.models.proof_path,
                         verbose_name="justificatif",
                     ),

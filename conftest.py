@@ -345,10 +345,12 @@ def private_files(settings, tmp_path):
     """Fichiers privés de chaque test dans un dossier temporaire, sur disque."""
     from django.utils.functional import empty
 
-    from apps.core.files import private_storage
+    from apps.core.files import private_storage, reset_circuit
 
     settings.PRIVATE_MEDIA_ROOT = tmp_path / "private"
     settings.PRIVATE_STORAGE_BACKEND = "filesystem"
     private_storage._wrapped = empty
+    reset_circuit()
     yield
     private_storage._wrapped = empty
+    reset_circuit()

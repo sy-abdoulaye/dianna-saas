@@ -13,7 +13,7 @@ from django.db.models import F, Q
 from django.utils.translation import gettext_lazy as _
 
 from apps.agenda.models import CalendarEvent
-from apps.core.files import private_storage
+from apps.core.files import get_private_storage
 from apps.core.models import Module, TenantModel
 
 
@@ -290,7 +290,7 @@ class TransportProof(ApprovalRequest):
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01")), MaxValueValidator(Decimal("1000"))],
     )
-    file = models.FileField(_("justificatif"), upload_to=proof_path, storage=private_storage)
+    file = models.FileField(_("justificatif"), upload_to=proof_path, storage=get_private_storage)
     file_type = models.CharField(_("type du fichier"), max_length=40)
     original_name = models.CharField(_("nom du fichier"), max_length=120, blank=True)
     valid_until = models.DateField(_("valide jusqu'au"))
