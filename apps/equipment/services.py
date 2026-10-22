@@ -231,17 +231,50 @@ def return_item(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def send_to_repair(item, *, actor, comment="", request=None) -> EquipmentItem:
-    """En stock ou attribué → en réparation ; le détenteur éventuel est conservé (L5-10)."""
+def send_to_repair(item, *, actor, comment="", request=None) -> dict:
+    """En stock ou attribué → en réparation ; le détenteur éventuel est conservé (L5-10).
+    Renvoie ce qu'il faut pour l'annulation immédiate (30 s)."""
     item = _lock(item)
     if item.status not in (Status.IN_STOCK, Status.ASSIGNED):
         raise EquipmentError(CHANGED)
+    previous = item.status
     item.status = Status.REPAIR
     item.save(update_fields=["status", "updated_at"])
-    _event(item, EquipmentEvent.Action.REPAIR, actor, item.holder, comment)
+    event_id = _event(item, EquipmentEvent.Action.REPAIR, actor, item.holder, comment)
     audit.log(
         "equipment.repair",
         _("Envoyé en réparation : %(item)s") % {"item": _label(item)},
+        actor=actor,
+        target=item,
+        request=request,
+    )
+    return {"item": str(item.public_id), "event": event_id, "previous": previous}
+
+
+@transaction.atomic
+def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
+    """« Annuler » après un envoi en réparation (30 s, auteur seulement) : l'équipement
+    reprend son état précédent et l'événement disparaît de l'historique (le journal d'audit
+    garde les deux actions). Refusé si l'équipement a changé depuis."""
+    item = EquipmentItem.objects.filter(public_id=payload["item"]).first()
+    if item is None:
+        raise EquipmentError(CHANGED)
+    item = _lock(item)
+    latest = item.events.order_by("-pk").values_list("pk", flat=True).first()
+    previous = payload["previous"]
+    if (
+        latest != payload["event"]
+        or item.status != Status.REPAIR
+        or previous not in (Status.IN_STOCK, Status.ASSIGNED)
+        or (previous == Status.ASSIGNED) != bool(item.holder_id)
+    ):
+        raise EquipmentError(CHANGED)
+    item.events.filter(pk=payload["event"]).delete()
+    item.status = previous
+    item.save(update_fields=["status", "updated_at"])
+    audit.log(
+        "equipment.repair_undone",
+        _("Envoi en réparation annulé : %(item)s") % {"item": _label(item)},
         actor=actor,
         target=item,
         request=request,
@@ -347,7 +380,7 @@ def close_issue(issue, *, actor, resolution, request=None) -> EquipmentIssue:
 
 
 @transaction.atomic
-def issue_to_repair(issue, *, actor, request=None) -> EquipmentItem:
+def issue_to_repair(issue, *, actor, request=None) -> dict:
     """« Envoyer en réparation » depuis un signalement : le détenteur est conservé."""
     issue = _lock_issue(issue)
     return send_to_repair(issue.item, actor=actor, comment=issue.description, request=request)

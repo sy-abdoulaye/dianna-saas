@@ -13,6 +13,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.approvals import workflow
@@ -107,8 +108,10 @@ def home(request):
         "statuses": EquipmentItem.Status.choices,
     }
     if tab == TAB_MINE:
-        context["items"] = EquipmentItem.objects.filter(holder=me).exclude(
-            status=EquipmentItem.Status.RETIRED
+        context["items"] = (
+            EquipmentItem.objects.filter(holder=me)
+            .exclude(status=EquipmentItem.Status.RETIRED)
+            .select_related("holder")
         )
         context["my_requests"] = _decorate_requests(
             list(EquipmentRequest.objects.filter(requester=me).prefetch_related("assignments")),
@@ -253,30 +256,37 @@ def _assigned(request, item, employee, payload):
     return trigger(response, requestsChanged=True)
 
 
+UNDO_ACTIONS = {
+    "equipment.assign": (
+        services.undo_assign,
+        gettext_lazy("Attribution annulée"),
+        gettext_lazy("L'équipement est de nouveau en stock."),
+    ),
+    "equipment.repair": (
+        services.undo_repair,
+        gettext_lazy("Envoi en réparation annulé"),
+        gettext_lazy("L'équipement a repris son état précédent."),
+    ),
+}
+
+
 @require_POST
 @module_required(Module.EQUIPMENT)
-def undo_assign(request, token):
+def undo_action(request, token):
     """« Annuler » dans la notification visuelle : 30 s, auteur seulement (L0-03)."""
     require(request, "equipment.manage")
     try:
         data = undo.read_token(request, token)
     except undo.UndoError as error:
         return toast_response(Toast(title=str(error.message), kind="err"), status=409)
-    if data.action != "equipment.assign":
+    if data.action not in UNDO_ACTIONS:
         raise Http404
+    undo_service, title, message = UNDO_ACTIONS[data.action]
     try:
-        services.undo_assign(json.loads(data.target), actor=request.employee, request=request)
+        undo_service(json.loads(data.target), actor=request.employee, request=request)
     except services.EquipmentError as error:
         return toast_response(Toast(title=str(error.message), kind="err"), status=409)
-    return _changed(
-        toast_response(
-            Toast(
-                title=_("Attribution annulée"),
-                message=_("L'équipement est de nouveau en stock."),
-                kind="info",
-            )
-        )
-    )
+    return _changed(toast_response(Toast(title=str(title), message=str(message), kind="info")))
 
 
 def _confirm_or_act(request, item, *, template_context, action, done_title):
@@ -333,17 +343,47 @@ def item_retire(request, public_id):
     )
 
 
-@require_POST
+def _repair(request, item, *, action_url, send):
+    """« Envoyer en réparation » : confirmation, puis « Annuler » pendant 30 s."""
+    if request.method == "GET":
+        holder = item.holder
+        return render(
+            request,
+            "components/confirm.html",
+            {
+                "title": _("Envoyer « %(item)s » en réparation ?")
+                % {"item": f"{item.get_kind_display()} {item.serial_number}"},
+                "text": _("%(name)s reste son détenteur pendant la réparation.")
+                % {"name": holder.full_name}
+                if holder
+                else _("L'équipement quitte le stock pendant la réparation."),
+                "ok_label": _("Envoyer en réparation"),
+                "action_url": action_url,
+            },
+        )
+    try:
+        payload = send()
+    except services.EquipmentError as error:
+        return _error(error)
+    token = undo.make_token(request, "equipment.repair", json.dumps(payload))
+    toast = Toast(
+        title=_("Envoyé en réparation"),
+        message=item.serial_number,
+        undo_url=reverse("equipment:undo", args=[token]),
+    )
+    return _changed(toast_response(toast, close_modal=True))
+
+
+@require_http_methods(["GET", "POST"])
 @module_required(Module.EQUIPMENT)
 @permission_required("equipment.manage")
 def item_repair(request, public_id):
     item = _item(public_id)
-    try:
-        services.send_to_repair(item, actor=request.employee, request=request)
-    except services.EquipmentError as error:
-        return _error(error)
-    return _changed(
-        toast_response(Toast(title=_("Envoyé en réparation"), message=item.serial_number))
+    return _repair(
+        request,
+        item,
+        action_url=reverse("equipment:item_repair", args=[item.public_id]),
+        send=lambda: services.send_to_repair(item, actor=request.employee, request=request),
     )
 
 
@@ -428,17 +468,16 @@ def issue_close(request, pk):
     return _changed(toast_response(Toast(title=_("Signalement clos")), close_modal=True))
 
 
-@require_POST
+@require_http_methods(["GET", "POST"])
 @module_required(Module.EQUIPMENT)
 @permission_required("equipment.manage")
 def issue_repair(request, pk):
     issue = _issue(pk)
-    try:
-        services.issue_to_repair(issue, actor=request.employee, request=request)
-    except services.EquipmentError as error:
-        return _error(error)
-    return _changed(
-        toast_response(Toast(title=_("Envoyé en réparation"), message=issue.item.serial_number))
+    return _repair(
+        request,
+        issue.item,
+        action_url=reverse("equipment:issue_repair", args=[issue.pk]),
+        send=lambda: services.issue_to_repair(issue, actor=request.employee, request=request),
     )
 
 

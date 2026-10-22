@@ -40,7 +40,7 @@
     {% elif tab == "equipe" %}
       <div class="card">
         {% if items %}
-          {% include "equipment/partials/items_table.html" with show_holder=True %}
+          {% include "equipment/partials/items_table.html" %}
         {% else %}
           {% translate "Aucun matériel" as empty_title %}
           {% translate "Votre équipe n'a pas de matériel attribué." as empty_text %}
@@ -71,7 +71,7 @@
           {% button _("Filtrer") type="submit" %}
         </form>
         {% if page_obj.paginator.count %}
-          {% include "equipment/partials/items_table.html" with items=page_obj.object_list show_holder=True park=True %}
+          {% include "equipment/partials/items_table.html" with items=page_obj.object_list park=True %}
           {% pagination page_obj "#equipment-content" %}
         {% else %}
           {% translate "Aucun équipement" as empty_title %}

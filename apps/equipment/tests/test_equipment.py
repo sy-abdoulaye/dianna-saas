@@ -274,3 +274,56 @@ def test_new_person_assignment_choices_are_in_post_people_of_the_company(
         .content.decode()
     )
     assert left.last_name not in modal and company_b.employee.last_name not in modal
+
+
+def test_my_equipment_shows_the_assigned_to_column_like_the_prototype(client_for, company_a):
+    held = company_a.requests["item"]
+    page = client_for(company_a.employee).get("/materiel/").content.decode()
+    assert "Attribué à" in page and held.serial_number in page
+    table = page[page.index("<table") : page.index("</table>")]
+    assert company_a.employee.full_name in table and "depuis le" in table
+
+
+def test_send_to_repair_asks_for_confirmation_then_can_be_undone(client_for, company_a):
+    """Comme les autres actions : confirmation, puis « Annuler » pendant 30 s."""
+    held, stock = company_a.requests["item"], company_a.requests["stock_item"]
+    client = client_for(company_a.hr)
+    confirm = client.get(f"/materiel/parc/{stock.public_id}/reparation/").content.decode()
+    assert "en réparation ?" in confirm and "Envoyer en réparation" in confirm
+    assert reload(stock).status == "in_stock"  # rien ne change avant la confirmation
+    response = client.post(f"/materiel/parc/{stock.public_id}/reparation/")
+    assert reload(stock).status == "repair"
+    undo = client.post(toast(response)["undo_url"])
+    assert toast(undo)["title"] == "Envoi en réparation annulé"
+    assert reload(stock).status == "in_stock"
+    assert not EquipmentEvent.all_companies.filter(item=stock, action="repair").exists()
+    assert AuditLog.all_companies.filter(action="equipment.repair_undone").exists()
+    # Depuis un signalement : le détenteur est conservé, l'annulation rend l'état « Attribué ».
+    issue = company_a.requests["issue"]
+    page = client.get(f"/materiel/signalements/{issue.pk}/reparation/").content.decode()
+    assert f"{company_a.employee.full_name} reste son détenteur" in page
+    response = client.post(f"/materiel/signalements/{issue.pk}/reparation/")
+    assert reload(held).status == "repair"
+    second = client.post(toast(response)["undo_url"])
+    assert second.status_code == 204
+    item = reload(held)
+    assert item.status == "assigned" and item.holder_id == company_a.employee.pk
+    # Un autre utilisateur ne peut pas annuler, et un équipement qui a changé non plus.
+    response = client.post(f"/materiel/parc/{stock.public_id}/reparation/")
+    assert client_for(company_a.admin).post(toast(response)["undo_url"]).status_code == 409
+    client.post(f"/materiel/parc/{stock.public_id}/fin-reparation/")
+    assert client.post(toast(response)["undo_url"]).status_code == 409
+
+
+def test_the_only_item_of_the_requested_kind_is_preselected(client_for, company_a):
+    request = company_a.requests["equipment_request"]  # écran, validée
+    stock = company_a.requests["stock_item"]  # seul écran en stock
+    hr = client_for(company_a.hr)
+    url = f"/materiel/demandes/{request.public_id}/attribuer/"
+    page = hr.get(url).content.decode()
+    assert f'<option value="{stock.pk}" selected>' in page
+    with tenant_context(company_a.company):
+        EquipmentItem.objects.create(kind="screen", model="x", serial_number="SCR-9")
+    page = hr.get(url).content.decode()
+    assert f'<option value="{stock.pk}" selected>' not in page  # plusieurs : à choisir
+    assert '<option value="" selected>Choisir…</option>' in page

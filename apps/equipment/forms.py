@@ -77,6 +77,10 @@ class StockChoiceForm(forms.Form):
             kind=kind, status=EquipmentItem.Status.IN_STOCK
         )
         self.fields["item"].label_from_instance = lambda i: f"{i.model} · {i.serial_number}"
+        # Un seul équipement de ce type en stock : présélectionné (prototype).
+        stock = list(self.fields["item"].queryset.values_list("pk", flat=True)[:2])
+        if len(stock) == 1 and not self.is_bound:
+            self.initial["item"] = stock[0]
 
 
 class IssueForm(forms.Form):

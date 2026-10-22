@@ -6,7 +6,7 @@
       <tr>
         <th scope="col">{% translate "Équipement" %}</th>
         <th scope="col">{% translate "N° de série" %}</th>
-        {% if show_holder %}<th scope="col">{% translate "Attribué à" %}</th>{% endif %}
+        <th scope="col">{% translate "Attribué à" %}</th>
         <th scope="col">{% translate "État" %}</th>
         {% if show_issue or park %}<th scope="col" class="end">{% translate "Actions" %}</th>{% endif %}
       </tr>
@@ -22,7 +22,7 @@
             <div class="meta">{{ item.model }}</div>
           </td>
           <td class="font-mono text-sm">{{ item.serial_number }}</td>
-          {% if show_holder %}<td>{% if item.holder %}{{ item.holder.full_name }}{% else %}<span class="text-ink-3">—</span>{% endif %}</td>{% endif %}
+          <td>{% if item.holder %}{{ item.holder.full_name }}{% if item.assigned_at %}<div class="meta">{% blocktranslate with day=item.assigned_at|fr_date:"short_year" %}depuis le {{ day }}{% endblocktranslate %}</div>{% endif %}{% else %}<span class="text-ink-3">—</span>{% endif %}</td>
           <td>{% status_badge "equipment" item.status %}</td>
           {% if show_issue %}
             <td class="end">
@@ -38,7 +38,7 @@
                 {% url "equipment:item_repair" item.public_id as repair_url %}
                 {% url "equipment:item_assign" item.public_id as assign_url %}
                 {% url "equipment:item_retire" item.public_id as retire_url %}
-                {% button _("Réparation") variant="ghost" size="sm" hx_post=repair_url hx_swap="none" %}
+                {% button _("Réparation") variant="ghost" size="sm" hx_get=repair_url hx_target="#modal-root" %}
                 {% button _("Retirer") variant="ghost" size="sm" hx_get=retire_url hx_target="#modal-root" %}
                 {% button _("Attribuer") variant="primary" size="sm" hx_get=assign_url hx_target="#modal-root" %}
               {% elif item.status == "repair" %}
