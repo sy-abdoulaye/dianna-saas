@@ -32,9 +32,20 @@ Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est
 ```bash
 make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind
 make up          # PostgreSQL 18 (Docker, port 5434), CSS, migrations, serveur sur :8000
+make seed        # dans un second terminal : entreprise de démonstration « Exemple SAS »
 make css         # dans un second terminal : recompile la feuille de style à chaque modification
 make worker      # dans un troisième terminal : travailleur des tâches (e-mails, invitations)
 ```
+
+Ports et nom du projet, à régler dans le `.env` si le port 8000 ou 5434 est déjà pris (par exemple une deuxième copie du projet) :
+
+| Variable | Rôle | Valeur par défaut |
+|---|---|---|
+| `APP_PORT` | port du serveur lancé par `make up` (aussi celui des liens des e-mails) | `8000` |
+| `DB_PORT` | port de PostgreSQL publié par Docker ; `DATABASE_URL` doit utiliser le même | `5434` |
+| `COMPOSE_PROJECT_NAME` | nom du projet Docker Compose : une autre valeur donne une base et un volume séparés | nom du dossier |
+
+`APP_PORT` se donne aussi sur la ligne de commande : `make up APP_PORT=8001`. Les adresses ci-dessous changent alors de port.
 
 Adresses (les sous-domaines de `localhost` fonctionnent sans configuration dans Chrome et Firefox) :
 

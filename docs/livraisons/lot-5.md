@@ -74,14 +74,46 @@ Date : 21 octobre 2026. Branche : `lot-5`.
 - **Numéro de série (L5-09).** Normalisé dans le service (NFKC, sans espaces ni espaces insécables, majuscules), avec une contrainte unique sur la valeur normalisée et une migration de normalisation.
 - **Intégration continue.** L'image MinIO est épinglée par son empreinte. Son remplacement est noté pour le lot 8, de même que l'analyse antivirus au dépôt, avant l'enregistrement.
 
+## Vérification élargie du lot 5 (22 oct. 2026)
+
+- **Nombres décimaux (L5-20).**
+  - Le montant d'un justificatif et la durée d'une intervention sont des champs texte avec `inputmode="decimal"`.
+  - « 2,15 » et « 2.15 » donnent 2,15 ; tout autre format est refusé (« Saisissez un montant comme 84,10. »), puis les bornes sont vérifiées.
+  - Champ commun : `apps/core/fields.DecimalTextField`.
+- **Stockage.**
+  - Les modèles passent la fonction `get_private_storage` : les migrations ne dépendent plus du réglage, sans changement de schéma.
+  - `make check`, lancé par l'intégration continue, vérifie `makemigrations --check` avec les réglages de production et la configuration S3.
+  - Coupe-circuit par processus (L5-21) : après une panne, les appels suivants échouent aussitôt pendant 30 s. Avec S3 injoignable, 12 photos font un seul appel au stockage (deux essais réseau, ceux de botocore) au lieu de 12.
+- **Numéros de série.** La migration de normalisation détecte les doublons avant la contrainte unique :
+  - le premier garde son numéro, les suivants reçoivent « -DOUBLON-2 », « -DOUBLON-3 »… ;
+  - la liste est affichée et inscrite au journal d'audit de l'entreprise ;
+  - test avec « AB 123 », « ab123 » et « ＡＢ１２３ ».
+- **Types validés par les RH.** Le message d'envoi dit « transmise aux RH », et le journal n'écrit jamais « à la place de ».
+- **Annuaire.** Une adresse e-mail en double qui atteint la base (deux créations simultanées) donne un message sur le champ, pas une erreur 500.
+- **Dates (L5-22).**
+  - Une seule fonction pour tout le projet, `apps/core/dates.format_date`, avec le filtre `fr_date`.
+  - Elle écrit « 1er novembre », y compris dans la relance.
+  - « mer. 21 oct. » dans les lignes de demandes, « lun. 19 oct. » dans les en-têtes du planning.
+- **Mobile (L5-23).** À 390 px, aucune page ne dépasse l'écran : le planning, l'annuaire, les campagnes et les utilisateurs défilent dans leur conteneur. Cause : le texte `sr-only` des tableaux, en position absolue, n'était pas retenu par le conteneur qui défile. Un parcours vérifie 27 pages pour les 4 profils.
+- **Écarts avec le prototype.**
+  - « Rechercher dans mes demandes », dans le résumé des demandes, sur les quatre modules.
+  - Résumé d'un justificatif dans l'ordre du prototype : mois · type · montant · nom du fichier.
+  - Colonne « Attribué à », avec la date, dans « Mon matériel ».
+  - « Envoyer en réparation » demande une confirmation et s'annule pendant 30 s, depuis le parc comme depuis un signalement.
+  - Un équipement seul de son type en stock est présélectionné dans « Attribuer un équipement ».
+- **Documentation.**
+  - Règle 5 de CLAUDE.md : un justificatif n'est jamais servi par lien signé (L5-01).
+  - LISEZ-MOI : `APP_PORT`, `DB_PORT` et `COMPOSE_PROJECT_NAME`, et `make seed` dans l'enchaînement des commandes.
+  - `00-decisions.md` : nouvelle section « V2, à décider après le lot 8 ».
+
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 651 tests (couverture 95 %), dont le test S3 sauté sans MinIO local et exécuté dans l'intégration continue ; puis 6 tests de performance |
-| `make e2e` | 40 parcours, dont le dépôt d'un justificatif puis sa validation par les RH (téléchargement du fichier), et l'attribution d'un équipement puis « Annuler » |
-| `make check` | aucune alerte, dont `--deploy` (configuration S3 vérifiée) |
+| `make test` | 686 tests : 684 réussis, 2 sautés (couverture 95 %) ; puis 6 tests de performance. Les deux tests sautés : le test S3, sans MinIO local, est exécuté dans l'intégration continue ; la relance par le travailleur dépend du jour (la relance elle-même est aussi testée à date fixe) |
+| `make e2e` | 44 parcours, dont le dépôt d'un justificatif saisi « 2,15 » puis sa validation par les RH (téléchargement du fichier), l'attribution d'un équipement puis « Annuler », et la largeur mobile pour les 4 profils |
+| `make check` | aucune alerte, dont `--deploy` (configuration S3 vérifiée) et `makemigrations --check` avec les réglages de production |
 
 Couverture des nouveaux modules : `apps/equipment` de 91 à 100 %, `apps/core/files.py` 91 %, `apps/approvals/tasks.py` 91 %.
 
@@ -101,8 +133,5 @@ Couverture des nouveaux modules : `apps/equipment` de 91 à 100 %, `apps/core/fi
 
 ## Points à relire
 
-- Décisions « À confirmer » :
-  - L5-02, pour l'image MinIO de l'intégration continue : les images officielles de MinIO ne sont plus publiées, d'où `bitnamilegacy/minio:2025.7.23` ;
-  - L5-10 : réparation ;
-  - L5-15 : signalements.
+- Décisions L5-02 (image MinIO comprise), L5-10 et L5-15 : validées le 22 oct. 2026.
 - L'analyse antivirus (ClamAV), notée « à confirmer » pour le lot 5 dans `02-architecture.md`, n'est pas faite. Elle est reportée au lot 8 dans « Pour plus tard », avec la création du compte Scaleway, le mode de chiffrement à vérifier, la purge à 3 ans et les limites internes d'allauth.
