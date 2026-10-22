@@ -7,7 +7,6 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
-from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from apps.approvals import rules
@@ -17,6 +16,8 @@ from apps.approvals.models import (
     SummerCampaign,
     TransportProof,
 )
+from apps.core.dates import format_date
+from apps.core.fields import DecimalTextField
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 TEXT = forms.Textarea(attrs={"rows": 3, "placeholder": _("Facultatif")})
@@ -116,13 +117,11 @@ class OnCallForm(RequestForm):
     end = forms.DateField(
         label=_("Fin"), widget=DATE, error_messages={"required": _("Choisissez la date de fin.")}
     )
-    hours = forms.DecimalField(
+    hours = DecimalTextField(
         label=_("Durée d'intervention (heures)"),
         required=False,
-        max_digits=4,
-        decimal_places=1,
         help_text=_("Obligatoire pour une intervention."),
-        widget=forms.NumberInput(attrs={"step": "0.5", "min": "0.5", "max": "24"}),
+        format_message=_("Saisissez une durée comme 2,5."),
     )
     description = forms.CharField(
         label=_("Description"),
@@ -259,18 +258,10 @@ class TransportForm(RequestForm):
     ticket_type = forms.ChoiceField(
         label=_("Type de titre"), choices=TransportProof.TicketType.choices
     )
-    amount = forms.DecimalField(
+    amount = DecimalTextField(
         label=_("Montant payé (€)"),
-        max_digits=7,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={"step": "0.01", "min": "0.01", "max": "1000"}),
-        error_messages={
-            "required": _("Indiquez un montant supérieur à 0."),
-            "invalid": _("Indiquez un montant supérieur à 0."),
-            "max_decimal_places": _("Indiquez un montant au centime près."),
-            "max_digits": _("Le montant semble trop élevé. Vérifiez la saisie."),
-            "max_whole_digits": _("Le montant semble trop élevé. Vérifiez la saisie."),
-        },
+        format_message=_("Saisissez un montant comme 84,10."),
+        error_messages={"required": _("Indiquez un montant supérieur à 0.")},
     )
     file = forms.FileField(
         label=_("Justificatif (PDF, JPG ou PNG)"),
@@ -288,7 +279,7 @@ class TransportForm(RequestForm):
         if not first <= month <= last:
             raise forms.ValidationError(
                 _("Choisissez un mois entre %(a)s et %(b)s.")
-                % {"a": date_format(first, "F Y"), "b": date_format(last, "F Y")}
+                % {"a": format_date(first, "month"), "b": format_date(last, "month")}
             )
         return month
 
