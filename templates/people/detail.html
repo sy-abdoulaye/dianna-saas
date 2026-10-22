@@ -53,8 +53,8 @@
               <dt>{% translate "Service" %}</dt><dd>{{ person.service|default:"—" }}</dd>
               <dt>{% translate "Manager" %}</dt>
               <dd>{% if person.manager %}<a href="{% url 'people:detail' person.manager.public_id %}">{{ person.manager.full_name }}</a>{% else %}<span class="text-ink-3">{% translate "Aucun" %}</span>{% endif %}</dd>
-              <dt>{% translate "Arrivée dans l'entreprise" %}</dt><dd>{{ person.arrival_date|date:"j F Y"|default:"—" }}</dd>
-              {% if person.departure_date and is_hr %}<dt>{% translate "Départ" %}</dt><dd>{{ person.departure_date|date:"j F Y" }}</dd>{% endif %}
+              <dt>{% translate "Arrivée dans l'entreprise" %}</dt><dd>{{ person.arrival_date|fr_date:"long"|default:"—" }}</dd>
+              {% if person.departure_date and is_hr %}<dt>{% translate "Départ" %}</dt><dd>{{ person.departure_date|fr_date:"long" }}</dd>{% endif %}
             </dl>
           </section>
           {% if can_view_hr %}
@@ -167,11 +167,11 @@
           {% for change in changes %}
             <li>
               <span>{{ change.get_kind_display }}{% if change.actor %} · {{ change.actor.full_name }}{% endif %}</span>
-              <span class="meta whitespace-nowrap">{{ change.created_at|date:"j F Y à H:i" }}</span>
+              <span class="meta whitespace-nowrap">{{ change.created_at|fr_date:"long_time" }}</span>
             </li>
           {% endfor %}
           {% if person.arrival_date %}
-            <li><span>{% translate "Arrivée dans l'entreprise" %}</span><span class="meta">{{ person.arrival_date|date:"j F Y" }}</span></li>
+            <li><span>{% translate "Arrivée dans l'entreprise" %}</span><span class="meta">{{ person.arrival_date|fr_date:"long" }}</span></li>
           {% endif %}
         </ul>
       </div>
