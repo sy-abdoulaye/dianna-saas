@@ -34,9 +34,41 @@ TRACKED_FIELDS = (
 
 
 class PeopleError(Exception):
-    def __init__(self, message):
+    def __init__(self, message, field=None):
         super().__init__(str(message))
         self.message = message
+        self.field = field
+
+
+# Contrainte de base → (champ, message) : deux créations simultanées avec la même adresse
+# donnent un message, jamais une erreur 500 (L5-19).
+CONSTRAINT_MESSAGES = {
+    "people_employee_email_ci_unique": (
+        "email",
+        _("Cette adresse est déjà utilisée par une autre fiche de l'annuaire."),
+    ),
+    "people_employee_registration_unique": (
+        "registration_number",
+        _("Ce matricule est déjà utilisé."),
+    ),
+}
+
+
+def _save_employee(employee, **kwargs):
+    from django.db import DataError, IntegrityError
+
+    from apps.approvals.workflow import INVALID_VALUE, constraint_name
+
+    try:
+        with transaction.atomic():
+            employee.save(**kwargs)
+    except IntegrityError as exc:
+        field, message = CONSTRAINT_MESSAGES.get(
+            constraint_name(exc), (None, _("La fiche n'a pas pu être enregistrée."))
+        )
+        raise PeopleError(message, field) from exc
+    except DataError as exc:
+        raise PeopleError(INVALID_VALUE) from exc
 
 
 def _record(employee, actor, kind, fields=(), *, request=None, action=None, summary=None):
@@ -99,7 +131,7 @@ def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
     employee.status = status_for_arrival(employee.arrival_date)
     if photo is not None:
         files.save(employee.photo, photo)
-    employee.save()
+    _save_employee(employee)
     _record(employee, actor, EmployeeChange.Kind.CREATED, request=request)
     if role != Role.EMPLOYEE:
         change_role(employee, role, actor=actor, request=request)
@@ -153,7 +185,7 @@ def _update_employee(employee, data, *, actor, photo, remove_photo, request, fil
         employee.photo = None
         changed.append("photo")
     if changed:
-        employee.save()
+        _save_employee(employee)
         _record(employee, actor, EmployeeChange.Kind.UPDATED, changed, request=request)
     return ["role", *changed] if role_changed else changed
 

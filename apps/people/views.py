@@ -258,7 +258,8 @@ class EmployeeFormView(PermissionRequiredMixin, View):
                 )
                 message = _("Fiche enregistrée")
         except (services.PeopleError, accounts.InvitationError) as error:
-            form.add_error(None, error.message)
+            field = getattr(error, "field", None)
+            form.add_error(field if field in form.fields else None, error.message)
             return self.render_form(request, form, employee, status=422)
         messages.success(request, message)
         return redirect("people:detail", public_id=employee.public_id)

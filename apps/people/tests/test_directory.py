@@ -741,3 +741,27 @@ def test_import_database_conflict_at_confirmation_is_not_a_server_error(
     assert done.status_code == 302 and done["Location"] == "/annuaire/import/"
     page = client.get(done["Location"]).content.decode()
     assert "L&#x27;import n&#x27;a pas pu être enregistré. Recommencez." in page
+
+
+def test_duplicate_email_reaching_the_service_is_a_message_not_a_500(
+    client_for, company_a, monkeypatch
+):
+    """Deux créations simultanées passent toutes deux le contrôle du formulaire : la
+    contrainte unique de la base tranche, et create_employee traduit l'IntegrityError."""
+    from apps.people import views
+
+    with tenant_context(company_a.company):
+        with pytest.raises(services.PeopleError) as error:
+            services.create_employee(
+                {"first_name": "Léa", "last_name": "Double", "email": company_a.manager.email},
+                actor=company_a.hr,
+            )
+        assert error.value.field == "email"
+        assert Employee.objects.filter(last_name="Double").count() == 0
+    # Classe utilisée par la vue (un test d'isolation recharge apps.people.forms).
+    monkeypatch.setattr(views.EmployeeForm, "clean_email", lambda form: form.cleaned_data["email"])
+    response = client_for(company_a.hr).post(
+        "/annuaire/nouveau/", form_data(company_a, email=company_a.manager.email.upper())
+    )
+    assert response.status_code == 422
+    assert "Cette adresse est déjà utilisée par une autre fiche de l" in response.content.decode()
