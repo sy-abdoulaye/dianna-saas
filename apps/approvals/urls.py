@@ -6,7 +6,15 @@ app_name = "approvals"
 
 # Chemins visibles en français (L1-03) : le convertisseur n'accepte que ces trois préfixes et
 # les traduit en type interne (telework, leave, on_call).
-SLUGS = {"telework": "teletravail", "leave": "conges", "on_call": "astreintes"}
+SLUGS = {
+    "telework": "teletravail",
+    "leave": "conges",
+    "on_call": "astreintes",
+    "transport": "transport",
+    # Demandes de matériel (lot 5) : le moteur commun traite /materiel/<id>/valider/… ;
+    # l'écran /materiel/ est celui de l'application Matériel (inclus avant celle-ci).
+    "equipment": "materiel",
+}
 
 
 class KindConverter:
@@ -31,6 +39,9 @@ urlpatterns = [
     path("teletravail/", views.request_list, {"kind": "telework"}, name="telework"),
     path("conges/", views.request_list, {"kind": "leave"}, name="leave"),
     path("astreintes/", views.request_list, {"kind": "on_call"}, name="on_call"),
+    path("transport/", views.request_list, {"kind": "transport"}, name="transport"),
+    # Justificatif : servi après contrôle de la permission, jamais par lien signé (L5-01).
+    path("transport/<uuid:public_id>/justificatif/", views.proof_file, name="proof_file"),
     path("<kind:kind>/", views.request_list, name="list"),
     path("<kind:kind>/nouvelle/", views.new_request, name="new"),
     path("<kind:kind>/export/", views.export_requests, name="export"),

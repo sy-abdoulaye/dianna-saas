@@ -38,7 +38,7 @@
           <section class="stack border-t border-line pt-4" aria-labelledby="h-preview">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <h2 class="h2" id="h-preview">{% translate "Aperçu de l'export" %}</h2>
-              <span class="meta">{% blocktranslate count n=people_count with days=days_count start=first|date:"j F Y" end=last|date:"j F Y" %}{{ n }} personne · {{ days }} jours ouvrés · du {{ start }} au {{ end }}{% plural %}{{ n }} personnes · {{ days }} jours ouvrés · du {{ start }} au {{ end }}{% endblocktranslate %}</span>
+              <span class="meta">{% blocktranslate count n=people_count with days=days_count start=first|fr_date:"long" end=last|fr_date:"long" %}{{ n }} personne · {{ days }} jours ouvrés · du {{ start }} au {{ end }}{% plural %}{{ n }} personnes · {{ days }} jours ouvrés · du {{ start }} au {{ end }}{% endblocktranslate %}</span>
             </div>
             {% if preview_rows %}
               <div class="table-wrap">
@@ -47,7 +47,7 @@
                   <thead>
                     <tr>
                       <th scope="col">{% translate "Collaborateur" %}</th>
-                      {% for day in preview_days %}<th scope="col">{{ day|date:"D j"|capfirst }}</th>{% endfor %}
+                      {% for day in preview_days %}<th scope="col">{{ day|fr_date:"weekday_short" }}</th>{% endfor %}
                       {% if more_days %}<th scope="col">…</th>{% endif %}
                     </tr>
                   </thead>

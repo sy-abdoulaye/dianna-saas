@@ -1,4 +1,4 @@
-{% load i18n %}<!doctype html>
+{% load i18n ui %}<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
@@ -20,7 +20,7 @@
         <thead>
           <tr>
             <th class="nm">{% translate "Collaborateur" %}</th>
-            {% for day in page.days %}<th>{{ day|date:"D j/m"|capfirst }}</th>{% endfor %}
+            {% for day in page.days %}<th>{{ day|fr_date:"weekday_numeric" }}</th>{% endfor %}
           </tr>
         </thead>
         <tbody>

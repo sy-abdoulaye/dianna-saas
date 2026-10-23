@@ -74,16 +74,19 @@ Base abstraite **ApprovalRequest** (T) : `public_id`, `requester` (Employee), `s
 | **SummerCampaign** | `label` (« Été 2027 »), `period_start`, `period_end`, `deadline`, `status` (draft, open, closed), `conflict_threshold` (%, défaut 30) | une seule campagne ouverte (contrainte unique partielle) ; fin ≥ début |
 | **LeaveRequest** | `campaign` (nul pour une autre absence), `start`, `end`, `leave_type` (summer, other), `comment`, `manager_decided_by`, `manager_decided_at` (première décision ; la décision finale RH utilise `decided_by` et `decided_at`) | fin ≥ début, ≤ 31 jours, pas de chevauchement avec ses demandes actives |
 | **OnCallDeclaration** | `kind` (on_call, intervention), `start`, `end` (dates incluses), `hours` (décimal, obligatoire si intervention, ≤ 24), `description` | fin ≥ début ; seul `on_call` crée un `CalendarEvent` |
-| **TransportProof** | `month` (date au 1er du mois, début de validité), `ticket_type` (monthly, yearly, single), `amount` (décimal), `file`, `valid_until` (calculé : fin du mois pour mensuel et titre unique, mois + 12 − 1 jour pour annuel) | pas de chevauchement de validité entre deux justificatifs actifs du même salarié et du même type ; montant > 0 et ≤ 1 000 |
+| **TransportProof** | `month` (date au 1er du mois, début de validité), `ticket_type` (monthly, yearly, single), `amount` (décimal), `file` (stockage privé, `<company_id>/transport/<aléatoire>`), `file_type` (type réel : application/pdf, image/jpeg, image/png), `original_name` (affiché, jamais utilisé pour le stockage), `valid_until` (calculé : fin du mois pour mensuel et titre unique, mois + 12 − 1 jour pour annuel), `reminder_sent_at` (relance de fin d'abonnement annuel, L5-12). Validé par les RH (`hr_validated`) | pas de chevauchement entre deux abonnements actifs (mensuel ou annuel) du même salarié, L5-06 ; montant > 0 et ≤ 1 000 (contrainte) ; `valid_until` ≥ `month` |
 
 Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme montant payé.
 
 ## Matériel (`equipment`)
 
-**EquipmentItem** (T) : `kind` (laptop, screen, headset, phone, other), `model`, `serial_number` (unique par entreprise), `status` (in_stock, assigned, repair, retired), `holder` (Employee, nul), `assigned_at`.
-**EquipmentAssignment** (T) : historique : `item`, `employee`, `assigned_at`, `returned_at`, `assigned_by`, `request` (EquipmentRequest, nul).
+**EquipmentItem** (T) : `public_id`, `kind` (laptop, screen, headset, phone, other), `model`, `serial_number` (normalisé par le service : Unicode NFKC, sans aucun espace, en majuscules ; unique par entreprise sur la valeur normalisée, contrainte `equipment_serial_unique`), `status` (in_stock, assigned, repair, retired), `holder` (Employee, nul), `assigned_at`. Contrainte : « assigned » ⇒ détenteur ; « in_stock » et « retired » ⇒ aucun détenteur ; « repair » : avec ou sans (L5-10).
+**EquipmentAssignment** (T) : historique : `item`, `employee`, `assigned_at`, `returned_at`, `assigned_by`, `request` (EquipmentRequest, nul). Index unique partiel : une seule attribution ouverte (`returned_at` nul) par équipement ; une attribution au plus par demande (L5-08).
 **EquipmentIssue** (T) : `item`, `reported_by`, `description`, `status` (open, closed), `closed_by`, `closed_at`, `resolution`.
-**EquipmentRequest** (T, hérite d'ApprovalRequest) : `kind`, `reason`.
+**EquipmentEvent** (T) : historique complet par équipement : `item`, `action` (added, assigned, returned, repair, back, issue, issue_closed, retired, undone), `actor`, `employee`, `comment`.
+**EquipmentRequest** (T, hérite d'ApprovalRequest) : `kind`, `reason`. Validée par les RH (`hr_validated`).
+
+**RateLimitCounter** (sans entreprise, `core`) : `key` (empreinte HMAC), `window_start`, `count` ; unique (`key`, `window_start`) ; voir L1-16.
 
 ## Communication interne (`announcements`)
 

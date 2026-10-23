@@ -12,13 +12,12 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
 from django.conf import settings
 
-from apps.planning.tests.test_performance import MONTH_EXPORT, populate
+from apps.planning.tests.test_performance import MONTH_EXPORT, median_seconds, populate
 
 pytestmark = [pytest.mark.django_db, pytest.mark.perf]
 PDF_BUDGET_SECONDS = 5.0
@@ -62,11 +61,9 @@ def test_largest_allowed_pdf_time(client_for, company_a):
     populate(company_a, 60)
     url = MONTH_EXPORT + "pdf&page=1"
     client.get(url)  # chargement des polices et des gabarits
-    start = time.perf_counter()
-    response = client.get(url)
-    elapsed = time.perf_counter() - start
+    elapsed, response = median_seconds(lambda: client.get(url))  # médiane de 3 exécutions
     assert response.status_code == 200 and response.content.startswith(b"%PDF")
-    print(f"\nPDF 50 personnes x 31 jours : {elapsed * 1000:.0f} ms")
+    print(f"\nPDF 50 personnes x 31 jours (médiane de 3) : {elapsed * 1000:.0f} ms")
     assert elapsed < PDF_BUDGET_SECONDS, f"{elapsed * 1000:.0f} ms"
 
 

@@ -87,6 +87,11 @@ def test_on_call_payroll_export(client_for, company_a):
     rows = rows_of(client_for(company_a.hr).get("/astreintes/export/?mois=2026-11&format=csv"))
     camille = next(r for r in rows if r[0] == company_a.employee.full_name)
     assert camille[3:] == ["2", "1", "2,5"]  # 1er et 2 novembre, une intervention de 2,5 h
+    response = client_for(company_a.hr).get("/astreintes/export/?mois=2026-11&format=xlsx")
+    sheet = load_workbook(io.BytesIO(response.content)).active
+    line = next(r for r in sheet.iter_rows(min_row=2) if r[0].value == camille[0])
+    assert [c.value for c in line[3:]] == [2, 1, 2.5]  # nombres, pas du texte
+    assert line[5].data_type == "n" and line[5].number_format == "#,##0.00"
 
 
 def test_excel_export_neutralizes_formulas(client_for, company_a):

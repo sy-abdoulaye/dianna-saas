@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.core import audit
 from apps.core.csv_export import csv_content
+from apps.core.files import delete_after_commit, file_writes
 from apps.core.models import AuditLog, Company, Service, Site
 from apps.people.models import Employee, EmployeeStatus
 
@@ -23,21 +24,35 @@ class AdministrationError(Exception):
         self.message = message
 
 
-@transaction.atomic
 def update_company(
     company: Company, data: dict, *, actor, logo=None, remove_logo=False, request=None
 ) -> list[str]:
+    """Paramètres de l'entreprise ; logo écrit avant l'UPDATE, supprimé en cas d'échec,
+    ancien logo supprimé après la validation (L5-18)."""
+    with file_writes() as files, transaction.atomic():
+        return _update_company(
+            company,
+            data,
+            actor=actor,
+            logo=logo,
+            remove_logo=remove_logo,
+            request=request,
+            files=files,
+        )
+
+
+def _update_company(company, data, *, actor, logo, remove_logo, request, files):
     company = Company.objects.select_for_update().get(pk=company.pk)
     changed = [name for name, value in data.items() if getattr(company, name) != value]
     for name in changed:
         setattr(company, name, data[name])
     if logo is not None:
-        if company.logo:
-            company.logo.delete(save=False)
-        company.logo.save(logo.name, logo, save=False)
+        delete_after_commit(company.logo.name)
+        files.save(company.logo, logo)
         changed.append("logo")
     elif remove_logo and company.logo:
-        company.logo.delete(save=False)
+        delete_after_commit(company.logo.name)
+        company.logo = None
         changed.append("logo")
     if changed:
         company.save()
@@ -207,10 +222,10 @@ def add_closure(*, day, label, site, actor, request=None):
     sous le même verrou, est envoyée aux RH."""
     from django.db import IntegrityError
     from django.urls import reverse
-    from django.utils.formats import date_format
 
     from apps.agenda.models import Closure
     from apps.core import notifications
+    from apps.core.dates import format_date
     from apps.core.tenancy import get_current_company
     from apps.people.models import IN_POST_STATUSES, Role
 
@@ -224,7 +239,7 @@ def add_closure(*, day, label, site, actor, request=None):
             closure = Closure.objects.create(date=day, label=label, site=site)
     except IntegrityError as exc:
         raise ClosureError("date", CLOSURE_DUPLICATE) from exc
-    when = date_format(day, "j F Y")
+    when = format_date(day, "long")
     audit.log(
         "company.closure_added",
         _("Fermeture ajoutée : %(label)s, le %(day)s (%(scope)s)")
@@ -258,11 +273,11 @@ def add_closure(*, day, label, site, actor, request=None):
 
 @transaction.atomic
 def delete_closure(closure, *, actor, request=None):
-    from django.utils.formats import date_format
+    from apps.core.dates import format_date
 
     summary = _("Fermeture supprimée : %(label)s, le %(day)s (%(scope)s)") % {
         "label": closure.label,
-        "day": date_format(closure.date, "j F Y"),
+        "day": format_date(closure.date, "long"),
         "scope": closure_scope(closure),
     }
     closure.delete()

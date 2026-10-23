@@ -4,6 +4,8 @@ Les transitions passent toutes par apps/approvals/workflow.py : jamais de change
 statut direct dans une vue."""
 
 import uuid
+from datetime import date, timedelta
+from decimal import Decimal
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -11,6 +13,7 @@ from django.db.models import F, Q
 from django.utils.translation import gettext_lazy as _
 
 from apps.agenda.models import CalendarEvent
+from apps.core.files import get_private_storage
 from apps.core.models import Module, TenantModel
 
 
@@ -35,6 +38,15 @@ class ApprovalRequest(TenantModel):
     module: str = ""
     calendar_kind: str | None = None
     permission_owner_field = "requester"
+    # Types validés par les RH seulement (transport M-06, matériel M-07, L5-04) : pas
+    # d'étape manager, « À valider » pour les RH et administrateurs.
+    hr_validated: bool = False
+    # Actions de permission propres au type (apps/core/permissions.py).
+    create_action = "requests.create"
+    view_action = "requests.view"
+    decide_action = "requests.decide"
+    # Fichier joint (justificatif) : supprimé quand la demande est retirée (L5-05).
+    file_field: str | None = None
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     requester = models.ForeignKey(
@@ -241,6 +253,80 @@ class OnCallDeclaration(ApprovalRequest):
         return (self.start, self.end) if self.kind == self.Kind.ON_CALL else None
 
 
+def proof_path(instance, filename):
+    """<company_id>/transport/<uuid>.<ext> : le nom d'origine n'est jamais utilisé (L5-01)."""
+    from apps.core.files import random_name
+    from apps.core.tenancy import get_current_company
+
+    company_id = instance.company_id or get_current_company().pk
+    extension = filename.rsplit(".", 1)[-1].lower()
+    return random_name(f"{company_id}/transport", f"x.{extension}")
+
+
+class TransportProof(ApprovalRequest):
+    """Justificatif de transport (docs/modules/05-demandes.md, section Transport), validé par
+    les RH. `valid_until` est calculé (fin du mois, ou 12 mois pour un abonnement annuel)."""
+
+    request_type = "transport"
+    module = Module.TRANSPORT
+    hr_validated = True
+    create_action = "transport.submit"
+    view_action = "transport.view"
+    decide_action = "transport.decide"
+    file_field = "file"
+
+    class TicketType(models.TextChoices):
+        MONTHLY = "monthly", _("Abonnement mensuel")
+        YEARLY = "yearly", _("Abonnement annuel")
+        SINGLE = "single", _("Titre unique")
+
+    month = models.DateField(_("mois concerné"))  # 1er du mois : début de validité
+    ticket_type = models.CharField(
+        _("type de titre"), max_length=10, choices=TicketType, default=TicketType.MONTHLY
+    )
+    amount = models.DecimalField(
+        _("montant payé"),
+        max_digits=7,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01")), MaxValueValidator(Decimal("1000"))],
+    )
+    file = models.FileField(_("justificatif"), upload_to=proof_path, storage=get_private_storage)
+    file_type = models.CharField(_("type du fichier"), max_length=40)
+    original_name = models.CharField(_("nom du fichier"), max_length=120, blank=True)
+    valid_until = models.DateField(_("valide jusqu'au"))
+    reminder_sent_at = models.DateTimeField(_("relance envoyée le"), null=True, blank=True)
+
+    class Meta(ApprovalRequest.Meta):
+        verbose_name = _("justificatif de transport")
+        verbose_name_plural = _("justificatifs de transport")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gt=0) & Q(amount__lte=1000), name="transport_amount_range"
+            ),
+            models.CheckConstraint(
+                condition=Q(valid_until__gte=F("month")), name="transport_valid_after_month"
+            ),
+        ]
+
+    def compute_validity(self):
+        """Fin du mois choisi ; abonnement annuel : 12 mois à partir du mois choisi."""
+        months = 12 if self.ticket_type == self.TicketType.YEARLY else 1
+        year, month = divmod(self.month.month - 1 + months, 12)
+        self.valid_until = date(self.month.year + year, month + 1, 1) - timedelta(days=1)
+        return self.valid_until
+
+    @property
+    def is_subscription(self) -> bool:
+        return self.ticket_type != self.TicketType.SINGLE
+
+
 REQUEST_MODELS = {
-    model.request_type: model for model in (TeleworkRequest, LeaveRequest, OnCallDeclaration)
+    model.request_type: model
+    for model in (TeleworkRequest, LeaveRequest, OnCallDeclaration, TransportProof)
 }
+
+
+def register_request_model(model):
+    """Types de demande définis dans d'autres applications (matériel)."""
+    REQUEST_MODELS[model.request_type] = model
+    return model

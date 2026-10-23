@@ -16,6 +16,7 @@ from apps.approvals.models import (
     RequestEvent,
     SummerCampaign,
     TeleworkRequest,
+    TransportProof,
 )
 from apps.core.models import (
     AuditLog,
@@ -32,6 +33,13 @@ from apps.core.tenancy import (
     NoCurrentCompanyError,
     current_company,
     tenant_context,
+)
+from apps.equipment.models import (
+    EquipmentAssignment,
+    EquipmentEvent,
+    EquipmentIssue,
+    EquipmentItem,
+    EquipmentRequest,
 )
 from apps.people.models import Employee, EmployeeChange
 from tests.factories import PASSWORD, EmployeeFactory
@@ -184,6 +192,12 @@ TENANT_ROWS = {
     RequestEvent: lambda d: d.requests["event"],
     CalendarEvent: lambda d: d.requests["calendar"],
     Closure: lambda d: d.requests["closure"],
+    TransportProof: lambda d: d.requests["transport"],
+    EquipmentItem: lambda d: d.requests["item"],
+    EquipmentAssignment: lambda d: d.requests["assignment"],
+    EquipmentEvent: lambda d: d.requests["equipment_event"],
+    EquipmentIssue: lambda d: d.requests["issue"],
+    EquipmentRequest: lambda d: d.requests["equipment_request"],
     CompanyModule: lambda d: CompanyModule.all_companies.filter(company=d.company).first(),
 }
 

@@ -22,7 +22,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 2. **Permissions côté serveur.** Chaque vue et chaque action vérifie le profil et le périmètre (soi, équipe, entreprise) avec les fonctions de `apps/core/permissions.py`. Masquer un bouton dans le template ne suffit jamais. La matrice fait foi : `docs/04-permissions.md`.
 3. **Design system.** Utilise uniquement les jetons et les composants définis dans `docs/05-design-system.md`. Pas de couleur en dur, pas de nouveau composant si un composant existant convient. Le prototype `docs/reference/prototype-dianna.html` est la référence visuelle et comportementale : ouvre-le dans un navigateur pour vérifier un écran.
 4. **Accessibilité.** WCAG 2.2 AA : libellé lié à chaque champ, erreurs annoncées, focus visible, navigation clavier, contrastes des jetons respectés.
-5. **Données personnelles.** Données RH sensibles : ne journalise jamais de contenu personnel dans les logs applicatifs. Les fichiers (justificatifs, photos) sont privés et servis après contrôle d'accès, par URL signée à durée courte.
+5. **Données personnelles.** Données RH sensibles : ne journalise jamais de contenu personnel dans les logs applicatifs. Les fichiers sont privés et servis après contrôle d'accès : photos et logos par URL signée à durée courte (A2-07) ; un justificatif jamais par lien signé, seulement par la vue qui contrôle la permission à chaque téléchargement (L5-01).
 6. **Pas de fonctionnalité imaginaire.** N'affiche pas une fonction comme opérationnelle si elle ne l'est pas. Ce qui est prévu plus tard reste masqué ou marqué « Bientôt ».
 
 ## Conventions
@@ -32,13 +32,16 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Vues basées sur des classes pour le CRUD, fonctions pour les actions HTMX simples. Logique métier dans `services.py` de chaque application, pas dans les vues ni les templates.
 - Changements d'état (valider, refuser, envoyer, signer) : une fonction de service par transition, qui vérifie l'état de départ, écrit l'historique, crée la notification et l'entrée du journal d'audit.
 - Templates : `templates/<app>/` pour les pages, `templates/<app>/partials/` pour les fragments HTMX, `templates/components/` pour les composants communs.
-- Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français.
+- Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français, toujours par `apps/core/dates.format_date` (filtre `fr_date`) : « 1er novembre », « mer. 21 oct. » ; jamais `|date:` ni `date_format` directs pour une date affichée (L5-22).
+- Nombres décimaux saisis : toujours `apps/core/fields.DecimalTextField` (texte, `inputmode="decimal"`, virgule ou point), jamais `type="number"` (L5-20).
 - Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export. Excel : toujours par `apps/core/xlsx_export.py` (même neutralisation, cellules texte enregistrées comme texte). PDF : toujours par `apps/core/pdf.py` (récupérateur d'URL fermé : jamais de `weasyprint.HTML` direct). Chaque export vérifie le périmètre côté serveur et s'inscrit au journal d'audit sans nom de personne.
 - Contrôles métier (A3-02) : les vérifications qui dépendent d'autres données (quota, doublon, chevauchement, période) et les verrous (`select_for_update`) sont dans le service, jamais dans la vue ni dans le formulaire ; le formulaire ne vérifie que ses champs, la vue appelle le service et affiche ses erreurs. Une `IntegrityError` devient un message, jamais une erreur 500. Seule exception : `seed_demo` crée sans `check_request` les demandes de démonstration déjà passées (dates antérieures au jour du chargement).
 - E-mails (A3-04) : toujours par `apps/core/mail.py`, donc par une tâche ; aucune donnée sensible en clair dans les arguments d'une tâche (identifiants seulement, ou contenu chiffré avec `TASKS_ENCRYPTION_KEY`).
 - Planning et compteurs : règle de confidentialité L4-16 appliquée par une seule fonction, partout (vue, aperçu, exports, compteurs, tableau de bord).
 - Toute limite de fréquence passe par apps/core/ratelimit.py, jamais par le cache.
-- Migrations : une migration par changement logique, jamais modifiée une fois fusionnée.
+- Fichiers déposés : type réel vérifié par `apps/core/files.clean_document` ; stockés sous `<company_id>/…` avec un nom aléatoire (jamais le nom d'origine) ; un justificatif est servi par `serve_isolated` après contrôle de la permission, jamais par lien signé.
+- Écriture d'un fichier (justificatif, photo, logo et tout futur dépôt) : son nom est inscrit dans la liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit explicitement avant l'INSERT ou l'UPDATE, et il est supprimé si l'opération échoue (`apps/core/files.file_writes`, `workflow.submit`) ; l'ancien fichier remplacé n'est supprimé qu'après la validation de la transaction. Jamais de `FieldFile.save()` direct dans un service. Une panne du stockage (`StorageUnavailableError`) donne un message, jamais une erreur 500.
+- Migrations : une migration par changement logique, jamais modifiée une fois fusionnée (seule exception, sans effet sur le schéma : L5-25).
 
 ## Commandes
 

@@ -32,9 +32,20 @@ Prérequis : `uv` (gestionnaire Python), Docker, `make`, `curl`. Python 3.13 est
 ```bash
 make install     # dépendances, Chromium pour Playwright, .env, pre-commit, binaire Tailwind
 make up          # PostgreSQL 18 (Docker, port 5434), CSS, migrations, serveur sur :8000
+make seed        # dans un second terminal : entreprise de démonstration « Exemple SAS »
 make css         # dans un second terminal : recompile la feuille de style à chaque modification
 make worker      # dans un troisième terminal : travailleur des tâches (e-mails, invitations)
 ```
+
+Ports et nom du projet, à régler dans le `.env` si le port 8000 ou 5434 est déjà pris (par exemple une deuxième copie du projet) :
+
+| Variable | Rôle | Valeur par défaut |
+|---|---|---|
+| `APP_PORT` | port du serveur lancé par `make up` (aussi celui des liens des e-mails) | `8000` |
+| `DB_PORT` | port de PostgreSQL publié par Docker ; `DATABASE_URL` doit utiliser le même | `5434` |
+| `COMPOSE_PROJECT_NAME` | nom du projet Docker Compose : une autre valeur donne une base et un volume séparés | nom du dossier |
+
+`APP_PORT` se donne aussi sur la ligne de commande : `make up APP_PORT=8001`. Les adresses ci-dessous changent alors de port.
 
 Adresses (les sous-domaines de `localhost` fonctionnent sans configuration dans Chrome et Firefox) :
 
@@ -55,7 +66,8 @@ Déploiement (même image Docker pour le serveur et le travailleur) :
 3. Travailleur des tâches, dans un conteneur séparé : `python manage.py db_worker`. Sans lui, aucun e-mail ne part (invitations, mot de passe oublié, demandes).
 4. Purge des résultats de tâches, une fois par jour : `python manage.py purge_task_results` (échecs de plus de 7 jours ; les tâches réussies sont supprimées dès leur fin). Les lignes de tâches ne contiennent ni lien ni texte d'e-mail en clair (A3-04). La même commande supprime les compteurs de limite de fréquence expirés.
    Pour le développement et les essais seulement : `docker compose --profile taches up -d` démarre la base `db`, applique les migrations (service `migrate`), puis le travailleur (`worker`) et la purge quotidienne (`scheduler`). Ces services utilisent les réglages de développement (`config.settings.dev` et ses clés publiques) et la base `db` de `docker-compose.yml` ; le `.env` créé par `make install` suffit et n'a pas à être modifié. En développement, les e-mails s'affichent dans le journal du travailleur : `docker compose logs -f worker`. Le déploiement en production du travailleur et de la purge est prévu au lot 8.
-5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `TASKS_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`.
+5. Variables obligatoires : `SECRET_KEY`, `MFA_ENCRYPTION_KEY`, `TASKS_ENCRYPTION_KEY`, `DATABASE_URL`, `ALLOWED_HOSTS`, `BASE_DOMAIN`, et pour les fichiers privés sur S3 (Scaleway Object Storage, fr-par) : `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (voir `.env.example` ; `manage.py check --deploy` les vérifie).
+6. Une fois par jour, après la purge : `python manage.py enqueue_daily_tasks` (relance des abonnements annuels de transport, exécutée par le travailleur).
 Contrôles : `make lint`, `make test`, `make e2e`, `make check`. Liste complète : `make help`.
 
 ## À faire hors code avant la commercialisation

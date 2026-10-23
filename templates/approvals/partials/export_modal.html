@@ -1,7 +1,7 @@
 {% extends "components/modal.html" %}
 {% load i18n ui %}
 {% block modal_icon %}{% icon "dl" %}{% endblock %}
-{% block modal_title %}{% if kind.key == "leave" %}{% translate "Exporter la synthèse de campagne" %}{% elif kind.key == "telework" %}{% translate "Exporter le récapitulatif du télétravail" %}{% else %}{% translate "Exporter les astreintes (paie)" %}{% endif %}{% endblock %}
+{% block modal_title %}{% if kind.key == "leave" %}{% translate "Exporter la synthèse de campagne" %}{% elif kind.key == "telework" %}{% translate "Exporter le récapitulatif du télétravail" %}{% elif kind.key == "transport" %}{% translate "Exporter les justificatifs de transport (paie)" %}{% else %}{% translate "Exporter les astreintes (paie)" %}{% endif %}{% endblock %}
 {% block modal_content %}
   {% partialdef form inline %}
     <form hx-get="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
@@ -14,7 +14,7 @@
             {% for choice in form.format %}<label class="checkbox" for="{{ choice.id_for_label }}">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}
           </div>
         </fieldset>
-        <p class="hint">{% if kind.key == "leave" %}{% translate "Par service : vœux, absents par semaine et alertes de dépassement du seuil." %}{% elif kind.key == "telework" %}{% translate "Jours de télétravail validés du mois, par salarié." %}{% else %}{% translate "Astreintes et interventions validées du mois, par salarié." %}{% endif %} {% translate "L'export est inscrit au journal d'activité." %}</p>
+        <p class="hint">{% if kind.key == "leave" %}{% translate "Par service : vœux, absents par semaine et alertes de dépassement du seuil." %}{% elif kind.key == "telework" %}{% translate "Jours de télétravail validés du mois, par salarié." %}{% elif kind.key == "transport" %}{% translate "Justificatifs validés qui couvrent le mois, avec le remboursement estimé." %}{% else %}{% translate "Astreintes et interventions validées du mois, par salarié." %}{% endif %} {% translate "L'export est inscrit au journal d'activité." %}</p>
       </div>
       <footer class="modal-foot">
         {% button _("Annuler") data_modal_close=True %}

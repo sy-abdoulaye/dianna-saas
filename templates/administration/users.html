@@ -18,7 +18,7 @@
         {% button _("Inviter un utilisateur") variant="primary" icon="plus" href=invite_url %}
       </div>
     </form>
-    <div id="results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="usersChanged from:body, modalClosed from:body" hx-target="this" hx-disinherit="*">
+    <div id="results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="usersChanged from:body, modalClosed from:body" hx-target="this" hx-sync="this:replace" hx-disinherit="*">
       {% partialdef results inline %}
         {% if page_obj.paginator.count %}
           <div class="table-wrap">

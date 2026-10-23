@@ -1,0 +1,117 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Suivi du matériel" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Suivi du matériel" %}</h1>
+      <p class="sub">{% translate "Équipements remis aux collaborateurs" %}</p>
+    </div>
+    <div class="actions">
+      {% if can_manage %}
+        {% url "equipment:item_add" as add_url %}
+        {% button _("Ajouter un équipement") icon="plus" hx_get=add_url hx_target="#modal-root" %}
+      {% endif %}
+      {% button _("Demander du matériel") variant="primary" icon="plus" hx_get=new_request_url hx_target="#modal-root" %}
+    </div>
+  </div>
+  {% include "components/tabs.html" with label=_("Suivi du matériel") %}
+  <div id="equipment-content" class="stack" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="equipmentChanged from:body, requestsChanged from:body" hx-select="#equipment-content" hx-swap="outerHTML" hx-disinherit="*">
+    {% if tab == "mon-materiel" %}
+      <div class="card">
+        {% if items %}
+          {% include "equipment/partials/items_table.html" with show_issue=True %}
+        {% else %}
+          {% translate "Aucun matériel attribué" as empty_title %}
+          {% translate "Le matériel qui vous est remis par l'entreprise apparaîtra ici." as empty_text %}
+          {% include "components/empty_state.html" with icon="laptop" title=empty_title text=empty_text %}
+        {% endif %}
+      </div>
+      <h2 class="h2">{% translate "Mes demandes de matériel" %}</h2>
+      <div class="card">
+        {% if my_requests %}
+          {% include "equipment/partials/requests_table.html" with rows=my_requests mine=True %}
+        {% else %}
+          {% translate "Aucune demande" as empty_title %}
+          {% translate "Besoin d'un équipement ? Faites une demande, les RH la traiteront." as empty_text %}
+          {% include "components/empty_state.html" with icon="file" title=empty_title text=empty_text %}
+        {% endif %}
+      </div>
+    {% elif tab == "equipe" %}
+      <div class="card">
+        {% if items %}
+          {% include "equipment/partials/items_table.html" %}
+        {% else %}
+          {% translate "Aucun matériel" as empty_title %}
+          {% translate "Votre équipe n'a pas de matériel attribué." as empty_text %}
+          {% include "components/empty_state.html" with icon="laptop" title=empty_title text=empty_text %}
+        {% endif %}
+      </div>
+    {% elif tab == "parc" %}
+      <div class="grid gap-4 sm:grid-cols-3">
+        {% translate "Équipements" as l1 %}{% include "components/kpi.html" with label=l1 value=kpi_total %}
+        {% translate "En stock" as l2 %}{% include "components/kpi.html" with label=l2 value=kpi_stock %}
+        {% translate "En réparation" as l3 %}{% include "components/kpi.html" with label=l3 value=kpi_repair %}
+      </div>
+      <div class="card">
+        <form class="filters" method="get" action="{% url 'equipment:home' %}" role="search">
+          <input type="hidden" name="onglet" value="parc">
+          <div class="field grow">
+            <label class="label" for="park-q">{% translate "Recherche" %}</label>
+            <div class="search-input">{% icon "search" %}<input class="input" id="park-q" type="search" name="q" value="{{ query }}" placeholder="{% translate 'Modèle, n° de série ou personne' %}"></div>
+          </div>
+          <div class="field">
+            <label class="label" for="park-type">{% translate "Type" %}</label>
+            <span class="select-wrap"><select class="select" id="park-type" name="type"><option value="">{% translate "Tous" %}</option>{% for value, label in kinds %}<option value="{{ value }}" {% if value == kind %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></span>
+          </div>
+          <div class="field">
+            <label class="label" for="park-status">{% translate "État" %}</label>
+            <span class="select-wrap"><select class="select" id="park-status" name="etat"><option value="">{% translate "Tous (hors retirés)" %}</option>{% for value, label in statuses %}<option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></span>
+          </div>
+          {% button _("Filtrer") type="submit" %}
+        </form>
+        {% if page_obj.paginator.count %}
+          {% include "equipment/partials/items_table.html" with items=page_obj.object_list park=True %}
+          {% pagination page_obj "#equipment-content" %}
+        {% else %}
+          {% translate "Aucun équipement" as empty_title %}
+          {% translate "Aucun équipement ne correspond." as empty_text %}
+          {% include "components/empty_state.html" with icon="laptop" title=empty_title text=empty_text %}
+        {% endif %}
+      </div>
+    {% elif tab == "demandes" %}
+      <h2 class="h2">{% translate "À valider" %}</h2>
+      <div class="card">
+        {% if todo %}
+          {% include "equipment/partials/requests_table.html" with rows=todo %}
+        {% else %}
+          {% translate "Rien à valider" as empty_title %}
+          {% include "components/empty_state.html" with icon="check" title=empty_title %}
+        {% endif %}
+      </div>
+      <h2 class="h2">{% translate "Historique" %}</h2>
+      <div class="card">
+        {% if done %}
+          {% include "equipment/partials/requests_table.html" with rows=done %}
+        {% else %}
+          {% translate "Aucune demande traitée" as empty_title %}
+          {% include "components/empty_state.html" with icon="file" title=empty_title %}
+        {% endif %}
+      </div>
+    {% else %}
+      <h2 class="h2">{% translate "Signalements ouverts" %}</h2>
+      <div class="card">
+        {% if open_issues %}
+          {% include "equipment/partials/issues_table.html" with issues=open_issues actions=True %}
+        {% else %}
+          {% translate "Aucun signalement ouvert" as empty_title %}
+          {% include "components/empty_state.html" with icon="check" title=empty_title %}
+        {% endif %}
+      </div>
+      {% if closed_issues %}
+        <h2 class="h2">{% translate "Signalements clos" %}</h2>
+        <div class="card">{% include "equipment/partials/issues_table.html" with issues=closed_issues %}</div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock %}

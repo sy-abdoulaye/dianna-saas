@@ -14,7 +14,6 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Count, Q
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
 from apps.approvals.models import (
@@ -26,8 +25,9 @@ from apps.approvals.models import (
 )
 from apps.core import audit, permissions
 from apps.core.csv_export import csv_content
+from apps.core.dates import format_date
 from apps.core.models import Service
-from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Styled, xlsx_content
+from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Number, Styled, xlsx_content
 from apps.people.models import IN_POST_STATUSES, Employee
 
 CSV_CONTENT_TYPE = "text/csv; charset=utf-8"
@@ -49,7 +49,7 @@ def month_bounds(month: date) -> tuple[date, date]:
 
 
 def month_label(month: date) -> str:
-    return date_format(month, "F Y")
+    return format_date(month, "month")
 
 
 def _file(fmt, title, header, rows, stem):
@@ -104,7 +104,7 @@ def telework_month(viewer, month: date, fmt: str, *, request=None):
             person.registration_number,
             person.service.name if person.service else "",
             len(by_person.get(person.pk, [])),
-            ", ".join(date_format(d, "d/m") for d in sorted(by_person.get(person.pk, []))),
+            ", ".join(format_date(d, "day_numeric") for d in sorted(by_person.get(person.pk, []))),
         ]
         for person in people
     ]
@@ -154,7 +154,7 @@ def on_call_month(viewer, month: date, fmt: str, *, request=None):
             t["person"].service.name if t["person"].service else "",
             t["days"],
             t["count"],
-            str(t["hours"]).replace(".", ","),
+            Number(t["hours"]),
         ]
         for t in sorted(
             totals.values(), key=lambda t: (t["person"].last_name, t["person"].first_name)
@@ -162,6 +162,66 @@ def on_call_month(viewer, month: date, fmt: str, *, request=None):
     ]
     _log(viewer, _("Export paie des astreintes"), month_label(month), fmt, request)
     return _file(fmt, _("Astreintes"), header, rows, f"astreintes-{first:%Y-%m}")
+
+
+# ---------- Transport (paie) ----------
+
+
+def transport_month(viewer, month: date, fmt: str, *, request=None):
+    """Justificatifs validés qui couvrent le mois, avec le montant du mois et le remboursement
+    estimé (L5-13) : 50 % des abonnements (article L3261-2 du Code du travail) ; un
+    abonnement annuel compte pour un douzième par mois ; un titre unique n'est pas concerné."""
+    from apps.approvals.models import TransportProof
+
+    _check(viewer)
+    first, last = month_bounds(month)
+    proofs = (
+        TransportProof.objects.filter(
+            status=RequestStatus.APPROVED,
+            month__lte=last,
+            valid_until__gte=first,
+            requester__in=_people_ids(viewer),
+        )
+        .select_related("requester", "requester__service")
+        .order_by("requester__last_name", "requester__first_name", "month")
+    )
+    header = [
+        _("Collaborateur"),
+        _("Matricule"),
+        _("Service"),
+        _("Type de titre"),
+        _("Validité"),
+        _("Montant payé"),
+        _("Montant du mois"),
+        _("Remboursement estimé"),
+    ]
+    rows = []
+    for proof in proofs:
+        monthly = proof.amount / 12 if proof.ticket_type == "yearly" else proof.amount
+        monthly = monthly.quantize(Decimal("0.01"))
+        refund = (
+            Number((monthly / 2).quantize(Decimal("0.01")), money=True)
+            if proof.is_subscription
+            else _("Non concerné")
+        )
+        rows.append(
+            [
+                proof.requester.full_name,
+                proof.requester.registration_number,
+                proof.requester.service.name if proof.requester.service else "",
+                proof.get_ticket_type_display(),
+                _("du %(a)s au %(b)s")
+                % {
+                    "a": format_date(proof.month, "numeric"),
+                    "b": format_date(proof.valid_until, "numeric"),
+                },
+                Number(proof.amount, money=True),
+                Number(monthly, money=True),
+                refund,
+            ]
+        )
+    _log(viewer, _("Export paie des justificatifs de transport"), month_label(month), fmt, request)
+    return _file(fmt, _("Transport"), header, rows, f"transport-{first:%Y-%m}")
 
 
 # ---------- Synthèse de campagne ----------
@@ -224,7 +284,7 @@ def campaign_file(viewer, campaign, fmt: str, *, request=None):
     _check(viewer)
     mondays, summaries = campaign_summary(campaign)
     header = [_("Service"), _("Effectif"), _("Vœux")] + [
-        _("Semaine du %(day)s") % {"day": date_format(m, "d/m")} for m in mondays
+        _("Semaine du %(day)s") % {"day": format_date(m, "day_numeric")} for m in mondays
     ]
     rows = []
     for item in summaries:

@@ -13,8 +13,9 @@ from datetime import date, timedelta
 from functools import lru_cache
 
 import holidays as holidays_lib
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
+
+from apps.core.dates import format_date
 
 ALSACE_MOSELLE = "57"  # Moselle : mêmes jours fériés que le Bas-Rhin et le Haut-Rhin
 
@@ -85,7 +86,7 @@ def day_off(day: date, site_id: int | None) -> DayOff | None:
 
 def day_off_message(day: date, off: DayOff) -> str:
     """Message de refus d'une déclaration sur un jour non ouvré."""
-    when = date_format(day, "j F")
+    when = format_date(day, "day_month")
     if off.kind == "holiday":
         return _("Le %(day)s est un jour férié (%(label)s).") % {"day": when, "label": off.label}
     if off.site_closure:

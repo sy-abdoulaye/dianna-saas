@@ -26,11 +26,11 @@ le dernier de la demande (A3-01).
 """
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 
-from django.db import IntegrityError, transaction
+from django.db import DataError, IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 
 from apps.agenda.days import day_off, day_off_message
@@ -45,8 +45,11 @@ from apps.approvals.models import (
     RequestStatus,
     SummerCampaign,
     TeleworkRequest,
+    TransportProof,
 )
 from apps.core import audit, notifications, permissions
+from apps.core.dates import format_date
+from apps.core.files import delete_private, write_private
 from apps.core.models import Notification
 from apps.people.models import IN_POST_STATUSES, Employee, Role
 
@@ -71,6 +74,7 @@ class RequestValidationError(WorkflowError):
 ALREADY_PROCESSED = _("Cette demande a déjà été traitée.")
 OTHER_DECISION = _("Une autre décision a été prise depuis. Rien n'a été modifié.")
 SAME_DAY = _("Vous avez déjà une demande pour ce jour.")
+AMOUNT_RANGE = _("Indiquez un montant supérieur à 0 et inférieur ou égal à 1 000 €.")
 CAMPAIGN_ALREADY_OPEN = _("Une campagne est déjà ouverte.")
 
 
@@ -131,7 +135,10 @@ def has_hr_step(request) -> bool:
 
 def first_validators(request) -> list[Employee]:
     """Qui reçoit la demande à l'envoi : le manager direct, sinon les RH et administrateurs
-    autres que le demandeur (M-12, L3-02)."""
+    autres que le demandeur (M-12, L3-02). Types validés par les RH (transport, matériel,
+    L5-04) : les RH et administrateurs autres que le demandeur."""
+    if request.hr_validated:
+        return hr_validators(exclude=request.requester)
     manager = active_manager(request.requester)
     if manager is not None:
         return [manager]
@@ -144,6 +151,12 @@ def can_decide(employee, request) -> bool:
     et administrateurs. Personne ne décide pour soi-même."""
     if employee is None or employee.pk == request.requester_id:
         return False
+    if request.hr_validated:
+        return (
+            request.status == RequestStatus.PENDING
+            and is_hr_or_admin(employee)
+            and permissions.can(employee, request.decide_action, request)
+        )
     if request.status == RequestStatus.PENDING:
         manager = active_manager(request.requester)
         if manager is not None and manager.pk == employee.pk:
@@ -162,7 +175,7 @@ def can_cancel_approved(employee, request) -> bool:
 
 def acting_for(employee, request):
     """Manager remplacé quand un RH ou un administrateur décide à sa place (bandeau M-12)."""
-    if request.status != RequestStatus.PENDING:
+    if request.status != RequestStatus.PENDING or request.hr_validated:
         return None
     manager = active_manager(request.requester)
     if manager is not None and manager.pk != employee.pk and is_hr_or_admin(employee):
@@ -175,6 +188,16 @@ def to_validate(employee, model):
     seulement les personnes sans manager (M-12) et l'étape RH des congés d'été."""
     from django.db.models import Q
 
+    related = ("requester", "requester__service", "requester__manager")
+    if model.hr_validated:
+        # Transport, matériel : toutes les demandes en attente, pour les RH seulement.
+        if not is_hr_or_admin(employee):
+            return model.objects.none()
+        return (
+            model.objects.filter(status=RequestStatus.PENDING)
+            .exclude(requester=employee)
+            .select_related(*related)
+        )
     in_post_ids = Employee.objects.filter(status__in=IN_POST_STATUSES).values("pk")
     has_active_manager = Q(requester__manager_id__in=in_post_ids)
     condition = Q(status=RequestStatus.PENDING, requester__manager=employee) & has_active_manager
@@ -257,7 +280,7 @@ def check_request(request, *, campaign=None) -> dict:
                 )
                 % {
                     "n": used,
-                    "week": date_format(rules.monday_of(request.date), "j N"),
+                    "week": format_date(rules.monday_of(request.date), "short"),
                     "quota": quota,
                 }
             }
@@ -279,13 +302,15 @@ def check_request(request, *, campaign=None) -> dict:
                     )
                     % {
                         "label": campaign.label,
-                        "a": date_format(campaign.period_start, "j F Y"),
-                        "b": date_format(campaign.period_end, "j F Y"),
+                        "a": format_date(campaign.period_start, "long"),
+                        "b": format_date(campaign.period_end, "long"),
                     }
                 }
         if rules.leave_overlaps(requester, request.start, request.end, exclude_pk=pk):
             return {"start": _("Cette période chevauche une de vos demandes existantes.")}
         return {}
+    if isinstance(request, TransportProof):
+        return _check_transport(request)
     if (
         isinstance(request, OnCallDeclaration)
         and request.kind == OnCallDeclaration.Kind.ON_CALL
@@ -295,14 +320,98 @@ def check_request(request, *, campaign=None) -> dict:
     return {}
 
 
+SUBSCRIPTIONS = (TransportProof.TicketType.MONTHLY, TransportProof.TicketType.YEARLY)
+
+
+def _check_transport(request) -> dict:
+    """Mois dans la fenêtre acceptée (L5-07), montant dans ses bornes, et pas de chevauchement
+    entre deux abonnements actifs (mensuel ou annuel, L5-06) ; un titre unique reste toujours
+    possible. Contrôles du service (A3-02), refaits même si le formulaire les a déjà faits."""
+    from apps.approvals.forms import transport_months
+
+    first, last = transport_months()
+    if request.month is None or not first <= request.month.replace(day=1) <= last:
+        return {
+            "month": _("Choisissez un mois entre %(a)s et %(b)s.")
+            % {"a": format_date(first, "month"), "b": format_date(last, "month")}
+        }
+    if request.amount is None or not Decimal("0") < Decimal(request.amount) <= Decimal("1000"):
+        return {"amount": AMOUNT_RANGE}
+    if request.ticket_type not in SUBSCRIPTIONS:
+        return {}
+    request.compute_validity()
+    overlapping = (
+        TransportProof.objects.filter(
+            requester=request.requester,
+            ticket_type__in=SUBSCRIPTIONS,
+            status__in=ACTIVE_STATUSES,
+            month__lte=request.valid_until,
+            valid_until__gte=request.month,
+        )
+        .exclude(pk=request.pk)
+        .order_by("month")
+        .first()
+    )
+    if overlapping is None:
+        return {}
+    covered = max(overlapping.month, request.month)
+    return {
+        "month": _("Un justificatif de ce type couvre déjà %(month)s.")
+        % {"month": format_date(covered, "month")}
+    }
+
+
+# Contrainte de base → (champ, message) : chaque IntegrityError est traduite selon la
+# contrainte en cause (L5-19), jamais par un message générique faux.
+CONSTRAINT_MESSAGES = {
+    "telework_one_active_per_day": ("date", SAME_DAY),
+    "transport_amount_range": ("amount", AMOUNT_RANGE),
+    "transport_valid_after_month": ("month", _("La validité doit commencer au mois choisi.")),
+    "leave_end_after_start": ("end", _("Le dernier jour doit être après le premier.")),
+    "on_call_end_after_start": ("end", _("La fin doit être après le début.")),
+}
+UNKNOWN_CONSTRAINT = _("La demande n'a pas pu être enregistrée : une valeur n'est pas acceptée.")
+INVALID_VALUE = _("Une valeur saisie est trop longue ou invalide. Vérifiez la saisie.")
+
+
+def constraint_name(exc) -> str:
+    cause = exc.__cause__ or exc.__context__
+    diag = getattr(cause, "diag", None)
+    return getattr(diag, "constraint_name", "") or ""
+
+
 def _save_checked(request, **kwargs):
-    """Enregistre sous point de sauvegarde : une contrainte de base violée malgré tout
-    (même jour) devient un message, jamais une erreur 500."""
+    """Enregistre sous point de sauvegarde : une contrainte de base violée malgré tout devient
+    le message de cette contrainte, une valeur refusée par la base (DataError) un message
+    clair ; jamais une erreur 500."""
     try:
         with transaction.atomic():
             request.save(**kwargs)
     except IntegrityError as exc:
-        raise RequestValidationError({"date": SAME_DAY}) from exc
+        field, message = CONSTRAINT_MESSAGES.get(constraint_name(exc), (None, UNKNOWN_CONSTRAINT))
+        raise RequestValidationError({field: message}) from exc
+    except DataError as exc:
+        raise RequestValidationError({None: INVALID_VALUE}) from exc
+
+
+def _write_file(request, content, cleanup):
+    """Écrit le fichier joint avant l'INSERT ; le nom est inscrit dans `cleanup` avant
+    l'écriture (L5-18)."""
+    field = request._meta.get_field(request.file_field)
+    name = field.generate_filename(request, content.name)
+    cleanup.append(name)
+    stored = write_private(name, content)
+    if stored != name:
+        cleanup.append(stored)
+    setattr(request, request.file_field, stored)
+
+
+def _forget_file(request):
+    """Les fichiers ne suivent pas les transactions : un envoi annulé ne laisse pas de fichier
+    sans demande (L5-05)."""
+    field_file = getattr(request, request.file_field) if request.file_field else None
+    if field_file and field_file.name:
+        delete_private(field_file.name)
 
 
 def sync_calendar(request):
@@ -356,7 +465,7 @@ def _notify_validators(request, validators) -> list[int]:
         _notify(
             v,
             text,
-            _module_url(request, "a-valider"),
+            _module_url(request, kind.todo_tab),
             Notification.Kind.REQUEST,
             email_subject=_("Demande à valider : %(kind)s") % {"kind": kind.lower},
             request=request,
@@ -409,8 +518,22 @@ def _audit(request, actor, action, verb, *, http_request=None, extra=""):
 # ---------- Transitions ----------
 
 
-@transaction.atomic
 def submit(model, requester: Employee, data: dict, *, http_request=None) -> TransitionResult:
+    """Envoi (voir `_submit`). Fichier joint (L5-05, L5-18) : son nom est inscrit dans la
+    liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit avant
+    l'INSERT, et il est supprimé si quoi que ce soit échoue ensuite (transaction annulée).
+    Lève StorageUnavailableError si le stockage ne répond pas : rien n'est enregistré."""
+    cleanup = []
+    try:
+        return _submit(model, requester, data, http_request=http_request, cleanup=cleanup)
+    except Exception:
+        for name in cleanup:
+            delete_private(name)
+        raise
+
+
+@transaction.atomic
+def _submit(model, requester, data, *, http_request=None, cleanup=None) -> TransitionResult:
     """Envoi. La fiche du demandeur est verrouillée, puis les contrôles métier sont faits
     (`check_request`) : deux envois simultanés ne peuvent ni dépasser le quota, ni créer deux
     demandes le même jour, ni deux absences ou astreintes qui se chevauchent. Lève
@@ -419,14 +542,19 @@ def submit(model, requester: Employee, data: dict, *, http_request=None) -> Tran
     requester = _lock_requester(requester.pk)
     data = dict(data)
     data.pop("campaign", None)
+    content = data.pop(model.file_field, None) if model.file_field else None
     request = model(requester=requester, submitted_at=timezone.now(), **data)
     campaign = None
     if isinstance(request, LeaveRequest) and request.leave_type == LeaveRequest.LeaveType.SUMMER:
         campaign = rules.open_campaign()
         request.campaign = campaign
+    if isinstance(request, TransportProof):
+        request.compute_validity()
     errors = check_request(request, campaign=campaign)
     if errors:
         raise RequestValidationError(errors)
+    if content is not None:
+        _write_file(request, content, cleanup)
     _save_checked(request)
     event_id = _event(request, requester, RequestEvent.Action.SUBMITTED)
     result = TransitionResult(request, previous_status="", event_id=event_id)
@@ -519,7 +647,10 @@ def approve(request, actor: Employee, *, comment: str = "", http_request=None) -
 
 
 def _substitution(request, actor, first_step) -> str:
-    """Trace d'un remplacement du manager par un RH ou un administrateur (M-12)."""
+    """Trace d'un remplacement du manager par un RH ou un administrateur (M-12). Jamais pour
+    les types validés par les RH, dont ils sont les valideurs prévus (L5-04)."""
+    if request.hr_validated:
+        return ""
     manager = active_manager(request.requester)
     if first_step and manager is not None and manager.pk != actor.pk:
         return _("à la place de %(name)s") % {"name": manager.full_name}
@@ -655,6 +786,9 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
             http_request=http_request,
         )
         request.delete()
+        if request.file_field:
+            # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
+            transaction.on_commit(lambda: _forget_file(request))
         return None
     previous = payload["previous"]
     expected = {

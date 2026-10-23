@@ -42,7 +42,9 @@ def trigger(response: HttpResponse, *, toast: Toast | None = None, close_modal=F
     if close_modal:
         payload["closeModal"] = True
     payload.update(events)
-    response.headers["HX-Trigger"] = json.dumps(payload, ensure_ascii=False)
+    # JSON en ASCII (échappements \uXXXX, décodés par htmx) : un caractère hors Latin-1
+    # (« € », « Œ ») serait sinon encodé par Django selon la RFC 2047, illisible pour htmx.
+    response.headers["HX-Trigger"] = json.dumps(payload)
     return response
 
 

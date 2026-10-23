@@ -3,10 +3,10 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
-from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
-from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest
+from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest, TransportProof
+from apps.core.dates import format_date
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class Kind:
     icon: str
     column: str
     url_name: str
+    todo_tab: str = "a-valider"  # onglet « À valider » de l'écran du module
 
 
 KINDS = {
@@ -56,7 +57,24 @@ KINDS = {
         _("Astreinte"),
         "approvals:on_call",
     ),
+    "transport": Kind(
+        "transport",
+        TransportProof,
+        _("Justificatifs de transport"),
+        _("justificatif de transport"),
+        _("Abonnements de transport en commun, validés par les RH"),
+        _("Ajouter un justificatif"),
+        "ticket",
+        _("Justificatif"),
+        "approvals:transport",
+    ),
 }
+
+
+def register_kind(kind: Kind) -> Kind:
+    """Types de demande d'autres applications (matériel, L5-04)."""
+    KINDS[kind.key] = kind
+    return kind
 
 
 def kind_of(request) -> Kind:
@@ -64,24 +82,24 @@ def kind_of(request) -> Kind:
 
 
 def full_date(day) -> str:
-    return date_format(day, "l j F Y")
+    return format_date(day, "full")
 
 
 def short_date(day) -> str:
-    return date_format(day, "j N")
+    return format_date(day, "short")
 
 
 def span(start, end) -> str:
     if start == end:
-        return date_format(start, "j F Y")
+        return format_date(start, "long")
     if start.year == end.year:
         return _("du %(a)s au %(b)s") % {
-            "a": date_format(start, "j F"),
-            "b": date_format(end, "j F Y"),
+            "a": format_date(start, "day_month"),
+            "b": format_date(end, "long"),
         }
     return _("du %(a)s au %(b)s") % {
-        "a": date_format(start, "j F Y"),
-        "b": date_format(end, "j F Y"),
+        "a": format_date(start, "long"),
+        "b": format_date(end, "long"),
     }
 
 
@@ -94,8 +112,25 @@ def workdays(start, end) -> int:
     return count
 
 
+def euros(amount) -> str:
+    return f"{amount:.2f}".replace(".", ",") + "\u00a0€"
+
+
+SUMMARIES = {}  # type de demande → fonction de résumé (autres applications)
+
+
 def summary(request) -> str:
     """Résumé d'une ligne (tableaux, notifications, e-mails)."""
+    if request.request_type in SUMMARIES:
+        return SUMMARIES[request.request_type](request)
+    if isinstance(request, TransportProof):
+        # Ordre du prototype : mois · type · montant · nom du fichier.
+        parts = [
+            format_date(request.month, "month"),
+            request.get_ticket_type_display(),
+            euros(request.amount),
+        ]
+        return " · ".join([*parts, request.original_name] if request.original_name else parts)
     if isinstance(request, TeleworkRequest):
         return full_date(request.date)
     if isinstance(request, LeaveRequest):

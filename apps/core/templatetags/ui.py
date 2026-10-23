@@ -251,3 +251,11 @@ def theme_switch(save_url: str = ""):
         "selected": "system",
         "data_attr": attrs,
     }
+
+
+@register.filter
+def fr_date(value, style="long"):
+    """Date au format français commun (apps/core/dates.py) : {{ day|fr_date:"long" }}."""
+    from apps.core.dates import format_date
+
+    return format_date(value, style)

@@ -23,8 +23,11 @@ def test_real_menu_shows_existing_routes_and_soon_entries_without_link():
     assert items["dashboard"].url == "/"
     assert items["workload"].soon and items["workload"].url is None
     assert items["telework"].url == "/teletravail/"
+    # Lot 5 : transport et matériel ont leurs écrans.
+    assert items["transport"].url == "/transport/"
+    assert items["equipment"].url == "/materiel/"
     # Les modules des lots suivants n'ont pas encore de route : pas d'entrée.
-    assert "equipment" not in items
+    assert "surveys" not in items
 
 
 def test_recruitment_is_shown_to_people_with_reports_not_to_the_manager_profile_alone():

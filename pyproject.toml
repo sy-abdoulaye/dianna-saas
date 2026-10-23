@@ -5,11 +5,13 @@ description = "Dianna : gestion RH et organisation du travail, SaaS multi-entrep
 readme = "LISEZ-MOI.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "boto3>=1.35,<2",
     "cryptography>=46",
     "django>=6.1.2,<6.2",
     "django-allauth[mfa]==65.19.1",
     "django-environ>=0.14.0",
     "django-htmx>=1.29.0",
+    "django-storages[s3]>=1.14,<1.15",
     "django-tasks-db==0.13.0",
     "gunicorn>=26.2.0",
     "holidays>=0.107,<1",

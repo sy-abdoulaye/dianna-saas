@@ -28,15 +28,37 @@
     <dt>{{ kind.column }}</dt><dd>{{ summary }}</dd>
     {% if obj.comment %}<dt>{% translate "Commentaire" %}</dt><dd>{{ obj.comment|linebreaksbr }}</dd>{% endif %}
     {% if obj.description %}<dt>{% translate "Description" %}</dt><dd>{{ obj.description|linebreaksbr }}</dd>{% endif %}
-    <dt>{% translate "Envoyée le" %}</dt><dd>{{ obj.submitted_at|date:"j F Y à H:i" }}</dd>
+    {% if kind.key == "transport" %}
+      <dt>{% translate "Valide jusqu'au" %}</dt><dd>{{ obj.valid_until|fr_date:"long" }}</dd>
+      <dt>{% translate "Remboursement estimé" %}</dt><dd>{% if obj.is_subscription %}{{ refund }}{% else %}{% translate "Non concerné (titre unique)" %}{% endif %}</dd>
+    {% endif %}
+    <dt>{% translate "Envoyée le" %}</dt><dd>{{ obj.submitted_at|fr_date:"long_time" }}</dd>
   </dl>
+  {% if proof_url %}
+    <div class="stack">
+      <h3 class="h3">{% translate "Justificatif" %}</h3>
+      {% if obj.file_type == "application/pdf" %}
+        <p class="meta">{{ obj.original_name }}</p>
+      {% else %}
+        <img class="proof-preview" src="{{ proof_url }}" alt="{% blocktranslate with name=obj.original_name %}Justificatif {{ name }}{% endblocktranslate %}">
+      {% endif %}
+      <div class="flex flex-wrap gap-2">
+        {% if obj.file_type == "application/pdf" %}
+          <a class="btn btn-secondary btn-sm" href="{{ proof_url }}" target="_blank" rel="noopener">{% icon "file" 16 %}<span>{% translate "Ouvrir le justificatif" %}</span></a>
+        {% endif %}
+        {% with download_url=proof_url|add:"?telecharger=1" %}
+          <a class="btn btn-ghost btn-sm" href="{{ download_url }}">{% icon "dl" 16 %}<span>{% translate "Télécharger" %}</span></a>
+        {% endwith %}
+      </div>
+    </div>
+  {% endif %}
   <div>
     <h3 class="h3 mb-2">{% translate "Historique" %}</h3>
     <ul class="rows">
       {% for event in history %}
         <li>
           <span>{{ event.get_action_display }}{% if event.comment %} : « {{ event.comment }} »{% endif %}{% if event.actor %} <span class="meta">{% blocktranslate with name=event.actor.full_name %}par {{ name }}{% endblocktranslate %}</span>{% endif %}</span>
-          <span class="meta whitespace-nowrap">{{ event.created_at|date:"j N à H:i" }}</span>
+          <span class="meta whitespace-nowrap">{{ event.created_at|fr_date:"short_time" }}</span>
         </li>
       {% endfor %}
     </ul>

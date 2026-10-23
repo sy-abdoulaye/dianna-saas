@@ -19,7 +19,7 @@
             {% for item in upcoming %}
               <li id="fermeture-{{ item.pk }}" class="flex-wrap">
                 <span>
-                  <b class="font-medium">{{ item.date|date:"l j F Y"|capfirst }}</b> · {{ item.label }}
+                  <b class="font-medium">{{ item.date|fr_date:"full"|capfirst }}</b> · {{ item.label }}
                   <span class="meta">· {{ item.scope|capfirst }}</span>
                   {% if item.concerned %}
                     <span class="meta block">
@@ -47,7 +47,7 @@
           <div class="card-body"><h2 class="h2" id="h-past-closures">{% translate "Fermetures passées (12 derniers mois)" %}</h2></div>
           <ul class="rows px-6 pb-5">
             {% for item in past %}
-              <li><span>{{ item.date|date:"j F Y" }} · {{ item.label }} <span class="meta">· {{ item.scope|capfirst }}</span></span></li>
+              <li><span>{{ item.date|fr_date:"long" }} · {{ item.label }} <span class="meta">· {{ item.scope|capfirst }}</span></span></li>
             {% endfor %}
           </ul>
         </section>

@@ -1,0 +1,24 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "laptop" %}{% endblock %}
+{% block modal_title %}{% translate "Attribuer un équipement" %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        <p class="modal-text">{{ obj.requester.full_name }} · {{ summary }}</p>
+        {% if form.fields.item.queryset.exists %}
+          {% include "components/field.html" with field=form.item %}
+        {% else %}
+          {% translate "Aucun équipement de ce type en stock. Ajoutez-en un au parc." as no_stock %}
+          {% include "components/banner.html" with kind="warn" text=no_stock %}
+        {% endif %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Attribuer") variant="primary" icon="check" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

@@ -13,7 +13,7 @@
     </div>
     <p class="meta">{% translate "Les campagnes de congés d'été se gèrent dans le module Congés estivaux (RH)." %}</p>
     <div class="flex flex-wrap items-center gap-4">
-      {% if logo_url %}<img class="company-logo" src="{{ logo_url }}" alt="{% translate 'Logo actuel' %}">{% else %}{% brand_mark 40 %}{% endif %}
+      {% if logo_url %}<img class="company-logo" src="{{ logo_url }}" alt="{% translate 'Logo actuel' %}" data-fallback>{% else %}{% brand_mark 40 %}{% endif %}
         <div class="min-w-64 flex-1">
           {% include "components/file_drop.html" with field=form.logo_upload hint=form.logo_upload.help_text %}
           {% if logo_url %}<label class="checkbox mt-2"><input type="checkbox" name="remove_logo" value="1"><span>{% translate "Retirer le logo" %}</span></label>{% endif %}

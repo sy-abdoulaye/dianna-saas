@@ -1,7 +1,7 @@
 {% load i18n ui %}
 <a class="card person-card" href="{% url 'people:detail' person.public_id %}">
   <div class="person-card-photo" aria-hidden="true">
-    {% if person.photo_url %}<img src="{{ person.photo_url }}" alt="">{% else %}{{ person|initials }}{% endif %}
+    {{ person|initials }}{% if person.photo_url %}<img src="{{ person.photo_url }}" alt="" data-fallback>{% endif %}
   </div>
   <div class="person-card-body">
     <div>

@@ -2,6 +2,7 @@
 
 import json
 from datetime import timedelta
+from decimal import Decimal
 
 import pytest
 from django.core import mail
@@ -356,3 +357,22 @@ def test_record_shows_requests_tab_to_self_manager_and_hr(client_for, company_a)
 
     colleague = EmployeeFactory(company=company_a.company)
     assert "En attente" not in client_for(colleague).get(url).content.decode()
+
+
+def test_on_call_hours_accept_a_comma(client_for, company_a):
+    """Champ texte décimal (L5-20) : « 2,5 » et « 2.5 » acceptés, tout autre format refusé."""
+    client = client_for(company_a.manager)
+    start = next_weekday(14)
+    data = {"kind": "intervention", "start": start.isoformat(), "end": start.isoformat()}
+    page = client.get("/astreintes/nouvelle/").content.decode()
+    assert 'inputmode="decimal"' in page and 'type="number"' not in page
+    for wrong in ("2;5", "deux", "2,5,1", "-2"):
+        data["hours"] = wrong
+        assert (
+            "Saisissez une durée comme 2,5."
+            in client.post("/astreintes/nouvelle/", data).content.decode()
+        )
+    data["hours"] = "2,5"
+    assert client.post("/astreintes/nouvelle/", data).status_code == 204
+    saved = OnCallDeclaration.all_companies.filter(requester=company_a.manager).latest("pk")
+    assert saved.hours == Decimal("2.5")

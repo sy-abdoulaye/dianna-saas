@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit, permissions
+from apps.core.files import delete_after_commit, file_writes
 from apps.core.tenancy import get_current_company
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 
@@ -33,9 +34,41 @@ TRACKED_FIELDS = (
 
 
 class PeopleError(Exception):
-    def __init__(self, message):
+    def __init__(self, message, field=None):
         super().__init__(str(message))
         self.message = message
+        self.field = field
+
+
+# Contrainte de base → (champ, message) : deux créations simultanées avec la même adresse
+# donnent un message, jamais une erreur 500 (L5-19).
+CONSTRAINT_MESSAGES = {
+    "people_employee_email_ci_unique": (
+        "email",
+        _("Cette adresse est déjà utilisée par une autre fiche de l'annuaire."),
+    ),
+    "people_employee_registration_unique": (
+        "registration_number",
+        _("Ce matricule est déjà utilisé."),
+    ),
+}
+
+
+def _save_employee(employee, **kwargs):
+    from django.db import DataError, IntegrityError
+
+    from apps.approvals.workflow import INVALID_VALUE, constraint_name
+
+    try:
+        with transaction.atomic():
+            employee.save(**kwargs)
+    except IntegrityError as exc:
+        field, message = CONSTRAINT_MESSAGES.get(
+            constraint_name(exc), (None, _("La fiche n'a pas pu être enregistrée."))
+        )
+        raise PeopleError(message, field) from exc
+    except DataError as exc:
+        raise PeopleError(INVALID_VALUE) from exc
 
 
 def _record(employee, actor, kind, fields=(), *, request=None, action=None, summary=None):
@@ -82,18 +115,23 @@ def ensure_an_admin_remains(employee, *, new_role=None, leaving=False):
         )
 
 
-@transaction.atomic
 def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
     """Crée la fiche au profil Salarié ; un autre profil est ensuite attribué par change_role
-    (journalisé people.role_changed, comme tout changement de profil)."""
+    (journalisé people.role_changed, comme tout changement de profil). La photo est écrite
+    avant l'INSERT et supprimée si la création échoue (L5-18)."""
+    with file_writes() as files, transaction.atomic():
+        return _create_employee(data, actor=actor, photo=photo, request=request, files=files)
+
+
+def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
     data = dict(data)
     role = data.pop("role", None) or Role.EMPLOYEE
     employee = Employee(**data)
     employee.company = get_current_company()  # avant le fichier : chemin <company_id>/photos/
     employee.status = status_for_arrival(employee.arrival_date)
     if photo is not None:
-        employee.photo.save(photo.name, photo, save=False)
-    employee.save()
+        files.save(employee.photo, photo)
+    _save_employee(employee)
     _record(employee, actor, EmployeeChange.Kind.CREATED, request=request)
     if role != Role.EMPLOYEE:
         change_role(employee, role, actor=actor, request=request)
@@ -101,13 +139,26 @@ def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
     return employee
 
 
-@transaction.atomic
 def update_employee(
     employee: Employee, data: dict, *, actor, photo=None, remove_photo=False, request=None
 ) -> list[str]:
     """Applique les changements et renvoie la liste des champs modifiés. Le profil d'accès
     passe par change_role (refus sur sa propre fiche, dernier administrateur protégé,
-    journal people.role_changed)."""
+    journal people.role_changed). Nouvelle photo écrite avant l'UPDATE et supprimée en cas
+    d'échec ; l'ancienne n'est supprimée qu'après la validation (L5-18)."""
+    with file_writes() as files, transaction.atomic():
+        return _update_employee(
+            employee,
+            data,
+            actor=actor,
+            photo=photo,
+            remove_photo=remove_photo,
+            request=request,
+            files=files,
+        )
+
+
+def _update_employee(employee, data, *, actor, photo, remove_photo, request, files):
     data = dict(data)
     role = data.pop("role", None)
     role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
@@ -126,15 +177,15 @@ def update_employee(
             employee.status = new_status
             changed.append("status")
     if photo is not None:
-        if employee.photo:
-            employee.photo.delete(save=False)
-        employee.photo.save(photo.name, photo, save=False)
+        delete_after_commit(employee.photo.name)
+        files.save(employee.photo, photo)
         changed.append("photo")
     elif remove_photo and employee.photo:
-        employee.photo.delete(save=False)
+        delete_after_commit(employee.photo.name)
+        employee.photo = None
         changed.append("photo")
     if changed:
-        employee.save()
+        _save_employee(employee)
         _record(employee, actor, EmployeeChange.Kind.UPDATED, changed, request=request)
     return ["role", *changed] if role_changed else changed
 
@@ -194,6 +245,11 @@ def archive(employee: Employee, *, actor, departure_date=None, request=None) -> 
         ["status", "departure_date"],
         request=request,
     )
+    # Matériel encore détenu : l'archivage n'est pas bloqué, les RH reçoivent la liste à
+    # restituer (docs/modules/07-materiel.md, L5-11).
+    from apps.equipment.services import alert_hr_on_departure
+
+    alert_hr_on_departure(employee, actor=actor)
     return previous
 
 

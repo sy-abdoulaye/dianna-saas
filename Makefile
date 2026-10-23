@@ -6,6 +6,11 @@ UV ?= uv
 RUN := $(UV) run
 MANAGE := $(RUN) python manage.py
 
+# Port du serveur de développement : `make up APP_PORT=8001`, variable d'environnement ou
+# ligne APP_PORT= du .env (Compose lit de même DB_PORT et COMPOSE_PROJECT_NAME dans le .env).
+APP_PORT ?= $(or $(shell sed -n 's/^APP_PORT=//p' .env 2>/dev/null | tail -n 1),8000)
+export APP_PORT
+
 # Tailwind CSS : binaire autonome, version et sommes SHA-256 fixées (T-04).
 TAILWIND_VERSION := v4.3.3
 TAILWIND_SHA256_linux-x64 := dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
@@ -44,7 +49,7 @@ db: ## Démarre PostgreSQL 18 (Docker) et attend qu'il soit prêt
 	docker compose up -d --wait db
 
 up: db css-build migrate ## Démarre PostgreSQL et le serveur de développement (http://localhost:8000)
-	$(MANAGE) runserver 0.0.0.0:8000
+	$(MANAGE) runserver 0.0.0.0:$(APP_PORT)
 
 worker: ## Travailleur des tâches en arrière-plan (e-mails), dans un second terminal
 	$(MANAGE) db_worker
@@ -80,9 +85,13 @@ format: ## Formate le code Python et les templates
 	$(RUN) ruff check --fix .
 	$(RUN) ruff format .
 
-check: ## Vérifications Django (dont la configuration de production)
+# Réglages de production pour les vérifications (clés aléatoires, S3 fictif).
+PROD_ENV = DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") MFA_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") TASKS_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") ALLOWED_HOSTS=example.com S3_BUCKET=verification S3_ENDPOINT_URL=https://s3.fr-par.scw.cloud S3_ACCESS_KEY=verification S3_SECRET_KEY=verification
+
+check: ## Vérifications Django (dont la configuration de production) et migrations à jour
 	$(MANAGE) check
-	DJANGO_SETTINGS_MODULE=config.settings.prod SECRET_KEY=$$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") MFA_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") TASKS_ENCRYPTION_KEY=$$(python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())") ALLOWED_HOSTS=example.com $(MANAGE) check --deploy --fail-level WARNING
+	$(PROD_ENV) $(MANAGE) check --deploy --fail-level WARNING
+	$(PROD_ENV) $(MANAGE) makemigrations --check --dry-run
 
 seed: ## Charge l'entreprise de démonstration « Exemple SAS » (disponible au lot 1)
 	@if $(MANAGE) help seed_demo >/dev/null 2>&1; then $(MANAGE) seed_demo; \

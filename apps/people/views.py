@@ -258,7 +258,8 @@ class EmployeeFormView(PermissionRequiredMixin, View):
                 )
                 message = _("Fiche enregistrée")
         except (services.PeopleError, accounts.InvitationError) as error:
-            form.add_error(None, error.message)
+            field = getattr(error, "field", None)
+            form.add_error(field if field in form.fields else None, error.message)
             return self.render_form(request, form, employee, status=422)
         messages.success(request, message)
         return redirect("people:detail", public_id=employee.public_id)
@@ -274,12 +275,15 @@ def archive(request, public_id):
     url = reverse("people:archive", args=[employee.public_id])
     form = ArchiveForm(request.POST or None)
     template = "people/partials/archive_modal.html"
+    from apps.equipment.services import held_by
+
+    held = held_by(employee)
     if request.method == "POST":
         if not form.is_valid():
             return render(
                 request,
                 f"{template}#form",
-                {"form": form, "person": employee, "action_url": url},
+                {"form": form, "person": employee, "action_url": url, "held": held},
                 status=422,
             )
         try:
@@ -294,7 +298,7 @@ def archive(request, public_id):
             return render(
                 request,
                 f"{template}#form",
-                {"form": form, "person": employee, "action_url": url},
+                {"form": form, "person": employee, "action_url": url, "held": held},
                 status=422,
             )
         token = undo.make_token(
@@ -312,7 +316,9 @@ def archive(request, public_id):
                 close_modal=True,
             )
         )
-    return render(request, template, {"form": form, "person": employee, "action_url": url})
+    return render(
+        request, template, {"form": form, "person": employee, "action_url": url, "held": held}
+    )
 
 
 def _with_event(response: HttpResponse) -> HttpResponse:

@@ -6,7 +6,7 @@ from .base import env
 DEBUG = True
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[".localhost", "localhost"])
 SITE_SCHEME = "http"
-SITE_PORT = env("SITE_PORT", default="8000")
+SITE_PORT = env("SITE_PORT", default=env("APP_PORT", default="8000"))
 DEMO_DISABLE_2FA = env.bool("DEMO_DISABLE_2FA", default=True)
 # Clé de développement, publique : ne jamais la réutiliser ailleurs.
 MFA_ENCRYPTION_KEY = env(

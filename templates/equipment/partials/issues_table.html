@@ -1,0 +1,35 @@
+{% load i18n ui %}
+<div class="table-wrap">
+  <table class="table">
+    <caption class="sr-only">{% translate "Signalements" %}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{% translate "Équipement" %}</th>
+        <th scope="col">{% translate "Auteur" %}</th>
+        <th scope="col">{% translate "Description" %}</th>
+        <th scope="col">{% translate "État" %}</th>
+        {% if actions %}<th scope="col" class="end">{% translate "Actions" %}</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for issue in issues %}
+        <tr>
+          <td><b class="font-medium">{{ issue.item.get_kind_display }}</b><div class="meta font-mono">{{ issue.item.serial_number }}</div></td>
+          <td>{{ issue.reported_by.full_name }}<div class="meta">{{ issue.created_at|fr_date:"short" }}</div></td>
+          <td class="min-w-56">{{ issue.description|linebreaksbr }}{% if issue.resolution %}<div class="meta">{% translate "Résolution :" %} {{ issue.resolution }}</div>{% endif %}</td>
+          <td>{% status_badge "equipment_issue" issue.status %}</td>
+          {% if actions %}
+            <td class="end whitespace-nowrap">
+              {% url "equipment:issue_repair" issue.pk as repair_url %}
+              {% url "equipment:issue_close" issue.pk as close_url %}
+              {% if issue.item.status == "assigned" or issue.item.status == "in_stock" %}
+                {% button _("Envoyer en réparation") size="sm" hx_get=repair_url hx_target="#modal-root" %}
+              {% endif %}
+              {% button _("Clore") variant="primary" size="sm" hx_get=close_url hx_target="#modal-root" %}
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

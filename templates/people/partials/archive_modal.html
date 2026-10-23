@@ -9,6 +9,11 @@
       <div class="modal-body">
         {% include "components/form_errors.html" %}
         <p class="modal-text">{% translate "La fiche passe au statut « Parti » et disparaît de l'annuaire des salariés. Son compte est désactivé ; ses données sont conservées. Vous pourrez la réactiver." %}</p>
+        {% if held %}
+          {% blocktranslate asvar held_title count n=held|length %}Cette personne détient encore {{ n }} équipement.{% plural %}Cette personne détient encore {{ n }} équipements.{% endblocktranslate %}
+          {% blocktranslate asvar held_text with items=held|join:", " %}{{ items }}. Les RH recevront la liste du matériel à restituer.{% endblocktranslate %}
+          {% include "components/banner.html" with kind="warn" title=held_title text=held_text %}
+        {% endif %}
         {% include "components/field.html" with field=form.departure_date %}
       </div>
       <footer class="modal-foot">

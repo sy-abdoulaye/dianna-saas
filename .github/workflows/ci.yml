@@ -27,6 +27,8 @@ jobs:
           version: "0.13.1"
       - run: uv sync --frozen
       - run: make lint
+      # make check : vérifications de production (S3 compris) et
+      # « makemigrations --check --dry-run » avec les réglages de production.
       - run: make check
 
   test:
@@ -50,7 +52,22 @@ jobs:
       - run: uv sync --frozen
       # Exports PDF (WeasyPrint) : bibliothèques natives.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
+      # Stockage S3 des justificatifs (L5-02) : MinIO, chiffrement côté serveur activé.
+      # Les images officielles de MinIO ne sont plus publiées : image Bitnami figée, épinglée
+      # par son empreinte (bitnamilegacy/minio:2025.7.23). À remplacer au lot 8.
+      - name: MinIO
+        run: |
+          docker run -d --name minio -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER=dianna -e MINIO_ROOT_PASSWORD=dianna-secret \
+            -e MINIO_KMS_SECRET_KEY="dianna-key:$(openssl rand -base64 32)" \
+            -e MINIO_DEFAULT_BUCKETS=dianna-ci \
+            bitnamilegacy/minio@sha256:8935e75fa5d11295c17171e4aa49efe390a1193cd7f12e4d21b92af9ffef09d7
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:9000/minio/health/live && break; sleep 2; done
       - run: make test
+        env:
+          S3_TEST_ENDPOINT: http://127.0.0.1:9000
+          S3_TEST_ACCESS_KEY: dianna
+          S3_TEST_SECRET_KEY: dianna-secret
       - run: uv run playwright install --with-deps chromium
       - run: make e2e
       - uses: actions/upload-artifact@v4
