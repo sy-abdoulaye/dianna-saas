@@ -196,6 +196,27 @@ def test_seed_demo_loads_both_companies(settings, db):
     assert to_validate.exists()
     assert not to_validate.filter(source_id__isnull=True).exists()
     assert not to_validate.filter(source_type="").exists()
+    # Lot 6 : 5 annonces (2 épinglées), 4 questionnaires (ouvert, ouvert avec moins de 3
+    # réponses, clos, brouillon), écrits par les services.
+    from apps.announcements.models import Announcement
+    from apps.surveys.models import Survey
+
+    announcements = Announcement.all_companies.filter(company=exemple)
+    assert announcements.count() == 5 and announcements.filter(pinned=True).count() == 2
+    from apps.surveys.models import SurveyReceipt, SurveyResponse
+
+    surveys = {
+        s.title: (
+            s.status,
+            SurveyReceipt.all_companies.filter(survey=s).count(),
+            SurveyResponse.all_companies.filter(survey=s).count(),
+        )
+        for s in Survey.all_companies.filter(company=exemple)
+    }
+    assert surveys["Baromètre de qualité de vie au travail 2026"] == ("open", 14, 14)
+    assert surveys["Retour sur l'intégration des nouveaux arrivants"] == ("open", 2, 2)
+    assert surveys["Enquête télétravail 2025"] == ("closed", 18, 18)
+    assert surveys["Besoins de formation 2027"] == ("draft", 0, 0)
     with pytest.raises(CommandError):
         call_command("seed_demo")
     call_command("seed_demo", "--reset")

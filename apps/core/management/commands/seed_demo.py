@@ -349,6 +349,15 @@ def slug(value: str) -> str:
     return "".join(c for c in value.lower() if c.isalpha())
 
 
+# Répondants du questionnaire « Intégration » du prototype : arrivés depuis moins d'un an à
+# la date du chargement, pour que le public « Arrivés depuis moins d'un an » compte au moins
+# 3 personnes (seuil d'anonymat, L6-05). Écart au prototype, figé en 2024 et 2025.
+NEW_HIRES = {
+    key: timezone.localdate() - timedelta(days=days)
+    for key, days in (("p14", 300), ("p22", 200), ("p24", 120))
+}
+
+
 def shifted(iso: str) -> date:
     """Décale une date du prototype pour garder le même écart avec aujourd'hui."""
     return date.fromisoformat(iso) + (timezone.localdate() - PROTOTYPE_TODAY)
@@ -419,7 +428,7 @@ class Command(BaseCommand):
                     status=STATUSES[status],
                     arrival_date=shifted(arrival)
                     if status == "arrivee"
-                    else date.fromisoformat(arrival),
+                    else NEW_HIRES.get(key) or date.fromisoformat(arrival),
                     departure_date=timezone.localdate() - timedelta(days=30)
                     if status == "parti"
                     else None,
@@ -448,6 +457,8 @@ class Command(BaseCommand):
             )
             self._seed_closures(sites)
             self._seed_requests(people)
+            self._seed_announcements(people)
+            self._seed_surveys(people)
             audit.log("platform.demo_loaded", "Données de démonstration chargées")
 
     def _seed_closures(self, sites):
@@ -653,6 +664,54 @@ class Command(BaseCommand):
             EquipmentRequest, "p2", "pending", kind="laptop", reason="Renouvellement (4 ans)"
         )
 
+    def _seed_announcements(self, people):
+        """Annonces du prototype (seedAnnonces), datées par rapport au jour du chargement.
+        Écart : « Nouvelle politique de télétravail » ne mentionne pas de délai (M-01)."""
+        from apps.announcements.models import Announcement, AnnouncementRead
+
+        now = timezone.now()
+        for title, category, body, author, days, pinned, readers in DEMO_ANNOUNCEMENTS:
+            announcement = Announcement.objects.create(
+                title=title,
+                category=category,
+                body=body,
+                author=people[author],
+                published_at=now - timedelta(days=days),
+                pinned=pinned,
+            )
+            for key in {author, *readers}:
+                AnnouncementRead.objects.create(announcement=announcement, employee=people[key])
+
+    def _seed_surveys(self, people):
+        """Questionnaires du prototype (seedQuestionnaires), écrits par les services : public
+        figé à la publication, réponses anonymes sans lien avec les reçus. Écarts :
+        « Intégration » n'a que 2 réponses (résultats masqués) ; le brouillon a une question
+        notée, obligatoire dans le formulaire."""
+        from apps.surveys import services
+        from apps.surveys.models import Survey
+
+        hr, today = people["p9"], timezone.localdate()
+        rng = DemoRandom(7)
+        for spec in DEMO_SURVEYS:
+            survey = services.create_draft(
+                services.DraftData(spec["title"], spec["audience"], None, *spec["questions"]),
+                actor=hr,
+            )
+            if spec["status"] == "draft":
+                continue
+            services.publish(survey, actor=hr)
+            respondents = [people[key] for key in spec["respondents"]]
+            rng.shuffle(respondents)
+            for person in respondents:
+                services.submit_answers(survey, person, demo_answers(survey, rng))
+            if spec["status"] == "closed":
+                services.close(survey, actor=hr)
+            # Dates d'affichage du prototype (échéance, publication), relatives à aujourd'hui.
+            Survey.objects.filter(pk=survey.pk).update(
+                due_date=today + timedelta(days=spec["due_in"]),
+                published_at=timezone.now() + timedelta(days=spec["due_in"] - 30),
+            )
+
     def _seed_equipment(self, people):
         """Parc du prototype (seedEquipment) : 15 équipements, attributions et historique."""
         from apps.equipment.models import (
@@ -856,3 +915,158 @@ def demo_proof(name: str, data: bytes, mime: str) -> dict:
         "file_type": mime,
         "original_name": name,
     }
+
+
+DEMO_ANNOUNCEMENTS = [
+    (
+        "Fermeture du site de Lyon le 24 décembre",
+        "site_life",
+        "Le site de Lyon sera fermé le jeudi 24 décembre. Les équipes support passent en "
+        "astreinte renforcée. Merci de poser vos congés avant le 20 novembre.",
+        "p9",
+        2,
+        True,
+        ["p3"],
+    ),
+    (
+        "Campagne des entretiens individuels 2026",
+        "hr",
+        "La campagne est ouverte du 5 octobre au 18 décembre. Chaque salarié complète son "
+        "auto-évaluation, puis son manager planifie l'entretien.",
+        "p9",
+        7,
+        True,
+        ["p1", "p3", "p5"],
+    ),
+    (
+        "Nouvelle politique de télétravail",
+        "company",
+        "Deux jours de télétravail par semaine, à déclarer dans Dianna. Les demandes sont "
+        "validées par le manager.",
+        "p9",
+        15,
+        False,
+        ["p1", "p5"],
+    ),
+    (
+        "Rappel : exercice d'évacuation à Paris",
+        "safety",
+        "Un exercice d'évacuation aura lieu le jeudi 5 novembre à 10 h. Le point de "
+        "rassemblement est devant l'entrée principale.",
+        "p10",
+        21,
+        False,
+        ["p1"],
+    ),
+    (
+        "Bienvenue à Sofia Nunes",
+        "company",
+        "Sofia rejoindra l'équipe finance à Nantes le 3 novembre en tant que comptable.",
+        "p9",
+        3,
+        False,
+        [],
+    ),
+]
+
+SURVEY_RESPONDENTS = [
+    "p2", "p3", "p4", "p6", "p8", "p11", "p13", "p14", "p15",
+    "p16", "p18", "p19", "p20", "p22", "p23", "p24", "p17", "p21",
+]  # fmt: skip
+
+DEMO_SURVEYS = [
+    {
+        "title": "Baromètre de qualité de vie au travail 2026",
+        "audience": "all",
+        "status": "open",
+        "due_in": 25,
+        "questions": (
+            [
+                "Je me sens bien dans mon équipe.",
+                "Ma charge de travail est soutenable.",
+                "Je dispose des outils nécessaires pour travailler.",
+            ],
+            "Qu'est-ce qui pourrait améliorer votre quotidien ?",
+        ),
+        "respondents": SURVEY_RESPONDENTS[:14],
+    },
+    {
+        "title": "Retour sur l'intégration des nouveaux arrivants",
+        "audience": "new_hires",
+        "status": "open",
+        "due_in": 42,
+        "questions": (
+            ["Mon accueil s'est bien passé.", "Je comprends mes objectifs."],
+            "Un point à améliorer dans l'intégration ?",
+        ),
+        "respondents": ["p24", "p22"],
+    },
+    {
+        "title": "Enquête télétravail 2025",
+        "audience": "all",
+        "status": "closed",
+        "due_in": -311,
+        "questions": (
+            [
+                "Le télétravail m'aide à mieux organiser ma semaine.",
+                "Je reste en contact avec mon équipe.",
+            ],
+            "",
+        ),
+        "respondents": SURVEY_RESPONDENTS,
+    },
+    {
+        "title": "Besoins de formation 2027",
+        "audience": "all",
+        "status": "draft",
+        "due_in": 0,
+        "questions": (
+            ["Les formations proposées répondent à mes besoins."],
+            "Quelle formation vous aiderait le plus en 2027 ?",
+        ),
+        "respondents": [],
+    },
+]
+
+DEMO_COMMENTS = {
+    2: [
+        "Les pics de charge reviennent chaque fin de mois.",
+        "Peu d'échanges avec les autres équipes.",
+    ],
+    3: ["Correct, mais les outils sont parfois lents.", "Ça dépend des semaines."],
+    4: ["Bonne entente, réunions utiles.", "Le télétravail aide beaucoup."],
+    5: ["Très bonne ambiance dans l'équipe.", "Matériel récent et adapté."],
+}
+
+
+class DemoRandom:
+    """Générateur reproductible du prototype (congruence linéaire), sans `random` : les
+    données de démonstration sont les mêmes à chaque chargement."""
+
+    def __init__(self, seed: int):
+        self.seed = seed
+
+    def next(self) -> float:
+        self.seed = (self.seed * 1103515245 + 12345) & 0x7FFFFFFF
+        return self.seed / 0x7FFFFFFF
+
+    def shuffle(self, items: list) -> None:
+        for index in range(len(items) - 1, 0, -1):
+            other = int(self.next() * (index + 1))
+            items[index], items[other] = items[other], items[index]
+
+
+def demo_answers(survey, rng: DemoRandom) -> dict:
+    """Réponse du prototype : notes de 2 à 5, commentaire une fois sur trois environ."""
+    from apps.surveys.models import Question
+
+    raw = {}
+    for question in survey.questions.all():
+        if question.kind == Question.Kind.SCALE:
+            score = 2 + int(rng.next() * 4)
+            comment = DEMO_COMMENTS[score][int(rng.next() * 2)] if rng.next() > 0.6 else ""
+            raw[question.pk] = {"score": score, "comment": comment}
+        else:
+            text = "Plus de visibilité sur le planning de l'équipe." if rng.next() > 0.5 else ""
+            raw[question.pk] = {"text": text}
+    return raw
