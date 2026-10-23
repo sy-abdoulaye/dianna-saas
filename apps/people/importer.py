@@ -167,40 +167,57 @@ def check(rows: list[ImportRow]) -> ImportPreview:
     limits = max_lengths()
     for row in rows:
         values = row.values
-        for name in REQUIRED:
-            if not values[name]:
-                row.errors.append(_("« %(col)s » est obligatoire.") % {"col": name})
-        for name, limit in limits.items():
-            if len(values[name]) > limit:
-                row.errors.append(
-                    _("Ligne %(line)s : « %(col)s » dépasse %(max)s caractères.")
-                    % {"line": row.line, "col": name, "max": limit}
-                )
-        email = values["email"].lower()
-        if email:
-            try:
-                validate_email(email)
-            except ValidationError:
-                row.errors.append(_("L'adresse e-mail n'est pas valide."))
-            if email in existing:
-                row.errors.append(_("Cette adresse est déjà utilisée dans l'annuaire."))
-            if len(by_email.get(email, [])) > 1:
-                row.errors.append(_("Adresse en double dans le fichier."))
-        if values["date_arrivee"] and parse_date(values["date_arrivee"]) is None:
-            row.errors.append(_("Date d'arrivée invalide (JJ/MM/AAAA)."))
-        if values["contrat"] and values["contrat"].lower() not in CONTRACTS:
-            row.errors.append(_("Contrat inconnu (CDI, CDD, Alternance ou Stage)."))
-        manager = values["manager_email"].lower()
-        if manager:
-            if manager == email:
-                row.errors.append(_("Une personne ne peut pas être son propre manager."))
-            elif manager not in existing and manager not in by_email:
-                row.errors.append(_("Manager introuvable dans l'annuaire ni dans le fichier."))
+        _check_fields(row, limits)
+        _check_email(row, existing, by_email)
+        _check_manager(row, existing, by_email)
         if values["service"] and values["service"].lower() not in services:
             new_services.setdefault(values["service"].lower(), values["service"])
         if values["site"] and values["site"].lower() not in sites:
             new_sites.setdefault(values["site"].lower(), values["site"])
     return ImportPreview(rows, sorted(new_services.values()), sorted(new_sites.values()))
+
+
+def _check_fields(row: ImportRow, limits: dict) -> None:
+    """Colonnes obligatoires, longueurs, date d'arrivée et type de contrat."""
+    values = row.values
+    for name in REQUIRED:
+        if not values[name]:
+            row.errors.append(_("« %(col)s » est obligatoire.") % {"col": name})
+    for name, limit in limits.items():
+        if len(values[name]) > limit:
+            row.errors.append(
+                _("Ligne %(line)s : « %(col)s » dépasse %(max)s caractères.")
+                % {"line": row.line, "col": name, "max": limit}
+            )
+    if values["date_arrivee"] and parse_date(values["date_arrivee"]) is None:
+        row.errors.append(_("Date d'arrivée invalide (JJ/MM/AAAA)."))
+    if values["contrat"] and values["contrat"].lower() not in CONTRACTS:
+        row.errors.append(_("Contrat inconnu (CDI, CDD, Alternance ou Stage)."))
+
+
+def _check_email(row: ImportRow, existing: dict, by_email: dict) -> None:
+    email = row.values["email"].lower()
+    if not email:
+        return
+    try:
+        validate_email(email)
+    except ValidationError:
+        row.errors.append(_("L'adresse e-mail n'est pas valide."))
+    if email in existing:
+        row.errors.append(_("Cette adresse est déjà utilisée dans l'annuaire."))
+    if len(by_email.get(email, [])) > 1:
+        row.errors.append(_("Adresse en double dans le fichier."))
+
+
+def _check_manager(row: ImportRow, existing: dict, by_email: dict) -> None:
+    """Le manager est une fiche existante ou une ligne du fichier, jamais la personne."""
+    manager = row.values["manager_email"].lower()
+    if not manager:
+        return
+    if manager == row.values["email"].lower():
+        row.errors.append(_("Une personne ne peut pas être son propre manager."))
+    elif manager not in existing and manager not in by_email:
+        row.errors.append(_("Manager introuvable dans l'annuaire ni dans le fichier."))
 
 
 def rows_from_session(data: list) -> list[ImportRow]:

@@ -23,6 +23,12 @@ FORMATS = [
     ("pdf", _("PDF")),
 ]
 OUT_OF_BOUNDS = _("Choisissez une date entre 2000 et 2100.")
+# Périodes prédéfinies de l'export : jour → (début, fin).
+PRESET_PERIODS = {
+    "semaine": services.week_of,
+    "semaine-prochaine": lambda today: services.week_of(today + timedelta(days=7)),
+    "mois": services.month_of,
+}
 PDF_TOO_BIG = _("Pour plus de personnes ou une période plus longue, utilisez l'export Excel.")
 FORMAT_LABELS = {"csv": "CSV", "xlsx": "Excel", "ics": "iCalendar", "pdf": "PDF"}
 
@@ -63,32 +69,32 @@ class ExportForm(forms.Form):
     def clean(self):
         cleaned = super().clean()
         period = cleaned.get("periode")
-        today = self.today
-        if period == "semaine":
-            first, last = services.week_of(today)
-        elif period == "semaine-prochaine":
-            first, last = services.week_of(today + timedelta(days=7))
-        elif period == "mois":
-            first, last = services.month_of(today)
+        if period in PRESET_PERIODS:
+            first, last = PRESET_PERIODS[period](self.today)
         else:
-            first, last = cleaned.get("debut"), cleaned.get("fin")
-            for name, day in (("debut", first), ("fin", last)):
-                if day is not None and not services.in_bounds(day):
-                    self.add_error(name, OUT_OF_BOUNDS)
-                    first = last = None
-            if not first and "debut" not in self.errors:
-                self.add_error("debut", _("Choisissez la date de début."))
-            if not last and "fin" not in self.errors:
-                self.add_error("fin", _("Choisissez la date de fin."))
-            if first and last and last < first:
-                self.add_error("fin", _("La fin doit être après le début."))
-            elif first and last and (last - first).days + 1 > services.MAX_EXPORT_DAYS:
-                self.add_error("fin", _("La période est limitée à 3 mois par export."))
+            first, last = self._custom_period(cleaned.get("debut"), cleaned.get("fin"))
         cleaned["first"], cleaned["last"] = first, last
         cleaned["people"] = None
         if cleaned.get("format") == "pdf" and first and last and not self.errors:
             self._limit_pdf(cleaned, first, last)
         return cleaned
+
+    def _custom_period(self, first, last):
+        """Période personnalisée : dates dans les bornes, fin après le début, 3 mois au plus.
+        Renvoie (début, fin), ou (None, None) avec les erreurs sur les champs."""
+        for name, day in (("debut", first), ("fin", last)):
+            if day is not None and not services.in_bounds(day):
+                self.add_error(name, OUT_OF_BOUNDS)
+                first = last = None
+        if not first and "debut" not in self.errors:
+            self.add_error("debut", _("Choisissez la date de début."))
+        if not last and "fin" not in self.errors:
+            self.add_error("fin", _("Choisissez la date de fin."))
+        if first and last and last < first:
+            self.add_error("fin", _("La fin doit être après le début."))
+        elif first and last and (last - first).days + 1 > services.MAX_EXPORT_DAYS:
+            self.add_error("fin", _("La période est limitée à 3 mois par export."))
+        return first, last
 
     def _limit_pdf(self, cleaned, first, last):
         """PDF : un mois et une page du planning (50 personnes) au plus ; au-delà, l'export

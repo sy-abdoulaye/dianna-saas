@@ -76,8 +76,35 @@ def brand_mark(size: int = 28):
     )
 
 
+def _button_classes(variant, *, size, icon_only, block, loading, css) -> str:
+    optional = (
+        (size == "sm", "btn-sm"),
+        (icon_only, "btn-icon"),
+        (block, "btn-block"),
+        (loading, "is-loading"),
+        (bool(css), css),
+    )
+    return " ".join(["btn", f"btn-{variant}", *(name for wanted, name in optional if wanted)])
+
+
+def _button_state_attrs(attrs, *, href, name, value, disabled, loading) -> bool:
+    """Lien ou bouton : renvoie True pour un lien. Un bouton désactivé ou en chargement
+    n'est jamais un lien."""
+    if loading:
+        attrs["aria-busy"] = "true"
+    if href and not disabled:
+        attrs["href"] = conditional_escape(href)
+        return True
+    if name:
+        attrs["name"] = name
+        attrs["value"] = value
+    if disabled or loading:
+        attrs["disabled"] = True
+    return False
+
+
 @register.inclusion_tag("components/button.html")
-def button(
+def button(  # noqa: PLR0913 (un argument par attribut HTML, API de tous les gabarits)
     label: str,
     variant: str = "secondary",
     icon: str = "",
@@ -99,18 +126,11 @@ def button(
     hx_*, data_* et aria_* deviennent des attributs (hx_post → hx-post)."""
     if variant not in BUTTON_VARIANTS:
         raise template.TemplateSyntaxError(f"Variante de bouton inconnue : {variant}")
-    classes = ["btn", f"btn-{variant}"]
-    if size == "sm":
-        classes.append("btn-sm")
-    if icon_only:
-        classes.append("btn-icon")
-    if block:
-        classes.append("btn-block")
-    if loading:
-        classes.append("is-loading")
-    if css:
-        classes.append(css)
-    attrs = {"class": " ".join(classes)}
+    attrs = {
+        "class": _button_classes(
+            variant, size=size, icon_only=icon_only, block=block, loading=loading, css=css
+        )
+    }
     if id:
         attrs["id"] = id
     if icon_only:
@@ -119,17 +139,9 @@ def button(
     if "hx-post" in attrs or "hx-delete" in attrs:
         # Pas de double envoi : le bouton est désactivé pendant la requête.
         attrs.setdefault("hx-disabled-elt", "this")
-    if loading:
-        attrs["aria-busy"] = "true"
-    is_link = bool(href) and not disabled
-    if is_link:
-        attrs["href"] = conditional_escape(href)
-    else:
-        if name:
-            attrs["name"] = name
-            attrs["value"] = value
-        if disabled or loading:
-            attrs["disabled"] = True
+    is_link = _button_state_attrs(
+        attrs, href=href, name=name, value=value, disabled=disabled, loading=loading
+    )
     return {
         "is_link": is_link,
         "type": type,

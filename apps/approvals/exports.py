@@ -305,3 +305,18 @@ def campaign_file(viewer, campaign, fmt: str, *, request=None):
         request,
     )
     return _file(fmt, _("Synthèse"), header, rows, f"synthese-{campaign.pk}")
+
+
+MONTH_EXPORTS = {
+    "telework": telework_month,
+    "on_call": on_call_month,
+    "transport": transport_month,
+}
+
+
+def export_file(kind: str, viewer, data: dict, *, request=None):
+    """Fichier demandé depuis la modale « Exporter » : mois (télétravail, astreintes,
+    transport) ou campagne (congés). Renvoie (contenu, type, nom)."""
+    if kind == "leave":
+        return campaign_file(viewer, data["campagne"], data["format"], request=request)
+    return MONTH_EXPORTS[kind](viewer, data["mois"], data["format"], request=request)

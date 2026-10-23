@@ -43,6 +43,22 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Écriture d'un fichier (justificatif, photo, logo et tout futur dépôt) : son nom est inscrit dans la liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit explicitement avant l'INSERT ou l'UPDATE, et il est supprimé si l'opération échoue (`apps/core/files.file_writes`, `workflow.submit`) ; l'ancien fichier remplacé n'est supprimé qu'après la validation de la transaction. Jamais de `FieldFile.save()` direct dans un service. Une panne du stockage (`StorageUnavailableError`) donne un message, jamais une erreur 500.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée (seule exception, sans effet sur le schéma : L5-25).
 
+## Qualité du code
+
+- Logique métier dans `services.py`, lectures complexes (filtres, périmètres, agrégats) dans `selectors.py`, vues minces : elles lisent la requête, appellent un service ou un sélecteur, rendent la réponse.
+- Une fonction fait une chose. ruff le vérifie (`pyproject.toml`) : complexité ≤ 10, 6 `return`, 12 branches, 8 arguments, 50 instructions au plus. Un `noqa` n'est admis qu'avec sa raison sur la même ligne.
+- Pas de duplication : réutiliser les briques existantes au lieu de les recopier :
+  - jeton d'annulation (`apps/core/undo.py`) et confirmation (`components/confirm.html`) ;
+  - notifications (`apps/core/notifications.py`), journal (`apps/core/audit.py`), e-mails (`apps/core/mail.py`) ;
+  - exports (`csv_export`, `xlsx_export`, `pdf`) et limites de fréquence (`ratelimit.py`) ;
+  - fichiers (`files.py`) et format des dates (`dates.py`).
+- Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
+- Annotations de type sur les fonctions de service et de sélection.
+- Noms explicites en anglais.
+- Docstring courte qui dit pourquoi, pas quoi.
+- Pas de code mort, pas de TODO sans décision inscrite dans `docs/00-decisions.md`.
+- Tests lisibles dont le nom dit le comportement vérifié (`test_employee_cannot_see_results`).
+
 ## Commandes
 
 ```bash

@@ -465,25 +465,9 @@ class Command(BaseCommand):
     def _seed_requests(self, people):
         """Demandes du prototype (prototype-donnees-demo.js, seedRequests), dates recalculées
         par rapport au lundi de la semaine du chargement. Écrites sans e-mail."""
-        from django.core.files.base import ContentFile
+        from apps.approvals.models import SummerCampaign
 
-        from apps.agenda.days import day_off
-        from apps.approvals import workflow
-        from apps.approvals.models import (
-            ACTIVE_STATUSES,
-            LeaveRequest,
-            OnCallDeclaration,
-            RequestEvent,
-            SummerCampaign,
-            TeleworkRequest,
-            TransportProof,
-        )
-        from apps.core import notifications
-        from apps.core.models import Notification
-        from apps.equipment.models import EquipmentRequest
-
-        today = timezone.localdate()
-        monday = today - timedelta(days=today.weekday())
+        writer = DemoRequestWriter(people)
         campaign = SummerCampaign.objects.create(
             label="Été 2027",
             period_start=date(2027, 6, 1),
@@ -491,81 +475,34 @@ class Command(BaseCommand):
             deadline=date(2027, 2, 28),
             status=SummerCampaign.Status.OPEN,
         )
-        refused_reason = "Effectif insuffisant ce jour-là."
-        counter = {"n": 0}
+        self._seed_telework(writer)
+        self._seed_leave(writer, campaign)
+        self._seed_on_call(writer)
+        self._seed_transport(writer)
+        self._seed_equipment_requests(writer)
+        self._seed_equipment(people)
 
-        def add(model, key, status, decided_by="p5", **data):
-            counter["n"] += 1
-            submitted = timezone.now() - timedelta(days=2 + counter["n"] % 9)
-            requester = people[key]
-            if model is TeleworkRequest:
-                # Jour férié ou fermé (selon la date du chargement) : jour ouvré suivant.
-                while data["date"].weekday() >= 5 or day_off(data["date"], requester.site_id):
-                    data["date"] += timedelta(days=1)
-            request = model(requester=requester, submitted_at=submitted, status=status, **data)
-            # Contrôles métier du service (A3-02), sauf pour une demande déjà passée : ses
-            # dates sont antérieures à aujourd'hui (seule exception, CLAUDE.md).
-            if isinstance(request, TransportProof):
-                request.compute_validity()
-            last_day = (
-                getattr(request, "end", None)
-                or getattr(request, "date", None)
-                or getattr(request, "valid_until", None)
-                or today
-            )
-            if status in ACTIVE_STATUSES and last_day >= today:
-                errors = workflow.check_request(request, campaign=data.get("campaign"))
-                if errors:
-                    raise CommandError(f"Demande de démonstration invalide : {errors}")
-            request.save()
-            RequestEvent.objects.create(
-                request_type=model.request_type,
-                request_id=request.pk,
-                actor=requester,
-                action="submitted",
-            )
-            if status in ("approved", "refused"):
-                request.decided_by = people[decided_by]
-                request.decided_at = submitted + timedelta(days=1)
-                request.decision_comment = refused_reason if status == "refused" else ""
-                request.save()
-                RequestEvent.objects.create(
-                    request_type=model.request_type,
-                    request_id=request.pk,
-                    actor=people[decided_by],
-                    action=status,
-                    comment=request.decision_comment,
-                )
-            workflow.sync_calendar(request)
-            if status == "pending":
-                for validator in workflow.first_validators(request):
-                    notifications.notify(
-                        validator,
-                        f"{requester.full_name} : {request._meta.verbose_name} à valider",
-                        url=workflow._module_url(request, "a-valider"),
-                        kind=Notification.Kind.REQUEST,
-                        source=request,
-                    )
-            return request
+    def _seed_telework(self, writer):
+        from apps.approvals.models import TeleworkRequest
 
-        def day(offset):
-            return monday + timedelta(days=offset)
+        day = writer.day
+        writer.add(TeleworkRequest, "p1", "approved", date=day(2))
+        writer.add(TeleworkRequest, "p1", "pending", date=day(9), comment="Travaux dans l'immeuble")
+        writer.add(TeleworkRequest, "p3", "approved", date=day(1))
+        writer.add(TeleworkRequest, "p3", "approved", date=day(3))
+        writer.add(TeleworkRequest, "p13", "pending", date=day(4))
+        writer.add(TeleworkRequest, "p24", "refused", date=day(2), comment="Rendez-vous médical")
+        writer.add(TeleworkRequest, "p2", "approved", "p6", date=day(0))
+        writer.add(TeleworkRequest, "p4", "approved", "p6", date=day(4))
+        writer.add(TeleworkRequest, "p15", "approved", "p6", date=day(1))
+        writer.add(TeleworkRequest, "p14", "pending", date=day(8))
 
-        tw = TeleworkRequest
-        add(tw, "p1", "approved", date=day(2))
-        add(tw, "p1", "pending", date=day(9), comment="Travaux dans l'immeuble")
-        add(tw, "p3", "approved", date=day(1))
-        add(tw, "p3", "approved", date=day(3))
-        add(tw, "p13", "pending", date=day(4))
-        add(tw, "p24", "refused", date=day(2), comment="Rendez-vous médical")
-        add(tw, "p2", "approved", "p6", date=day(0))
-        add(tw, "p4", "approved", "p6", date=day(4))
-        add(tw, "p15", "approved", "p6", date=day(1))
-        add(tw, "p14", "pending", date=day(8))
-        lv = LeaveRequest
+    def _seed_leave(self, writer, campaign):
+        from apps.approvals.models import LeaveRequest
+
         summer = {"campaign": campaign, "leave_type": LeaveRequest.LeaveType.SUMMER}
-        add(
-            lv,
+        writer.add(
+            LeaveRequest,
             "p1",
             "pending",
             start=date(2027, 8, 2),
@@ -573,26 +510,63 @@ class Command(BaseCommand):
             comment="Deux semaines en famille",
             **summer,
         )
-        add(lv, "p3", "approved", start=date(2027, 7, 19), end=date(2027, 7, 30), **summer)
-        add(lv, "p13", "pending", start=date(2027, 8, 2), end=date(2027, 8, 20), **summer)
-        add(lv, "p24", "approved", start=date(2027, 8, 9), end=date(2027, 8, 27), **summer)
-        add(lv, "p14", "pending", start=date(2027, 7, 26), end=date(2027, 8, 6), **summer)
-        add(lv, "p2", "approved", "p6", start=date(2027, 8, 2), end=date(2027, 8, 20), **summer)
-        add(lv, "p4", "pending", start=date(2027, 7, 12), end=date(2027, 7, 23), **summer)
-        add(lv, "p5", "approved", "p9", start=date(2027, 8, 16), end=date(2027, 8, 27), **summer)
-        add(
-            lv,
+        writer.add(
+            LeaveRequest, "p3", "approved", start=date(2027, 7, 19), end=date(2027, 7, 30), **summer
+        )
+        writer.add(
+            LeaveRequest, "p13", "pending", start=date(2027, 8, 2), end=date(2027, 8, 20), **summer
+        )
+        writer.add(
+            LeaveRequest, "p24", "approved", start=date(2027, 8, 9), end=date(2027, 8, 27), **summer
+        )
+        writer.add(
+            LeaveRequest, "p14", "pending", start=date(2027, 7, 26), end=date(2027, 8, 6), **summer
+        )
+        writer.add(
+            LeaveRequest,
+            "p2",
+            "approved",
+            "p6",
+            start=date(2027, 8, 2),
+            end=date(2027, 8, 20),
+            **summer,
+        )
+        writer.add(
+            LeaveRequest, "p4", "pending", start=date(2027, 7, 12), end=date(2027, 7, 23), **summer
+        )
+        writer.add(
+            LeaveRequest,
+            "p5",
+            "approved",
+            "p9",
+            start=date(2027, 8, 16),
+            end=date(2027, 8, 27),
+            **summer,
+        )
+        writer.add(
+            LeaveRequest,
             "p14",
             "approved",
-            start=day(7),
-            end=day(11),
+            start=writer.day(7),
+            end=writer.day(11),
             leave_type=LeaveRequest.LeaveType.OTHER,
         )
-        oc = OnCallDeclaration
-        add(oc, "p3", "approved", start=day(4), end=day(6), description="Week-end d'astreinte")
-        add(oc, "p24", "pending", start=day(11), end=day(13))
-        add(
-            oc,
+
+    def _seed_on_call(self, writer):
+        from apps.approvals.models import OnCallDeclaration
+
+        day = writer.day
+        writer.add(
+            OnCallDeclaration,
+            "p3",
+            "approved",
+            start=day(4),
+            end=day(6),
+            description="Week-end d'astreinte",
+        )
+        writer.add(OnCallDeclaration, "p24", "pending", start=day(11), end=day(13))
+        writer.add(
+            OnCallDeclaration,
             "p3",
             "approved",
             kind=OnCallDeclaration.Kind.INTERVENTION,
@@ -601,80 +575,83 @@ class Command(BaseCommand):
             hours=2.5,
             description="Incident serveur de messagerie",
         )
-        add(oc, "p16", "pending", "p6", start=day(5), end=day(6))
+        writer.add(OnCallDeclaration, "p16", "pending", "p6", start=day(5), end=day(6))
 
-        # Transport (prototype : seedRequests), mois en cours et mois précédent.
-        this_month = today.replace(day=1)
+    def _seed_transport(self, writer):
+        """Transport (prototype : seedRequests), mois en cours et mois précédent."""
+        from apps.approvals.models import TransportProof
+
+        this_month = writer.today.replace(day=1)
         last_month = (this_month - timedelta(days=1)).replace(day=1)
-
-        def proof(name, data_bytes, mime):
-            return {
-                "file": ContentFile(data_bytes, name=f"justificatif.{name.rsplit('.', 1)[1]}"),
-                "file_type": mime,
-                "original_name": name,
-            }
-
         pdf, jpg = demo_pdf(), demo_jpg()
-        tp = TransportProof
-        monthly = {"ticket_type": tp.TicketType.MONTHLY, "amount": "84.10"}
-        add(
-            tp,
+        monthly = {"ticket_type": TransportProof.TicketType.MONTHLY, "amount": "84.10"}
+        writer.add(
+            TransportProof,
             "p1",
             "approved",
             "p9",
             month=last_month,
             **monthly,
-            **proof("abonnement-septembre.pdf", pdf, "application/pdf"),
+            **demo_proof("abonnement-septembre.pdf", pdf, "application/pdf"),
         )
-        add(
-            tp,
+        writer.add(
+            TransportProof,
             "p1",
             "pending",
             month=this_month,
             **monthly,
-            **proof("abonnement-octobre.pdf", pdf, "application/pdf"),
+            **demo_proof("abonnement-octobre.pdf", pdf, "application/pdf"),
         )
-        add(
-            tp,
+        writer.add(
+            TransportProof,
             "p3",
             "pending",
             month=this_month,
             **monthly,
-            **proof("justificatif-tcl.pdf", pdf, "application/pdf"),
+            **demo_proof("justificatif-tcl.pdf", pdf, "application/pdf"),
         )
-        add(
-            tp,
+        writer.add(
+            TransportProof,
             "p2",
             "refused",
             "p9",
             month=last_month,
-            ticket_type=tp.TicketType.SINGLE,
+            ticket_type=TransportProof.TicketType.SINGLE,
             amount="12.40",
-            **proof("ticket.jpg", jpg, "image/jpeg"),
+            **demo_proof("ticket.jpg", jpg, "image/jpeg"),
         )
-        add(
-            tp,
+        writer.add(
+            TransportProof,
             "p15",
             "pending",
             month=this_month,
-            ticket_type=tp.TicketType.MONTHLY,
+            ticket_type=TransportProof.TicketType.MONTHLY,
             amount="86.40",
-            **proof("navigo-oct.pdf", pdf, "application/pdf"),
+            **demo_proof("navigo-oct.pdf", pdf, "application/pdf"),
         )
 
-        # Matériel : demandes (prototype : seedRequests).
-        eq = EquipmentRequest
-        add(eq, "p1", "pending", kind="headset", reason="Casque actuel défectueux (micro)")
-        add(
-            eq,
+    def _seed_equipment_requests(self, writer):
+        """Matériel : demandes (prototype : seedRequests)."""
+        from apps.equipment.models import EquipmentRequest
+
+        writer.add(
+            EquipmentRequest,
+            "p1",
+            "pending",
+            kind="headset",
+            reason="Casque actuel défectueux (micro)",
+        )
+        writer.add(
+            EquipmentRequest,
             "p13",
             "approved",
             "p9",
             kind="screen",
             reason="Deuxième écran pour le suivi des tickets",
         )
-        add(eq, "p2", "pending", kind="laptop", reason="Renouvellement (4 ans)")
-        self._seed_equipment(people)
+        writer.add(
+            EquipmentRequest, "p2", "pending", kind="laptop", reason="Renouvellement (4 ans)"
+        )
 
     def _seed_equipment(self, people):
         """Parc du prototype (seedEquipment) : 15 équipements, attributions et historique."""
@@ -769,3 +746,113 @@ def demo_jpg() -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", (320, 200), (236, 239, 244)).save(buffer, format="JPEG", quality=80)
     return buffer.getvalue()
+
+
+REFUSED_REASON = "Effectif insuffisant ce jour-là."
+
+
+class DemoRequestWriter:
+    """Écrit une demande de démonstration comme le moteur commun : contrôles du service,
+    événements, décision, calendrier et notification des valideurs, sans e-mail."""
+
+    def __init__(self, people):
+        self.people = people
+        self.today = timezone.localdate()
+        self.monday = self.today - timedelta(days=self.today.weekday())
+        self.count = 0
+
+    def day(self, offset: int) -> date:
+        return self.monday + timedelta(days=offset)
+
+    def add(self, model, key, status, decided_by="p5", **data):
+        from apps.approvals import workflow
+
+        self.count += 1
+        submitted = timezone.now() - timedelta(days=2 + self.count % 9)
+        requester = self.people[key]
+        request = model(
+            requester=requester,
+            submitted_at=submitted,
+            status=status,
+            **self._shift_telework_day(model, requester, data),
+        )
+        self._check(request, status, data)
+        request.save()
+        self._event(request, requester, "submitted")
+        if status in ("approved", "refused"):
+            self._decide(request, status, self.people[decided_by], submitted)
+        workflow.sync_calendar(request)
+        if status == "pending":
+            self._notify_validators(request)
+        return request
+
+    def _shift_telework_day(self, model, requester, data: dict) -> dict:
+        """Jour férié ou fermé (selon la date du chargement) : jour ouvré suivant."""
+        from apps.agenda.days import day_off
+        from apps.approvals.models import TeleworkRequest
+
+        if model is TeleworkRequest:
+            while data["date"].weekday() >= 5 or day_off(data["date"], requester.site_id):
+                data["date"] += timedelta(days=1)
+        return data
+
+    def _check(self, request, status, data: dict) -> None:
+        """Contrôles métier du service (A3-02), sauf pour une demande déjà passée : ses dates
+        sont antérieures à aujourd'hui (seule exception, CLAUDE.md)."""
+        from apps.approvals import workflow
+        from apps.approvals.models import ACTIVE_STATUSES, TransportProof
+
+        if isinstance(request, TransportProof):
+            request.compute_validity()
+        last_day = (
+            getattr(request, "end", None)
+            or getattr(request, "date", None)
+            or getattr(request, "valid_until", None)
+            or self.today
+        )
+        if status in ACTIVE_STATUSES and last_day >= self.today:
+            errors = workflow.check_request(request, campaign=data.get("campaign"))
+            if errors:
+                raise CommandError(f"Demande de démonstration invalide : {errors}")
+
+    def _event(self, request, actor, action, comment=""):
+        from apps.approvals.models import RequestEvent
+
+        RequestEvent.objects.create(
+            request_type=request.request_type,
+            request_id=request.pk,
+            actor=actor,
+            action=action,
+            comment=comment,
+        )
+
+    def _decide(self, request, status, decided_by, submitted) -> None:
+        request.decided_by = decided_by
+        request.decided_at = submitted + timedelta(days=1)
+        request.decision_comment = REFUSED_REASON if status == "refused" else ""
+        request.save()
+        self._event(request, decided_by, status, request.decision_comment)
+
+    def _notify_validators(self, request) -> None:
+        from apps.approvals import workflow
+        from apps.core import notifications
+        from apps.core.models import Notification
+
+        for validator in workflow.first_validators(request):
+            notifications.notify(
+                validator,
+                f"{request.requester.full_name} : {request._meta.verbose_name} à valider",
+                url=workflow._module_url(request, "a-valider"),
+                kind=Notification.Kind.REQUEST,
+                source=request,
+            )
+
+
+def demo_proof(name: str, data: bytes, mime: str) -> dict:
+    from django.core.files.base import ContentFile
+
+    return {
+        "file": ContentFile(data, name=f"justificatif.{name.rsplit('.', 1)[1]}"),
+        "file_type": mime,
+        "original_name": name,
+    }

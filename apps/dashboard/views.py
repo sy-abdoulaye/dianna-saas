@@ -51,49 +51,63 @@ def _today_mix(request, me, today):
 
 
 def indicators(request, me, today, todo_count, mix) -> list[tuple[str, object]]:
+    """Quatre indicateurs au plus, propres au profil (fiche 02)."""
     kinds = _request_kinds(request)
     if me.role == Role.ADMIN:
-        return [
-            (
-                _("Utilisateurs actifs"),
-                Employee.objects.filter(status__in=IN_POST_STATUSES, user__is_active=True).count(),
-            ),
-            (_("Modules activés"), f"{len(enabled_modules(request))} / {len(Module.values)}"),
-            (_("Services"), Service.objects.count()),
-            (_("Événements du journal"), AuditLog.objects.count()),
-        ]
-    kpis = []
+        return _admin_indicators(request)
     if me.role == Role.HR:
-        counts = menu_counts(request)
-        if "transport" in kinds:
-            kpis.append((_("Justificatifs à valider"), counts.get("transport", 0)))
-        others = [k for k in kinds if k != "transport"]
-        if others:
-            kpis.append((_("Demandes à valider"), todo_count - counts.get("transport", 0)))
-        if "leave" in kinds:
-            campaign = rules.open_campaign()
-            if campaign is not None:
-                wishes = campaign.requests.exclude(
-                    status__in=(RequestStatus.CANCELLED, RequestStatus.REFUSED)
-                ).count()
-                kpis.append((_("Vœux de la campagne"), wishes))
-        kpis += [
-            (_("Effectif en poste"), Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()),
-            (
-                _("Arrivées à venir"),
-                Employee.objects.filter(status=EmployeeStatus.UPCOMING).count(),
-            ),
-        ]
-        return kpis
+        return _hr_indicators(request, kinds, todo_count)
     if is_validator(me):
-        if kinds:
-            kpis.append((_("Demandes à valider"), todo_count))
-        if mix:
-            counts = mix["counts"]
-            kpis.append((_("Équipe sur site aujourd'hui"), f"{counts['site']} / {mix['total']}"))
-            kpis.append((_("En télétravail aujourd'hui"), counts["tt"]))
-            kpis.append((_("En congés aujourd'hui"), counts["cp"]))
-        return kpis
+        return _manager_indicators(kinds, todo_count, mix)
+    return _employee_indicators(request, me, today, kinds, mix)
+
+
+def _admin_indicators(request) -> list[tuple[str, object]]:
+    return [
+        (
+            _("Utilisateurs actifs"),
+            Employee.objects.filter(status__in=IN_POST_STATUSES, user__is_active=True).count(),
+        ),
+        (_("Modules activés"), f"{len(enabled_modules(request))} / {len(Module.values)}"),
+        (_("Services"), Service.objects.count()),
+        (_("Événements du journal"), AuditLog.objects.count()),
+    ]
+
+
+def _hr_indicators(request, kinds, todo_count) -> list[tuple[str, object]]:
+    kpis = []
+    counts = menu_counts(request)
+    if "transport" in kinds:
+        kpis.append((_("Justificatifs à valider"), counts.get("transport", 0)))
+    if any(k != "transport" for k in kinds):
+        kpis.append((_("Demandes à valider"), todo_count - counts.get("transport", 0)))
+    campaign = rules.open_campaign() if "leave" in kinds else None
+    if campaign is not None:
+        wishes = campaign.requests.exclude(
+            status__in=(RequestStatus.CANCELLED, RequestStatus.REFUSED)
+        ).count()
+        kpis.append((_("Vœux de la campagne"), wishes))
+    return [
+        *kpis,
+        (_("Effectif en poste"), Employee.objects.filter(status=EmployeeStatus.ACTIVE).count()),
+        (_("Arrivées à venir"), Employee.objects.filter(status=EmployeeStatus.UPCOMING).count()),
+    ]
+
+
+def _manager_indicators(kinds, todo_count, mix) -> list[tuple[str, object]]:
+    kpis = [(_("Demandes à valider"), todo_count)] if kinds else []
+    if mix:
+        counts = mix["counts"]
+        kpis += [
+            (_("Équipe sur site aujourd'hui"), f"{counts['site']} / {mix['total']}"),
+            (_("En télétravail aujourd'hui"), counts["tt"]),
+            (_("En congés aujourd'hui"), counts["cp"]),
+        ]
+    return kpis
+
+
+def _employee_indicators(request, me, today, kinds, mix) -> list[tuple[str, object]]:
+    kpis = []
     if "telework" in kinds:
         monday, sunday = planning.week_of(today)
         used = TeleworkRequest.objects.filter(

@@ -67,9 +67,7 @@ def planning(request):
         view=view,
         anchor=anchor,
         page=request.GET.get("page"),
-        q=q,
-        service=service,
-        site=site,
+        filters=services.PeopleFilter(q=q, service=service, site=site),
         can_declare=can_declare,
         today=today,
     )
