@@ -169,6 +169,7 @@ class EquipmentEvent(TenantModel):
         ISSUE_CLOSED = "issue_closed", _("Signalement clos")
         RETIRED = "retired", _("Retiré du parc")
         UNDONE = "undone", _("Attribution annulée")
+        REPAIR_UNDONE = "repair_undone", _("Envoi en réparation annulé")
 
     item = models.ForeignKey(EquipmentItem, on_delete=models.CASCADE, related_name="events")
     action = models.CharField(_("action"), max_length=15, choices=Action)

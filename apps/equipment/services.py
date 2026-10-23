@@ -254,8 +254,9 @@ def send_to_repair(item, *, actor, comment="", request=None) -> dict:
 @transaction.atomic
 def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
     """« Annuler » après un envoi en réparation (30 s, auteur seulement) : l'équipement
-    reprend son état précédent et l'événement disparaît de l'historique (le journal d'audit
-    garde les deux actions). Refusé si l'équipement a changé depuis."""
+    reprend son état précédent ; l'historique garde « Envoyé en réparation » et ajoute « Envoi
+    en réparation annulé », comme une attribution annulée. Refusé si l'équipement a changé
+    depuis, donc aussi pour un jeton déjà utilisé (le dernier événement n'est plus le même)."""
     item = EquipmentItem.objects.filter(public_id=payload["item"]).first()
     if item is None:
         raise EquipmentError(CHANGED)
@@ -269,9 +270,9 @@ def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
         or (previous == Status.ASSIGNED) != bool(item.holder_id)
     ):
         raise EquipmentError(CHANGED)
-    item.events.filter(pk=payload["event"]).delete()
     item.status = previous
     item.save(update_fields=["status", "updated_at"])
+    _event(item, EquipmentEvent.Action.REPAIR_UNDONE, actor, item.holder)
     audit.log(
         "equipment.repair_undone",
         _("Envoi en réparation annulé : %(item)s") % {"item": _label(item)},

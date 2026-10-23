@@ -296,7 +296,20 @@ def test_send_to_repair_asks_for_confirmation_then_can_be_undone(client_for, com
     undo = client.post(toast(response)["undo_url"])
     assert toast(undo)["title"] == "Envoi en réparation annulé"
     assert reload(stock).status == "in_stock"
-    assert not EquipmentEvent.all_companies.filter(item=stock, action="repair").exists()
+    # L'historique garde l'envoi et ajoute l'annulation, comme pour une attribution annulée.
+    actions = list(
+        EquipmentEvent.all_companies.filter(item=stock)
+        .order_by("pk")
+        .values_list("action", flat=True)
+    )
+    assert actions[-2:] == ["repair", "repair_undone"]
+    history = client.get(f"/materiel/parc/{stock.public_id}/").content.decode()
+    assert "Envoyé en réparation" in history and "Envoi en réparation annulé" in history
+    # Jeton d'annulation rejoué : refusé, rien ne change.
+    replay = client.post(toast(response)["undo_url"])
+    assert replay.status_code == 409
+    assert reload(stock).status == "in_stock"
+    assert EquipmentEvent.all_companies.filter(item=stock, action="repair_undone").count() == 1
     assert AuditLog.all_companies.filter(action="equipment.repair_undone").exists()
     # Depuis un signalement : le détenteur est conservé, l'annulation rend l'état « Attribué ».
     issue = company_a.requests["issue"]
