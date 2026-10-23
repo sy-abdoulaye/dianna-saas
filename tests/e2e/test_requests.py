@@ -2,6 +2,7 @@
 Le parcours 1 part de la page Télétravail : le planning arrive au lot 4."""
 
 import re
+import time
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -19,6 +20,14 @@ def urls(live_server):
     return lambda path="/": f"http://exemple.localhost:{port}{path}"
 
 
+def wait_for_a_fresh_totp_window(margin: float = 3.0) -> None:
+    """Un code calculé dans les dernières secondes de sa fenêtre de 30 s peut expirer avant
+    d'être vérifié : on attend alors la fenêtre suivante (parcours instables sinon)."""
+    remaining = 30 - time.time() % 30
+    if remaining < margin:
+        time.sleep(remaining + 0.1)
+
+
 def sign_in(page: Page, urls, person):
     secret = activate_totp(person.user) if person.requires_two_factor else None
     page.goto(urls("/connexion/"))
@@ -26,6 +35,7 @@ def sign_in(page: Page, urls, person):
     page.get_by_label("Mot de passe").fill(PASSWORD)
     page.get_by_role("button", name="Se connecter").click()
     if secret:
+        wait_for_a_fresh_totp_window()
         page.get_by_label("Code").fill(totp_code(secret))
         page.get_by_role("button", name="Valider").click()
     expect(page.get_by_role("heading", level=1)).to_contain_text("Bonjour")
