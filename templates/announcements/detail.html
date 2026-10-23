@@ -1,0 +1,41 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{{ announcement.title }} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{% url 'announcements:list' %}">{% translate "Communication interne" %}</a> › {{ announcement.title }}</div>
+      <h1 class="h1">{{ announcement.title }}</h1>
+      <p class="sub">
+        {% if announcement.author %}
+          {% blocktranslate with category=announcement.get_category_display day=announcement.published_at|fr_date:"long" name=announcement.author.full_name %}{{ category }} · publiée le {{ day }} par {{ name }}{% endblocktranslate %}
+        {% else %}
+          {% blocktranslate with category=announcement.get_category_display day=announcement.published_at|fr_date:"long" %}{{ category }} · publiée le {{ day }}{% endblocktranslate %}
+        {% endif %}
+      </p>
+    </div>
+    {% if can_manage %}
+      <div class="actions">
+        {% url "announcements:pin" announcement.public_id as pin_url %}
+        {% url "announcements:edit" announcement.public_id as edit_url %}
+        {% url "announcements:delete" announcement.public_id as delete_url %}
+        {% if announcement.pinned %}{% translate "Désépingler" as pin_label %}{% else %}{% translate "Épingler" as pin_label %}{% endif %}
+        {% button pin_label hx_post=pin_url hx_swap="none" %}
+        {% button _("Modifier") icon="edit" hx_get=edit_url hx_target="#modal-root" %}
+        {% button _("Supprimer") variant="danger" hx_get=delete_url hx_target="#modal-root" %}
+      </div>
+    {% endif %}
+  </div>
+  <div class="split">
+    <article class="card card-body prose-text">{{ announcement.body|plain_text }}</article>
+    <aside class="stack">
+      {% if reads %}
+        {% blocktranslate asvar reads_value with read=reads.0 total=reads.1 %}{{ read }} sur {{ total }}{% endblocktranslate %}
+        {% translate "Lectures" as reads_label %}
+        {% include "components/kpi.html" with label=reads_label value=reads_value note=_("ont lu cette annonce") progress=reads.0 progress_max=reads.1 %}
+      {% endif %}
+      {% url "announcements:list" as list_url %}
+      {% button _("Retour aux annonces") icon="left" href=list_url %}
+    </aside>
+  </div>
+{% endblock %}

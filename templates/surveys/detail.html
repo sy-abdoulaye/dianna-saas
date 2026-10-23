@@ -1,0 +1,61 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{{ survey.title }} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{% url 'surveys:list' %}">{% translate "Questionnaires" %}</a> › {{ survey.title }}</div>
+      <h1 class="h1">{{ survey.title }}</h1>
+      <p class="sub">{{ survey.get_audience_display }}{% if survey.due_date %} · {% blocktranslate with day=survey.due_date|fr_date:"long" %}jusqu'au {{ day }}{% endblocktranslate %}{% endif %}</p>
+    </div>
+    {% if can_manage %}
+      <div class="actions">
+        {% if survey.status == "draft" %}
+          {% url "surveys:delete" survey.public_id as delete_url %}
+          {% url "surveys:edit" survey.public_id as edit_url %}
+          {% url "surveys:publish" survey.public_id as publish_url %}
+          {% button _("Supprimer") variant="danger" hx_get=delete_url hx_target="#modal-root" %}
+          {% button _("Modifier le brouillon") icon="edit" hx_get=edit_url hx_target="#modal-root" %}
+          {% button _("Publier") variant="primary" hx_get=publish_url hx_target="#modal-root" %}
+        {% elif survey.status == "open" %}
+          {% url "surveys:close" survey.public_id as close_url %}
+          {% button _("Clore le questionnaire") hx_get=close_url hx_target="#modal-root" %}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+  <div>{% status_badge "survey" survey.status %}</div>
+  {% if both %}
+    {% url "surveys:detail" survey.public_id as detail_url %}
+    <nav class="tabs" aria-label="{% translate 'Affichage' %}">
+      <a href="{{ detail_url }}" {% if mode == "answer" %}aria-current="page"{% endif %}>{% translate "Répondre" %}</a>
+      <a href="{{ detail_url }}?vue={{ view_results }}" {% if mode == "results" %}aria-current="page"{% endif %}>{% translate "Résultats" %}</a>
+    </nav>
+  {% endif %}
+  {% if mode == "answer" %}
+    {% include "surveys/partials/answer_form.html" %}
+  {% elif mode == "results" %}
+    {% include "surveys/partials/results.html" %}
+  {% elif mode == "draft" %}
+    <section class="card card-body stack" aria-labelledby="h-draft">
+      <h2 class="h2" id="h-draft">{% translate "Aperçu du brouillon" %}</h2>
+      <ol class="draft-questions">
+        {% for question in questions %}
+          <li>{{ question.label }} <span class="meta">({% if question.kind == "scale" %}{% translate "échelle de 1 à 5" %}{% else %}{% translate "réponse libre" %}{% endif %})</span></li>
+        {% endfor %}
+      </ol>
+      <p class="meta">{% translate "Ce questionnaire n'est visible que par les RH tant qu'il n'est pas publié." %}</p>
+    </section>
+  {% else %}
+    <div class="card">
+      {% url "surveys:list" as list_url %}
+      {% translate "Retour aux questionnaires" as back %}
+      {% if has_answered %}
+        {% translate "Merci, votre réponse est enregistrée" as t %}{% translate "Les résultats sont consultés par les managers et les RH." as x %}
+      {% else %}
+        {% translate "Ce questionnaire est clos" as t %}{% translate "Il n'accepte plus de réponses." as x %}
+      {% endif %}
+      {% include "components/empty_state.html" with icon="check" title=t text=x action_label=back action_url=list_url action_variant="secondary" %}
+    </div>
+  {% endif %}
+{% endblock %}

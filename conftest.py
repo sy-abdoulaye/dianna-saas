@@ -160,6 +160,56 @@ def build_equipment(employee, now) -> dict:
     }
 
 
+def build_communication(*, author, people, respondent) -> dict:
+    """Lot 6 : une annonce lue par l'auteur ; un questionnaire ouvert (deux questions, public
+    figé sur `people`, une réponse anonyme et son reçu) et un brouillon."""
+    from django.utils import timezone
+
+    from apps.announcements.models import Announcement, AnnouncementRead
+    from apps.surveys.models import (
+        Answer,
+        Question,
+        Survey,
+        SurveyInvitation,
+        SurveyReceipt,
+        SurveyResponse,
+    )
+
+    now = timezone.now()
+    announcement = Announcement.objects.create(
+        title="Fermeture du site le 24 décembre",
+        category="site_life",
+        body="Le site sera fermé le jeudi 24 décembre.",
+        author=author,
+        published_at=now,
+    )
+    read = AnnouncementRead.objects.create(announcement=announcement, employee=author)
+    survey = Survey.objects.create(
+        title="Baromètre", status="open", created_by=author, published_at=now
+    )
+    question = Question.objects.create(
+        survey=survey, order=1, kind="scale", label="Je me sens bien dans mon équipe."
+    )
+    Question.objects.create(survey=survey, order=2, kind="text", label="Une idée ?")
+    invitations = [SurveyInvitation.objects.create(survey=survey, employee=p) for p in people]
+    receipt = SurveyReceipt.objects.create(survey=survey, employee=respondent)
+    response = SurveyResponse.objects.create(survey=survey)
+    answer = Answer.objects.create(response=response, question=question, score=4)
+    draft = Survey.objects.create(title="Formation 2027", created_by=author)
+    Question.objects.create(survey=draft, order=1, kind="scale", label="Question du brouillon")
+    return {
+        "announcement": announcement,
+        "announcement_read": read,
+        "survey": survey,
+        "draft_survey": draft,
+        "question": question,
+        "invitation": invitations[0],
+        "receipt": receipt,
+        "response": response,
+        "answer": answer,
+    }
+
+
 def build_company(slug: str, name: str) -> CompanyData:
     company = CompanyFactory(slug=slug, name=name)
     site = SiteFactory(company=company, name="Lyon")
@@ -181,6 +231,11 @@ def build_company(slug: str, name: str) -> CompanyData:
 
         change = EmployeeChange.objects.create(employee=employee, actor=admin)
         requests = build_requests(employee)
+        requests.update(
+            build_communication(
+                author=hr, people=[admin, hr, manager, employee], respondent=employee
+            )
+        )
     audit = AuditLogFactory(company=company, actor=admin)
     return CompanyData(
         company,

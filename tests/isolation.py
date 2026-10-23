@@ -95,6 +95,47 @@ ISOLATION_CASES = {
         lambda b: reverse("approvals:campaign_status", args=[b.requests["campaign"].pk, "clore"]),
     ),
     # Annuaire (lot 2)
+    # Communication interne et questionnaires (lot 6).
+    "announcements:detail": (
+        "get",
+        lambda b: reverse("announcements:detail", args=[b.requests["announcement"].public_id]),
+    ),
+    "announcements:edit": (
+        "post",
+        lambda b: reverse("announcements:edit", args=[b.requests["announcement"].public_id]),
+    ),
+    "announcements:pin": (
+        "post",
+        lambda b: reverse("announcements:pin", args=[b.requests["announcement"].public_id]),
+    ),
+    "announcements:delete": (
+        "post",
+        lambda b: reverse("announcements:delete", args=[b.requests["announcement"].public_id]),
+    ),
+    "surveys:detail": (
+        "get",
+        lambda b: reverse("surveys:detail", args=[b.requests["survey"].public_id]),
+    ),
+    "surveys:answer": (
+        "post",
+        lambda b: reverse("surveys:answer", args=[b.requests["survey"].public_id]),
+    ),
+    "surveys:edit": (
+        "post",
+        lambda b: reverse("surveys:edit", args=[b.requests["draft_survey"].public_id]),
+    ),
+    "surveys:publish": (
+        "post",
+        lambda b: reverse("surveys:publish", args=[b.requests["draft_survey"].public_id]),
+    ),
+    "surveys:close": (
+        "post",
+        lambda b: reverse("surveys:close", args=[b.requests["survey"].public_id]),
+    ),
+    "surveys:delete": (
+        "post",
+        lambda b: reverse("surveys:delete", args=[b.requests["draft_survey"].public_id]),
+    ),
     "people:detail": ("get", lambda b: reverse("people:detail", args=[b.employee.public_id])),
     "people:edit": ("get", lambda b: reverse("people:edit", args=[b.employee.public_id])),
     "people:archive": ("get", lambda b: reverse("people:archive", args=[b.employee.public_id])),
@@ -162,4 +203,8 @@ NOT_TENANT_OBJECTS = {
     "approvals:undo",
     # Modules : le paramètre est le code du module, pas un objet d'une entreprise.
     "administration:toggle_module",
+    # Annulation d'une suppression d'annonce : jeton signé lié à l'auteur ; l'annonce est
+    # relue dans l'entreprise courante (test : test_undo_token_of_another_company_is_refused,
+    # annonces).
+    "announcements:undo",
 }

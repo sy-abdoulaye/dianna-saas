@@ -26,8 +26,11 @@ def test_real_menu_shows_existing_routes_and_soon_entries_without_link():
     # Lot 5 : transport et matériel ont leurs écrans.
     assert items["transport"].url == "/transport/"
     assert items["equipment"].url == "/materiel/"
+    # Lot 6 : communication interne et questionnaires.
+    assert items["announcements"].url == "/annonces/"
+    assert items["surveys"].url == "/questionnaires/"
     # Les modules des lots suivants n'ont pas encore de route : pas d'entrée.
-    assert "surveys" not in items
+    assert "careers" not in items
 
 
 def test_recruitment_is_shown_to_people_with_reports_not_to_the_manager_profile_alone():

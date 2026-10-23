@@ -1,0 +1,90 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Questionnaires" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Questionnaires" %}</h1>
+      <p class="sub">{% translate "Enquêtes internes anonymes" %}</p>
+    </div>
+    {% if can_manage %}
+      <div class="actions">
+        {% url "surveys:new" as new_url %}
+        {% button _("Créer un questionnaire") variant="primary" icon="plus" hx_get=new_url hx_target="#modal-root" %}
+      </div>
+    {% endif %}
+  </div>
+  {% if todo %}
+    <div class="banner banner-warn">
+      {% icon "clip" %}
+      <div>
+        <b>{% blocktranslate count n=todo|length %}{{ n }} questionnaire à remplir.{% plural %}{{ n }} questionnaires à remplir.{% endblocktranslate %}</b>
+        {% for survey in todo %}<a class="link" href="{% url 'surveys:detail' survey.public_id %}">{{ survey.title }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  <div class="card">
+    {% include "components/filters.html" with form=filter_form action=list_url target="#results" %}
+    <div id="results" aria-live="polite">
+      {% partialdef results inline %}
+        {% if page_obj.paginator.count %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{% translate "Questionnaires" %}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{% translate "Questionnaire" %}</th>
+                  <th scope="col">{% translate "Statut" %}</th>
+                  <th scope="col">{% translate "Réponses" %}</th>
+                  <th scope="col">{% translate "Échéance" %}</th>
+                  <th scope="col" class="end"><span class="sr-only">{% translate "Action" %}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for survey in page_obj.object_list %}
+                  {% url "surveys:detail" survey.public_id as detail_url %}
+                  <tr>
+                    <td>
+                      <a class="link font-medium" href="{{ detail_url }}">{{ survey.title }}</a>
+                      <div class="meta">{{ survey.get_audience_display }} · {% blocktranslate count n=survey.question_count %}{{ n }} question{% plural %}{{ n }} questions{% endblocktranslate %}</div>
+                    </td>
+                    <td>{% status_badge "survey" survey.status %}</td>
+                    <td class="min-w-40">
+                      {% if survey.status == "draft" %}
+                        <span class="text-ink-3">—</span>
+                      {% else %}
+                        {% blocktranslate asvar answered with n=survey.response_count total=survey.invited_count %}{{ n }} sur {{ total }}{% endblocktranslate %}
+                        <div class="meta">{{ answered }}</div>
+                        <progress class="progress" max="{{ survey.invited_count|default:1 }}" value="{{ survey.response_count }}" aria-label="{% translate 'Réponses' %} : {{ answered }}">{{ answered }}</progress>
+                      {% endif %}
+                    </td>
+                    <td class="text-ink-2">{% if survey.due_date %}{{ survey.due_date|fr_date:"short_year" }}{% else %}—{% endif %}</td>
+                    <td class="end">
+                      {% if survey.status == "open" and survey.is_invited and not survey.has_answered %}
+                        {% button _("Répondre") variant="primary" size="sm" href=detail_url %}
+                      {% elif can_manage or can_view_results %}
+                        {% button _("Voir") size="sm" href=detail_url %}
+                      {% else %}
+                        {% button _("Ouvrir") size="sm" href=detail_url %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% pagination page_obj "#results" %}
+        {% else %}
+          {% translate "Aucun questionnaire" as t %}
+          {% if filtered %}
+            {% translate "Aucun questionnaire ne correspond à ces filtres." as x %}{% translate "Réinitialiser" as a %}
+            {% include "components/empty_state.html" with icon="clip" title=t text=x action_label=a action_url=list_url action_variant="secondary" %}
+          {% else %}
+            {% translate "Les questionnaires qui vous concernent apparaîtront ici." as x %}
+            {% include "components/empty_state.html" with icon="clip" title=t text=x %}
+          {% endif %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}
