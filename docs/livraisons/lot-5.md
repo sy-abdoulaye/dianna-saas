@@ -106,6 +106,14 @@ Date : 21 octobre 2026. Branche : `lot-5`.
   - LISEZ-MOI : `APP_PORT`, `DB_PORT` et `COMPOSE_PROJECT_NAME`, et `make seed` dans l'enchaînement des commandes.
   - `00-decisions.md` : nouvelle section « V2, à décider après le lot 8 ».
 
+## Derniers points avant validation (23 oct. 2026)
+
+- **Excel (L5-24).** Dans les exports paie du transport et des astreintes, les montants et les heures sont des nombres, au format monétaire ou décimal ; la somme d'une colonne fonctionne. Seules les cellules texte sont neutralisées.
+- **Réparation annulée.** L'historique garde « Envoyé en réparation » et ajoute « Envoi en réparation annulé » (migration `equipment/0003`, valeur de choix seulement). Un jeton d'annulation rejoué est refusé.
+- **Migrations modifiées.** L'exception pour `people/0002` et `core/0003` est notée (L5-25).
+- **Coupe-circuit.** Le coût de la première visite de chaque fenêtre de 30 s, avec un S3 qui ne répond pas, est noté pour le lot 8.
+- **Performance.** Chaque durée mesurée est la médiane de 3 exécutions ; les budgets ne changent pas.
+
 ## Tests
 
 | Commande | Résultat |
