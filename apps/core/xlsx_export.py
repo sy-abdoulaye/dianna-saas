@@ -2,11 +2,16 @@
 
 Comme pour le CSV (apps/core/csv_export.py), toute cellule qui commence par =, +, -, @, une
 tabulation ou un retour chariot est préfixée d'une apostrophe, et toutes les cellules texte
-sont enregistrées comme texte : openpyxl ne doit jamais en faire une formule."""
+sont enregistrées comme texte : openpyxl ne doit jamais en faire une formule.
+
+Montants et heures : `Number`, enregistré comme nombre avec un format (« 1 234,56 € » ou
+« 2,50 » dans un Excel français), pour que les sommes fonctionnent. Dans un CSV, la même
+cellule s'écrit en texte français (« 42,05 € »)."""
 
 import io
 from collections.abc import Iterable
 from dataclasses import dataclass
+from decimal import Decimal
 from functools import lru_cache
 
 from openpyxl import Workbook
@@ -27,6 +32,26 @@ class Styled:
     text: str
     fill: str = ""
     ink: str = ""
+
+
+# Codes de format Excel (indépendants de la langue : le séparateur de milliers et la
+# virgule décimale sont ceux du poste qui ouvre le fichier).
+MONEY_FORMAT = '#,##0.00\\ "€"'
+DECIMAL_FORMAT = "#,##0.00"
+
+
+@dataclass(frozen=True)
+class Number:
+    """Nombre d'un export : `money=True` pour un montant en euros."""
+
+    value: Decimal
+    money: bool = False
+
+    def __str__(self) -> str:
+        # Texte du CSV : virgule décimale, « € » après une espace insécable.
+        if self.money:
+            return f"{self.value:.2f}".replace(".", ",") + "\u00a0€"
+        return str(self.value).replace(".", ",")
 
 
 @lru_cache(maxsize=64)
@@ -63,6 +88,10 @@ def _cell(sheet, value, *, bold=False):
         cell = WriteOnlyCell(sheet, value=safe_cell(value.text))
         cell.data_type = "s"
         cell.style = _named_style(sheet.parent, value.fill, value.ink)
+        return cell
+    if isinstance(value, Number):
+        cell = WriteOnlyCell(sheet, value=value.value)
+        cell.number_format = MONEY_FORMAT if value.money else DECIMAL_FORMAT
         return cell
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return WriteOnlyCell(sheet, value=value)

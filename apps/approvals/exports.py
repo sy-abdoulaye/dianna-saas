@@ -27,7 +27,7 @@ from apps.core import audit, permissions
 from apps.core.csv_export import csv_content
 from apps.core.dates import format_date
 from apps.core.models import Service
-from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Styled, xlsx_content
+from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Number, Styled, xlsx_content
 from apps.people.models import IN_POST_STATUSES, Employee
 
 CSV_CONTENT_TYPE = "text/csv; charset=utf-8"
@@ -154,7 +154,7 @@ def on_call_month(viewer, month: date, fmt: str, *, request=None):
             t["person"].service.name if t["person"].service else "",
             t["days"],
             t["count"],
-            str(t["hours"]).replace(".", ","),
+            Number(t["hours"]),
         ]
         for t in sorted(
             totals.values(), key=lambda t: (t["person"].last_name, t["person"].first_name)
@@ -171,7 +171,6 @@ def transport_month(viewer, month: date, fmt: str, *, request=None):
     """Justificatifs validés qui couvrent le mois, avec le montant du mois et le remboursement
     estimé (L5-13) : 50 % des abonnements (article L3261-2 du Code du travail) ; un
     abonnement annuel compte pour un douzième par mois ; un titre unique n'est pas concerné."""
-    from apps.approvals.kinds import euros
     from apps.approvals.models import TransportProof
 
     _check(viewer)
@@ -201,7 +200,7 @@ def transport_month(viewer, month: date, fmt: str, *, request=None):
         monthly = proof.amount / 12 if proof.ticket_type == "yearly" else proof.amount
         monthly = monthly.quantize(Decimal("0.01"))
         refund = (
-            euros((monthly / 2).quantize(Decimal("0.01")))
+            Number((monthly / 2).quantize(Decimal("0.01")), money=True)
             if proof.is_subscription
             else _("Non concerné")
         )
@@ -216,8 +215,8 @@ def transport_month(viewer, month: date, fmt: str, *, request=None):
                     "a": format_date(proof.month, "numeric"),
                     "b": format_date(proof.valid_until, "numeric"),
                 },
-                euros(proof.amount),
-                euros(monthly),
+                Number(proof.amount, money=True),
+                Number(monthly, money=True),
                 refund,
             ]
         )

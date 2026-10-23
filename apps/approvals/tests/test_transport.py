@@ -236,7 +236,7 @@ def test_detail_shows_the_preview_to_hr(client_for, company_a):
 # ---------- Export paie et relance ----------
 
 
-def test_payroll_export(client_for, company_a):
+def payroll_proofs(company_a):
     with tenant_context(company_a.company):
         now = timezone.now()
         for ticket, month, amount in (
@@ -257,6 +257,10 @@ def test_payroll_export(client_for, company_a):
             )
             proof.compute_validity()
             proof.save()
+
+
+def test_payroll_export(client_for, company_a):
+    payroll_proofs(company_a)
     response = client_for(company_a.hr).get("/transport/export/?mois=2026-11&format=csv")
     rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig")), delimiter=";"))
     assert rows[0][-1] == "Remboursement estimé"
@@ -397,3 +401,25 @@ def test_search_in_my_requests_looks_in_the_summary(client_for, company_a):
     for url in ("/teletravail/", "/conges/", "/astreintes/", "/transport/"):
         page = client.get(url).content.decode()
         assert 'placeholder="Rechercher dans mes demandes"' in page, url
+
+
+def test_payroll_excel_amounts_are_numbers_that_add_up(client_for, company_a):
+    """Excel : montants enregistrés comme nombres au format monétaire, pas comme texte ; la
+    somme d'une colonne fonctionne. Les cellules texte restent neutralisées."""
+    from openpyxl import load_workbook
+
+    payroll_proofs(company_a)
+    response = client_for(company_a.hr).get("/transport/export/?mois=2026-11&format=xlsx")
+    sheet = load_workbook(io.BytesIO(response.content)).active
+    rows = list(sheet.iter_rows(min_row=2))
+    paid = [row[5] for row in rows]
+    assert all(c.data_type == "n" and "€" in c.number_format for c in paid)
+    assert sum(Decimal(str(c.value)) for c in paid) == Decimal("936.50")
+    # Une formule SUM ajoutée par la paie porte sur des nombres : même total.
+    monthly = [Decimal(str(row[6].value)) for row in rows]
+    assert sum(monthly) == Decimal("84.10") + Decimal("70.00") + Decimal("12.40")
+    refunds = {row[3].value: row[7] for row in rows}
+    assert refunds["Abonnement mensuel"].data_type == "n"
+    assert refunds["Abonnement mensuel"].value == 42.05
+    assert refunds["Titre unique"].data_type == "s"
+    assert refunds["Titre unique"].value == "Non concerné"
