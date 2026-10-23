@@ -19,15 +19,17 @@
 - Par question notée : moyenne sur 5, répartition 5 à 1 en barres, puis **« Commentaires (n) »** : chaque commentaire avec sa note, sans nom, triés de la note la plus haute à la plus basse.
 - Par question ouverte : liste des réponses.
 - Moins de 3 réponses : « Résultats masqués » (seuil d'anonymat, M-10). Les commentaires suivent la même règle.
+- Résultats visibles seulement après la clôture ou l'échéance passée (L6-01). Pendant l'ouverture : « N réponses reçues · Les résultats seront visibles à la clôture ». Jamais de liste des répondants ni des non-répondants, pour aucun profil.
+- Commentaires à note égale : dans un ordre qui ne suit pas celui des réponses (clé aléatoire).
 - Lot 8 : résultats par service seulement si le service compte au moins le seuil de répondants.
 
 ## Cycle de vie
 
-Brouillon → (Publier, confirmation, notification au public) → Ouvert → (Clore, confirmation) → Clos. Un brouillon peut être supprimé ; un questionnaire publié n'est plus modifiable.
+Brouillon → (Publier, confirmation, notification au public) → Ouvert → (Clore, confirmation, ou automatiquement le lendemain de l'échéance) → Clos. Un brouillon peut être modifié (« Modifier le brouillon », L6-07) ou supprimé ; un questionnaire publié n'est plus modifiable. Le public est figé à la publication ; un public de moins de 3 personnes ne peut pas être publié (L6-05).
 
 ## Limite connue (L1-09)
 
-L'anonymat est garanti au niveau de l'application. En base, l'ordre physique des lignes et la date du jour peuvent permettre de rapprocher un reçu et une réponse quand les réponses sont peu nombreuses. Risque résiduel accepté pour la V1, à revoir au lot 8.
+L'anonymat est garanti au niveau de l'application. En base, par un accès SQL direct, l'ordre physique des lignes et le numéro de transaction (`xmin`, commun au reçu et à la réponse) peuvent permettre de les rapprocher quand les réponses sont peu nombreuses. Les réponses ne portent plus de date (L6-02). Risque résiduel accepté pour la V1, à revoir au lot 8 (réécriture groupée des réponses, aucun accès SQL direct hors procédure tracée).
 
 ## Critères d'acceptation
 

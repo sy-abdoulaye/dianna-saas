@@ -29,6 +29,6 @@ Adresses en développement : vitrine http://localhost:8000, Exemple SAS http://e
 - 10 entretiens à toutes les étapes, fiches de suivi avec une note privée de Louise.
 - 4 comptes rendus d'intervention : validé, brouillon, envoyé (à valider par Louise), complément demandé.
 
-**Écarts volontaires avec le prototype :** le questionnaire « Retour sur l'intégration » n'a que 2 réponses (pour montrer les résultats masqués) ; l'annonce « Nouvelle politique de télétravail » ne mentionne pas de délai de déclaration (M-01).
+**Écarts volontaires avec le prototype :** le questionnaire « Retour sur l'intégration » n'a que 2 réponses (ses résultats resteront masqués) ; l'annonce « Nouvelle politique de télétravail » ne mentionne pas de délai de déclaration (M-01) ; les arrivées de Hugo Fabre, Samuel Perrin et Pierre Blanc sont recalculées à moins d'un an du chargement, pour que le public « Arrivés depuis moins d'un an » compte 3 personnes (L6-15) ; le brouillon « Besoins de formation 2027 » a une question notée ; les résultats des questionnaires ouverts ne sont pas affichés avant leur clôture (L6-01), seuls ceux de « Enquête télétravail 2025 » (clos, 18 réponses) le sont.
 
 Les justificatifs et photos de démonstration sont des fichiers générés (PDF d'une page, avatars à initiales), jamais de vraies pièces.

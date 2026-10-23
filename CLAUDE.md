@@ -18,7 +18,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 
 ## Règles non négociables
 
-1. **Isolation des entreprises.** Tout modèle métier hérite de `TenantModel` (champ `company`) et passe par `TenantManager`. Aucune requête métier ne doit pouvoir renvoyer les données d'une autre entreprise. Chaque nouvelle vue a un test d'isolation (voir `docs/02-architecture.md`, section Tests). `save()` et le signal `m2m_changed` vérifient que les relations vers un objet métier restent dans la même entreprise ; `QuerySet.update()` et `bulk_create` les contournent : ne les utilise jamais sur une relation vers un objet métier sans vérification explicite de l'entreprise. Pas de queryset sur un modèle métier au niveau d'une classe (attribut queryset d'une vue, champ de formulaire) : toujours dans get_queryset ou __init__.
+1. **Isolation des entreprises.** Tout modèle métier hérite de `TenantModel` (champ `company`) et passe par `TenantManager` ; seules les réponses anonymes aux questionnaires héritent de `TenantBase` (même isolation, sans horodatage, L6-12). Aucune requête métier ne doit pouvoir renvoyer les données d'une autre entreprise. Chaque nouvelle vue a un test d'isolation (voir `docs/02-architecture.md`, section Tests). `save()` et le signal `m2m_changed` vérifient que les relations vers un objet métier restent dans la même entreprise ; `QuerySet.update()` et `bulk_create` les contournent : ne les utilise jamais sur une relation vers un objet métier sans vérification explicite de l'entreprise. Pas de queryset sur un modèle métier au niveau d'une classe (attribut queryset d'une vue, champ de formulaire) : toujours dans get_queryset ou __init__.
 2. **Permissions côté serveur.** Chaque vue et chaque action vérifie le profil et le périmètre (soi, équipe, entreprise) avec les fonctions de `apps/core/permissions.py`. Masquer un bouton dans le template ne suffit jamais. La matrice fait foi : `docs/04-permissions.md`.
 3. **Design system.** Utilise uniquement les jetons et les composants définis dans `docs/05-design-system.md`. Pas de couleur en dur, pas de nouveau composant si un composant existant convient. Le prototype `docs/reference/prototype-dianna.html` est la référence visuelle et comportementale : ouvre-le dans un navigateur pour vérifier un écran.
 4. **Accessibilité.** WCAG 2.2 AA : libellé lié à chaque champ, erreurs annoncées, focus visible, navigation clavier, contrastes des jetons respectés.
@@ -52,6 +52,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
   - notifications (`apps/core/notifications.py`), journal (`apps/core/audit.py`), e-mails (`apps/core/mail.py`) ;
   - exports (`csv_export`, `xlsx_export`, `pdf`) et limites de fréquence (`ratelimit.py`) ;
   - fichiers (`files.py`) et format des dates (`dates.py`).
+  - erreur de service (`core/errors.ServiceError`), réponses HTMX (`htmx.py` : `error_response`, `confirm_response`, `modal_form_response`, `location`), notifications groupées (`notify_many`), filtres de liste (`components/filters.html`), texte saisi affiché sans HTML (filtre `plain_text`).
 - Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
 - Annotations de type sur les fonctions de service et de sélection.
 - Noms explicites en anglais.

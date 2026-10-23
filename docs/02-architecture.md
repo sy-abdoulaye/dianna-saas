@@ -62,6 +62,7 @@ class TenantModel(models.Model):
         abstract = True
 ```
 
+- `TenantModel` = `TenantBase` (champ `company`, gestionnaires, contrôles) + `Timestamped`. `TenantBase` seule n'existe que pour les réponses anonymes aux questionnaires, qui ne doivent porter aucune date (L6-12) ; un test refuse tout autre modèle métier sans horodatage.
 - `TenantManager.get_queryset()` filtre sur `current_company` et **lie le queryset à cette entreprise**. À l'évaluation (lecture, comptage, mise à jour, suppression, sous-requête), il lève `NoCurrentCompanyError` sans entreprise courante et `CompanyMismatchError` si l'entreprise courante n'est pas celle de la construction, ou si le queryset a été construit sans entreprise (jamais de liste vide silencieuse ni de données d'une autre entreprise). En production, les vues et les formulaires sont importés pendant la première requête d'un processus : un queryset de classe serait lié à l'entreprise de cette requête.
 - `save()` renseigne `company` depuis le contexte et refuse une incohérence.
 - Les clés étrangères entre objets métier sont vérifiées par `clean()` (même entreprise).

@@ -79,7 +79,7 @@ Versions vérifiées le 18 octobre 2026.
 | L1-06 | Planning d'un manager | Son service, plus les membres de son équipe directe rattachés à d'autres services | Validé (18 oct. 2026) |
 | L1-07 | Astreinte au planning | Elle se cumule avec les autres états : la case montre l'état principal (congé > télétravail > sur site) et un repère « A » | Validé (18 oct. 2026) |
 | L1-08 | Annulation après envoi | La demande est supprimée ; le journal d'audit garde « demande envoyée puis retirée » | Validé (18 oct. 2026) |
-| L1-09 | Anonymat des questionnaires | Risque résiduel accepté pour la V1 (rapprochement possible en base par l'ordre physique des lignes et la date du jour quand les réponses sont peu nombreuses). À documenter dans la fiche et à revoir au lot 8 | Validé (18 oct. 2026) |
+| L1-09 | Anonymat des questionnaires | Risque résiduel accepté pour la V1 : rapprochement possible en base, par un accès SQL direct, quand les réponses sont peu nombreuses : ordre physique des lignes, et numéro de transaction (`xmin`), commun au reçu et à la réponse créés dans la même transaction (ajouté au lot 6). La date a été retirée des réponses (L6-02). L'application ne lit jamais ces colonnes. À revoir au lot 8 | Validé (18 oct. 2026, complété le 24 oct.) |
 
 ## Décisions prises pendant le lot 1 (19 oct. 2026)
 
@@ -240,6 +240,31 @@ Réponses aux questions Q1 à Q14 de la préparation du lot 5, et choix faits pe
 
 Nouvelles dépendances du lot 5 (accord du 21 oct. 2026) : `django-storages[s3]` 1.14.6 et `boto3` 1.43.116 (avec `botocore` 1.43.116, `s3transfer` 0.19.3, `jmespath` 1.1.0, `urllib3` 2.8.0). Bornes dans `pyproject.toml` : `django-storages[s3]>=1.14,<1.15`, `boto3>=1.35,<2`.
 
+## Préparation et décisions du lot 6 (24 oct. 2026)
+
+Réponses aux questions Q1 à Q11 de la préparation du lot 6, et choix faits pendant le lot.
+
+| N° | Sujet | Décision | Statut |
+|---|---|---|---|
+| L6-01 | Résultats des questionnaires | Visibles seulement après la clôture, ou l'échéance passée, et à partir du seuil d'anonymat (3 réponses). Pendant l'ouverture, seul le nombre de réponses s'affiche (« 4 réponses reçues · Les résultats seront visibles à la clôture »), pour aucun profil la liste de qui a répondu ou non. Évite qu'une différence entre deux consultations révèle une réponse. Une seule règle, `surveys.selectors.results_visible`, par laquelle passe `survey_results` (résultats, commentaires, réponses libres, tout futur filtre ou export). Si une relance est ajoutée, elle partira automatiquement aux non-répondants, sans que personne ne voie leurs noms. **Écart au prototype**, qui montre les résultats d'un questionnaire ouvert | Validé (24 oct. 2026) |
+| L6-02 | Date des réponses | `SurveyResponse.submitted_on` supprimé : une réponse ne porte aucune date (avec une seule réponse un jour donné, elle la reliait au reçu) | Validé (24 oct. 2026) |
+| L6-03 | Reçu et réponse | Créés dans la même transaction, sans clé commune ; risque `xmin` ajouté à L1-09. Répondre n'écrit ni journal, ni notification, ni tâche, ni log | Validé (24 oct. 2026) |
+| L6-04 | Public | Figé à la publication (`SurveyInvitation`) : droit de répondre, bandeau « à remplir », participation. « Tous les salariés » : personnes présentes (statut « Actif »), RH et administrateur compris ; « Managers » : au moins un collaborateur direct en poste ; « Arrivés depuis moins d'un an » : arrivée dans les 365 jours avant la publication | Validé (24 oct. 2026) |
+| L6-05 | Public sous le seuil | Publication refusée : « Le public compte moins de 3 personnes : les résultats ne pourraient jamais être affichés sans risque pour l'anonymat. ». Seuil fixe à 3 dans l'écran, contrainte en base ≥ 3 | Validé (24 oct. 2026) |
+| L6-06 | Échéance | Facultative. Après la date, le serveur refuse les réponses ; `enqueue_daily_tasks` clôt chaque jour les questionnaires échus (journal « clos automatiquement ») | Validé (24 oct. 2026) |
+| L6-07 | Brouillon | « Modifier le brouillon » (titre, public, échéance, questions) tant qu'il n'est pas publié ; ensuite 404. **Écart au prototype**, qui ne le prévoit pas. Au moins une question notée, comme le formulaire du prototype | Validé (24 oct. 2026) |
+| L6-08 | E-mail des annonces | Seulement à la publication d'une annonce épinglée (M-16). Modifier ou épingler ensuite n'envoie rien et ne notifie pas de nouveau | Validé (24 oct. 2026) |
+| L6-09 | Annonce supprimée | Suppression logique (`deleted_at`), annulable 30 s ; contenu gardé jusqu'à la purge (lot 8). Les notifications restent ; leur lien mène à « Cette annonce a été supprimée. » (404) | Validé (24 oct. 2026) |
+| L6-10 | Limites | Annonce : titre 120, message 15 à 5 000 caractères. Questionnaire : titre 120, 1 à 20 questions notées de 300 caractères, une question ouverte. Réponse : commentaire 1 000, réponse libre 2 000 | Validé (24 oct. 2026) |
+| L6-11 | Résultats des managers | Ceux de toute l'entreprise (matrice), pas de résultats par service avant le lot 8 | Validé (24 oct. 2026) |
+| L6-12 | Modèle sans horodatage | `TenantBase` (isolation sans `Timestamped`), réservée aux réponses anonymes (`SurveyResponse`, `Answer`) ; `TenantModel` = `TenantBase` + `Timestamped`, sans migration des modèles existants. Un test refuse tout autre modèle métier sans horodatage | Validé (technique) |
+| L6-13 | Briques communes du lot 6 | Évolutions au lieu de variantes : `notifications.notify_many` (une insertion pour tout le public, entreprise revérifiée) ; `htmx.location` (HX-Location vers `#content`, la notification visuelle et son « Annuler » restent) ; `htmx.error_response`, `confirm_response`, `modal_form_response` ; `core.errors.ServiceError` ; `access.company_module_enabled` (tâches) ; filtre `plain_text` (texte échappé, liens détectés). L'existant n'est pas repris (dette technique, note du lot 6) | Validé (technique) |
+| L6-14 | Annonces : public et lecture | Public : personnes présentes (« Actif »). Lectures « x sur y » : personnes présentes seulement ; visibles de l'auteur, des RH et de l'administrateur (`announcements.services.can_see_reads`). L'auteur a lu son annonce dès la publication | Validé (technique) |
+| L6-15 | Démonstration | Arrivées de p14, p22 et p24 recalculées à 300, 200 et 120 jours avant le chargement : le public « Arrivés depuis moins d'un an » du questionnaire « Intégration » compte ainsi 3 personnes (seuil). Le brouillon « Besoins de formation 2027 » a une question notée en plus de la question ouverte | Validé (technique) |
+| L6-16 | Qualité du code | ruff : complexité ≤ 10 (C90), 6 `return`, 12 branches, 8 arguments, 50 instructions (PLR0911 à PLR0915), plus B, SIM, RET, DJ, N, PTH. Seuil de 8 arguments (et non 6) : les services prennent des arguments nommés (`*, actor, request`). Seule exception : le gabarit `button` (un argument par attribut HTML) | Validé (technique) |
+
+Aucune nouvelle dépendance au lot 6.
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
@@ -252,6 +277,10 @@ Nouvelles dépendances du lot 5 (accord du 21 oct. 2026) : `django-storages[s3]`
 - **Lot 8 :** purge des justificatifs au-delà de leur durée de conservation (3 ans, M-13), fichiers compris.
 - **Lot 8 :** analyse antivirus de chaque fichier au moment du dépôt, avant son enregistrement dans le stockage et en base (ClamAV ou équivalent, prévu « à confirmer » dans 02-architecture.md) : un fichier infecté ou non analysable est refusé avec un message ; non faite au lot 5, à décider avec l'hébergement (service, dépendance, délai de réponse).
 - **Lot 8 :** avec un S3 qui ne répond pas (connexion acceptée puis aucune réponse), la première visite de chaque fenêtre de 30 s du coupe-circuit (L5-21) coûte 7 à 10 s avant le message, et chaque processus Gunicorn a son propre coupe-circuit. À revoir avec l'infrastructure réelle : coupe-circuit partagé entre processus, délais de connexion et de lecture.
+- **Lot 8 :** anonymat des questionnaires en base (L1-09, L6-03) : réécriture groupée et périodique des réponses d'un questionnaire (une seule transaction pour toutes), pour effacer le lien par le numéro de transaction et l'ordre physique ; règle d'exploitation « aucun accès SQL direct à la base de production hors procédure tracée ».
+- **Lot 8 :** relance des non-répondants d'un questionnaire, si elle est ajoutée : automatique, sans que personne ne voie les noms (L6-01).
+- **Lot 8 :** purge des annonces supprimées (suppression logique, L6-09).
+- **Lot 8 :** catalogue de traduction français (`locale/fr`) : sans lui, les pluriels suivent la règle anglaise (« 0 collaborateurs » au lieu de « 0 collaborateur »). Corrigé à la main dans les écrans du lot 6.
 - **Lot 8 :** remplacer l'image `bitnamilegacy/minio` de l'intégration continue (plus maintenue) par un serveur compatible S3 encore maintenu.
 - **Lot 8 :** abonnement iCalendar par URL : jeton personnel, révocable, limité aux droits de son propriétaire (L4-05).
 - **Lot 8 :** déploiement en production du travailleur de tâches (`db_worker`) et de la purge quotidienne (`purge_task_results`) ; le profil `taches` de docker-compose.yml ne sert qu'au développement et aux essais (A3-04).
@@ -296,3 +325,9 @@ Le prototype validé a élargi la V1 initiale. À trancher pour l'ordre de livra
 - **Carrière et évaluations, Questionnaires, Suivi du matériel, Suivi d'intervention** étaient prévus en V1.1 ou V2 dans le cahier des charges ; ils figurent dans le prototype validé. Recommandation : les livrer aux lots 5 à 7, après le cœur présence et organisation.
 - Le cahier des charges prévoit aussi un profil « gestionnaire de module » et un profil « lecteur » ; ils sont remplacés par les 4 profils (V-06) en attendant.
 - **Plan de charge et Recrutement** restent hors V1 (page « Bientôt » dans le prototype).
+
+Écarts volontaires au prototype décidés pendant les lots :
+
+- Résultats d'un questionnaire visibles seulement après sa clôture (L6-01).
+- « Modifier le brouillon » d'un questionnaire (L6-07).
+- « Envoyer en réparation » avec confirmation et annulation (L5-10).
