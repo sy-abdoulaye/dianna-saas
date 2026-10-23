@@ -127,7 +127,11 @@ def _employee_indicators(request, me, today, kinds, mix) -> list[tuple[str, obje
 
         held = EquipmentItem.objects.filter(holder=me).exclude(status=EquipmentItem.Status.RETIRED)
         kpis.append((_("Matériel attribué"), held.count()))
-    if "leave" in kinds:
+    if module_is_enabled(request, Module.ANNOUNCEMENTS):
+        from apps.announcements import selectors as announcements
+
+        kpis.append((_("Annonces non lues"), announcements.unread_count(me)))
+    if "leave" in kinds and len(kpis) < 4:
         upcoming = (
             LeaveRequest.objects.filter(requester=me, status=RequestStatus.APPROVED, end__gte=today)
             .order_by("start")
@@ -175,6 +179,15 @@ def latest_requests(request, me) -> list:
     return sorted(rows, key=lambda r: r.submitted_at, reverse=True)[:4]
 
 
+def _latest_announcements(request, me) -> list | None:
+    """Bloc « Annonces » : les 3 dernières, épinglées en premier (prototype)."""
+    if not module_is_enabled(request, Module.ANNOUNCEMENTS):
+        return None
+    from apps.announcements import selectors as announcements
+
+    return announcements.latest(me)
+
+
 def home(request):
     me = request.employee
     today = timezone.localdate()
@@ -195,6 +208,7 @@ def home(request):
         "planning_url": reverse("planning:week") if mix else "",
         "latest": latest_requests(request, me) if me.role != Role.ADMIN else None,
         "has_requests": bool(_request_kinds(request)),
+        "announcements": _latest_announcements(request, me),
         "equipment_url": reverse("equipment:home")
         if module_is_enabled(request, Module.EQUIPMENT)
         else "",
