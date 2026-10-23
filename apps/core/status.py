@@ -32,6 +32,9 @@ STATUSES: dict[str, dict[str, Status]] = {
         "upcoming": Status("info", _("Arrivée prochaine")),
         "left": Status("ko", _("Parti")),
     },
+    "announcement": {
+        "new": Status("info", _("Nouveau")),
+    },
     "survey": {
         "draft": Status("info", _("Brouillon")),
         "open": Status("ok", _("Ouvert")),

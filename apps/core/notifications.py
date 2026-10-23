@@ -38,6 +38,45 @@ def notify(
     return notification
 
 
+def notify_many(
+    recipients, text: str, url: str = "", kind: str = Notification.Kind.INFO, *, email_subject=""
+) -> int:
+    """Même notification pour beaucoup de personnes (annonce, questionnaire publié) : une
+    seule requête d'insertion au lieu d'une par personne. Les destinataires viennent du
+    gestionnaire filtré de l'entreprise courante ; l'entreprise de chacun est revérifiée,
+    car bulk_create ne passe pas par TenantModel.save() (règle 1). Renvoie le nombre créé."""
+    from apps.core.tenancy import get_current_company
+
+    if url and (not url.startswith("/") or url.startswith("//")):
+        raise ValueError("Le lien d'une notification doit être un chemin interne.")
+    company = get_current_company()
+    recipients = list(recipients)
+    if any(person.company_id != company.pk for person in recipients):
+        raise ValueError("Destinataire d'une autre entreprise.")
+    created = Notification.objects.bulk_create(
+        [
+            Notification(
+                company=company,
+                recipient=person,
+                text=text[:255],
+                url=url,
+                kind=kind,
+                email_subject=email_subject[:150],
+            )
+            for person in recipients
+        ]
+    )
+    if email_subject:
+        from apps.core.mail import queue_notification_email
+
+        by_pk = {person.pk: person for person in recipients}
+        for notification in created:
+            person = by_pk[notification.recipient_id]
+            if person.user_id and person.user.is_active:
+                queue_notification_email(notification)
+    return len(created)
+
+
 def retract_unsent(source, *, exclude=()) -> int:
     """Supprime les notifications de `source` dont l'e-mail n'est pas encore parti : elles ne
     sont plus vraies après une nouvelle transition (A3-05). Les autres restent (historique)."""

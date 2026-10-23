@@ -271,3 +271,15 @@ def fr_date(value, style="long"):
     from apps.core.dates import format_date
 
     return format_date(value, style)
+
+
+@register.filter(needs_autoescape=False)
+def plain_text(value) -> str:
+    """Texte simple saisi par une personne (annonces) : tout est échappé, puis les liens web
+    et e-mail sont détectés (rel="nofollow") et les retours à la ligne gardés. Jamais de HTML
+    libre (fiche 08) : « <script> » s'affiche tel quel."""
+    from django.utils.html import linebreaks
+    from django.utils.html import urlize as make_links
+
+    escaped = make_links(str(value or ""), nofollow=True, autoescape=True)
+    return mark_safe(linebreaks(escaped))  # noqa: S308 (texte déjà échappé par urlize)

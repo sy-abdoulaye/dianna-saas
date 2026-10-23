@@ -167,8 +167,14 @@ class TenantManager(models.Manager.from_queryset(TenantQuerySet)):
         return queryset
 
 
-class TenantModel(Timestamped):
-    """Base de tout modèle métier (règle 1 de CLAUDE.md).
+class TenantBase(models.Model):
+    """Isolation d'un modèle métier (règle 1 de CLAUDE.md), sans horodatage.
+
+    Elle n'existe que pour les données qui ne doivent porter aucune date ni aucun ordre
+    d'arrivée : les réponses anonymes aux questionnaires (`SurveyResponse`, `Answer`), qu'un
+    horodatage permettrait de rapprocher du reçu de leur auteur (M-10). C'est la seule façon
+    de créer un modèle d'entreprise sans horodatage ; tout autre modèle métier hérite de
+    `TenantModel`.
 
     - `objects` ne voit que l'entreprise courante ;
     - `all_companies` est réservé aux commandes de plateforme, à l'administration éditeur et
@@ -201,7 +207,7 @@ class TenantModel(Timestamped):
                 field.is_relation
                 and (field.many_to_one or field.one_to_one)
                 and field.name != "company"
-                and issubclass(field.related_model, TenantModel)
+                and issubclass(field.related_model, TenantBase)
             ):
                 yield field
 
@@ -244,6 +250,13 @@ class TenantModel(Timestamped):
             )
         self.check_same_company()
         super().save(*args, **kwargs)
+
+
+class TenantModel(TenantBase, Timestamped):
+    """Base de tout modèle métier : isolation (TenantBase) et horodatage (Timestamped)."""
+
+    class Meta(TenantBase.Meta):
+        abstract = True
 
 
 class Module(models.TextChoices):
@@ -383,7 +396,7 @@ def check_m2m_same_company(sender, instance, action, reverse, model, pk_set, **k
     """Relations plusieurs-à-plusieurs : refuse d'ajouter un objet d'une autre entreprise."""
     if action != "pre_add" or not pk_set:
         return
-    if not isinstance(instance, TenantModel) or not issubclass(model, TenantModel):
+    if not isinstance(instance, TenantBase) or not issubclass(model, TenantBase):
         return
     foreign = model.all_companies.filter(pk__in=pk_set).exclude(company_id=instance.company_id)
     if foreign.exists():

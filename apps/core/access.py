@@ -33,6 +33,12 @@ def module_is_enabled(request, module: str) -> bool:
     return module in enabled_modules(request)
 
 
+def company_module_enabled(module: str) -> bool:
+    """Même règle hors requête (tâches) : activé sauf ligne « désactivé » pour l'entreprise
+    courante."""
+    return not CompanyModule.objects.filter(module=module, enabled=False).exists()
+
+
 def require(request, action: str, obj=None):
     employee = getattr(request, "employee", None)
     if employee is None or not permissions.can(employee, action, obj):
