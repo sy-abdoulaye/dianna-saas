@@ -1,7 +1,11 @@
 """Performance du planning (docs/modules/06-planning.md) : 200 personnes × 31 jours en moins de
 300 ms côté serveur, pour la vue mois et pour l'export d'un mois ; nombre de requêtes
-indépendant de l'effectif (jamais de requête par case)."""
+indépendant de l'effectif (jamais de requête par case).
 
+Chaque durée est la médiane de 3 exécutions (`median_seconds`) : un pic de charge ponctuel de
+la machine ne fait pas échouer le test, le budget reste le même."""
+
+import statistics
 import time
 from datetime import date, timedelta
 
@@ -18,6 +22,17 @@ from apps.people.models import Employee
 pytestmark = [pytest.mark.django_db, pytest.mark.perf]
 BUDGET_SECONDS = 0.3
 MONTH = date(2026, 10, 1)
+RUNS = 3
+
+
+def median_seconds(action, runs=RUNS):
+    """Médiane de `runs` exécutions de `action()` ; renvoie aussi le dernier résultat."""
+    durations, result = [], None
+    for _run in range(runs):
+        start = time.perf_counter()
+        result = action()
+        durations.append(time.perf_counter() - start)
+    return statistics.median(durations), result
 
 
 def populate(company_data, count, start=0):
@@ -87,10 +102,9 @@ def populate(company_data, count, start=0):
 def timed(client, url):
     client.get(url)  # premier appel : chargement des gabarits et des caches
     with CaptureQueriesContext(connection) as queries:
-        start = time.perf_counter()
         response = client.get(url)
-        elapsed = time.perf_counter() - start
     assert response.status_code == 200
+    elapsed, _last = median_seconds(lambda: client.get(url))
     return elapsed, len(queries), response
 
 
@@ -122,8 +136,8 @@ def test_month_grid_of_200_people_on_a_single_page(company_a, monkeypatch):
     monkeypatch.setattr(services, "PER_PAGE", 500)
     with tenant_context(company_a.company):
         hr = Employee.objects.get(pk=company_a.hr.pk)
-        start = time.perf_counter()
-        grid = services.grid(hr, view="mois", anchor=MONTH, today=timezone.localdate())
-        elapsed = time.perf_counter() - start
+        elapsed, grid = median_seconds(
+            lambda: services.grid(hr, view="mois", anchor=MONTH, today=timezone.localdate())
+        )
     assert len(grid.rows) >= 200 and len(grid.days) == 31
     assert elapsed < BUDGET_SECONDS, f"{elapsed * 1000:.0f} ms"
