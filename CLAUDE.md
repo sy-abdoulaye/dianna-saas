@@ -47,15 +47,16 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 ## Qualité du code
 
 - Logique métier dans `services.py`, lectures complexes (filtres, périmètres, agrégats) dans `selectors.py`, vues minces : elles lisent la requête, appellent un service ou un sélecteur, rendent la réponse.
-- Une fonction fait une chose. ruff le vérifie (`pyproject.toml`) : complexité ≤ 10, 6 `return`, 12 branches, 8 arguments, 50 instructions au plus. Un `noqa` n'est admis qu'avec sa raison sur la même ligne.
+- Une fonction fait une chose. ruff le vérifie (`pyproject.toml`) : complexité ≤ 10, 6 `return`, 12 branches, 6 arguments, 50 instructions au plus (RUF100 signale un `noqa` devenu inutile). Un `noqa` n'est admis qu'avec sa raison sur la même ligne.
 - Pas de duplication : réutiliser les briques existantes au lieu de les recopier :
   - jeton d'annulation (`apps/core/undo.py`) et confirmation (`components/confirm.html`) ;
   - notifications (`apps/core/notifications.py`), journal (`apps/core/audit.py`), e-mails (`apps/core/mail.py`) ;
   - exports (`csv_export`, `xlsx_export`, `pdf`) et limites de fréquence (`ratelimit.py`) ;
   - fichiers (`files.py`) et format des dates (`dates.py`).
-  - erreur de service (`core/errors.ServiceError`), réponses HTMX (`htmx.py` : `error_response`, `confirm_response`, `modal_form_response`, `location`), notifications groupées (`notify_many`), filtres de liste (`components/filters.html`), texte saisi affiché sans HTML (filtre `plain_text`).
+  - erreur de service (`core/errors.ServiceError`, base de toute erreur métier), réponses HTMX (`htmx.py` : `error_response`, `confirm_response`, `modal_form_response`, `form_error_response`, `location`), notifications à plusieurs personnes (`notify_many`, jamais une boucle de `notify`), filtres de liste (`components/filters.html`), texte saisi affiché sans HTML (filtre `plain_text`), contexte d'une action (`core/context.ActionContext`) pour les fonctions internes des services.
 - Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
-- Annotations de type sur les fonctions de service et de sélection.
+- Annotations de type sur les fonctions de service et de sélection ; `make typecheck` (mypy, django-stubs) est bloquant sur tous les `services.py`, `selectors.py` et `apps/approvals/workflow/`.
+- Moteur des demandes : paquet `apps/approvals/workflow/` (socle, valideurs, contrôles, notifications, transitions, annulation, campagnes). On l'importe toujours par la façade (`from apps.approvals import workflow`), et ses modules s'appellent entre eux par elle (`workflow._event(...)`) : un seul point d'entrée.
 - Noms explicites en anglais.
 - Docstring courte qui dit pourquoi, pas quoi.
 - Pas de code mort, pas de TODO sans décision inscrite dans `docs/00-decisions.md`.
@@ -69,6 +70,7 @@ make css           # compile Tailwind en mode watch
 make test          # pytest (unitaires et intégration)
 make e2e           # tests de parcours Playwright
 make lint          # ruff check, ruff format --check, djlint
+make typecheck     # mypy sur les services et sélecteurs (bloquant)
 make seed          # charge l'entreprise de démonstration « Exemple SAS »
 make migrate
 ```

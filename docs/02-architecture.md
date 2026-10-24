@@ -95,7 +95,7 @@ def scope_queryset(user_employee, queryset, module: str) -> QuerySet: ...
 
 ## Circuit de validation commun
 
-Toutes les demandes partagent la même machine à états (`apps/approvals/workflow.py`) :
+Toutes les demandes partagent la même machine à états (paquet `apps/approvals/workflow/`, importé par sa façade `workflow` ; modules `common`, `validators`, `checks`, `notifications`, `transitions`, `undo`, `campaigns`, depuis refacto-1) :
 
 ```
 (envoi)      → pending
@@ -112,7 +112,7 @@ approved     → cancelled                     (RH ou administrateur, motif obli
 - le jeton porte l'identifiant du `RequestEvent` créé par la transition : l'annulation n'est acceptée, sous verrou de la demande, que si cet événement est toujours le dernier. Sinon : « Une autre décision a été prise depuis. Rien n'a été modifié. » (409, A3-01) ;
 - si la demande redevient active (refus ou annulation défaits), les contrôles métier sont refaits sous le même verrou que l'envoi ; s'ils échouent, l'annulation est refusée avec le message habituel (A3-02).
 
-**Contrôles métier (A3-02) :** quota de télétravail, une demande par jour, chevauchement des congés et des astreintes, période de la campagne sont faits par `check_request` dans `workflow.py`, sous verrou de la fiche du demandeur (ordre des verrous : fiche, puis demande). Les formulaires ne vérifient que leurs champs ; la vue appelle le service et affiche ses erreurs (`RequestValidationError`). Une violation de contrainte en base devient un message, jamais une erreur 500.
+**Contrôles métier (A3-02) :** quota de télétravail, une demande par jour, chevauchement des congés et des astreintes, période de la campagne sont faits par `check_request` (`apps/approvals/workflow/checks.py`), sous verrou de la fiche du demandeur (ordre des verrous : fiche, puis demande). Les formulaires ne vérifient que leurs champs ; la vue appelle le service et affiche ses erreurs (`RequestValidationError`). Une violation de contrainte en base devient un message, jamais une erreur 500.
 
 Les e-mails liés à une action annulable sont mis en file avec un **délai de 45 secondes** et ne partent pas si l'action a été annulée entre-temps.
 
