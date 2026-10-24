@@ -21,6 +21,7 @@ from django.utils.translation import gettext as _
 
 from apps.core import audit
 from apps.core.models import Service, Site
+from apps.core.text import strip_unsafe_characters
 from apps.people.models import ContractType, Employee, EmployeeChange
 from apps.people.services import status_for_arrival
 
@@ -133,7 +134,9 @@ def read(uploaded) -> list[ImportRow]:
         reader.fieldnames = header
         rows = []
         for raw in reader:
-            values = {name: (raw.get(name) or "").strip() for name in COLUMNS}
+            values = {
+                name: strip_unsafe_characters(raw.get(name) or "").strip() for name in COLUMNS
+            }
             if not any(values.values()):
                 continue
             rows.append(ImportRow(line=reader.line_num, values=values))
