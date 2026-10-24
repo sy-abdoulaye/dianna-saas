@@ -95,14 +95,14 @@ Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme
 
 ## Questionnaires (`surveys`)
 
-**Survey** (T) : `public_id`, `title`, `audience` (all, managers, new_hires), `due_date` (facultative), `status` (draft, open, closed), `created_by`, `published_at`, `closed_at`, `anonymity_threshold` (3 par défaut, contrainte ≥ 3).
+**Survey** (T) : `public_id`, `title`, `audience` (all, managers, new_hires), `due_date` (facultative), `status` (draft, open, closed), `created_by`, `published_at`, `closed_at`, `anonymity_threshold` (5 par défaut, contrainte ≥ 5, L6-17).
 **Question** (T) : `survey`, `order`, `kind` (scale, text), `label` (300). Unique (survey, order).
 **SurveyInvitation** (T) : `survey`, `employee`. Unique (survey, employee). Public figé à la publication (L6-04).
 **SurveyReceipt** (T) : `survey`, `employee` (horodatage `created_at`). Unique (survey, employee). Sert uniquement à empêcher une seconde réponse ; jamais affiché.
 **SurveyResponse** (`TenantBase`) : clé primaire **UUID aléatoire**, `survey`. **Aucun lien vers le salarié, aucune date** (`submitted_on` supprimé, L6-02).
 **Answer** (`TenantBase`) : clé primaire UUID aléatoire, `response`, `question`, `score` (1 à 5, nul), `text`, `comment` (justification facultative de la note). Unique (response, question).
 
-`SurveyResponse` et `Answer` héritent de `TenantBase`, l'isolation sans le mixin `Timestamped` (pas d'horodatage, pas de clé séquentielle) : sinon on retrouverait le répondant en rapprochant l'ordre des reçus et des réponses. Le reçu et la réponse sont créés dans la même transaction, sans clé commune. Des tests vérifient qu'aucun champ ne les relie, qu'aucun ne permet de les trier dans l'ordre des reçus, et que répondre n'écrit ni journal, ni notification, ni tâche. Risque résiduel en base : L1-09.
+`SurveyResponse` et `Answer` héritent de `TenantBase`, l'isolation sans le mixin `Timestamped` (pas d'horodatage, pas de clé séquentielle) : sinon on retrouverait le répondant en rapprochant l'ordre des reçus et des réponses. Le reçu et la réponse sont créés dans la même transaction, sans clé commune. Des tests vérifient qu'aucun champ ne les relie, qu'aucun ne permet de les trier dans l'ordre des reçus, et que répondre n'écrit ni journal, ni notification, ni tâche. Risque résiduel en base : L1-09 (ordre physique ; `xmin` du reçu = `xmin` de la réponse + 1, le reçu étant écrit dans une sous-transaction ; sauvegardes).
 
 ## Carrière (`careers`)
 

@@ -25,10 +25,10 @@ Adresses en développement : vitrine http://localhost:8000, Exemple SAS http://e
 - Campagne « Été 2027 » ouverte, avec des vœux qui se chevauchent dans le service Support client (conflit visible).
 - Astreintes et interventions ; justificatifs de transport (un refusé, plusieurs en attente) au lot 5.
 - 15 équipements (attribués, en stock, en réparation) et 3 demandes de matériel.
-- 5 annonces (2 épinglées), 4 questionnaires (ouvert, ouvert avec moins de 3 réponses, clos, brouillon) avec commentaires sur les notes.
+- 5 annonces (2 épinglées), 4 questionnaires (ouvert, clos avec 3 réponses donc résultats masqués, clos avec résultats visibles, brouillon) avec commentaires sur les notes.
 - 10 entretiens à toutes les étapes, fiches de suivi avec une note privée de Louise.
 - 4 comptes rendus d'intervention : validé, brouillon, envoyé (à valider par Louise), complément demandé.
 
-**Écarts volontaires avec le prototype :** le questionnaire « Retour sur l'intégration » n'a que 2 réponses (ses résultats resteront masqués) ; l'annonce « Nouvelle politique de télétravail » ne mentionne pas de délai de déclaration (M-01) ; les arrivées de Hugo Fabre, Samuel Perrin et Pierre Blanc sont recalculées à moins d'un an du chargement, pour que le public « Arrivés depuis moins d'un an » compte 3 personnes (L6-15) ; le brouillon « Besoins de formation 2027 » a une question notée ; les résultats des questionnaires ouverts ne sont pas affichés avant leur clôture (L6-01), seuls ceux de « Enquête télétravail 2025 » (clos, 18 réponses) le sont.
+**Écarts volontaires avec le prototype :** le questionnaire « Retour sur l'intégration » est clos avec 3 réponses, sous le seuil de 5 (résultats masqués) ; l'annonce « Nouvelle politique de télétravail » ne mentionne pas de délai de déclaration (M-01) ; les arrivées de Nina Lambert, Hugo Fabre, Samuel Perrin, Chloé Renard et Pierre Blanc sont recalculées à moins d'un an du chargement, pour que le public « Arrivés depuis moins d'un an » compte 5 personnes (L6-15) ; le brouillon « Besoins de formation 2027 » a une question notée ; les résultats des questionnaires ouverts ne sont pas affichés avant leur clôture (L6-01), seuls ceux de « Enquête télétravail 2025 » (clos, 18 réponses) le sont.
 
 Les justificatifs et photos de démonstration sont des fichiers générés (PDF d'une page, avatars à initiales), jamais de vraies pièces.

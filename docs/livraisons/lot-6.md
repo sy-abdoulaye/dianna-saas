@@ -18,9 +18,9 @@ Date : 24 octobre 2026. Branche : `lot-6`.
   - `button` : classes et attributs ;
   - `seed_demo` : classe `DemoRequestWriter`, une méthode par module ;
   - `pdf.py` : `Path.read_bytes`.
-- **Exceptions `noqa`** (raison sur la ligne) :
+- **Exceptions `noqa`.** Il y en a 21 dans le projet (14 dans le code et les réglages, 7 dans les tests), chacune avec sa raison sur la ligne (audit du 25 oct.). Deux sont nées pendant ce lot :
   - `apps/core/templatetags/ui.py`, `button` : `PLR0913`, un argument par attribut HTML, API utilisée par tous les gabarits ;
-  - `apps/core/templatetags/ui.py`, `plain_text` (lot 6) : `S308`, `mark_safe` sur un texte déjà échappé par `urlize`.
+  - `apps/core/templatetags/ui.py`, `plain_text` : `S308`, `mark_safe` sur un texte déjà échappé par `urlize`.
 - **CLAUDE.md.** Nouvelle section « Qualité du code ».
 
 ## Ce qui est fait
@@ -45,12 +45,12 @@ Date : 24 octobre 2026. Branche : `lot-6`.
 - **Anonymat réel.**
   - Les réponses (`SurveyResponse`, `Answer`) héritent de `TenantBase`, la nouvelle base sans horodatage (L6-12).
   - Elles ont une clé UUID4 aléatoire, aucune date (`submitted_on` supprimé, L6-02) et aucun lien vers la personne ou le reçu.
-  - Le reçu et la réponse sont créés dans la même transaction.
+  - Le reçu et la réponse sont créés dans la même transaction : la réponse dans la transaction du service, le reçu dans une sous-transaction. Le `xmin` du reçu vaut donc celui de la réponse + 1, ce qui est un lien résiduel en base (L1-09).
   - Répondre n'écrit ni journal, ni notification, ni tâche.
-- **Public figé à la publication** (L6-04). Un public de moins de 3 personnes ne peut pas être publié (L6-05).
+- **Public figé à la publication** (L6-04). Un public de moins de 5 personnes ne peut pas être publié (L6-05, L6-17).
 - **Seuil d'anonymat appliqué partout.**
   - Une seule règle, `results_visible`, par laquelle passe `survey_results`.
-  - Résultats visibles après la clôture ou l'échéance passée, à partir de 3 réponses (L6-01).
+  - Résultats visibles après la clôture ou l'échéance passée, à partir de 5 réponses (L6-01, L6-17).
   - Avant : le nombre de réponses seulement, jamais de noms.
   - Commentaires triés par note décroissante ; à note égale, l'ordre suit la clé aléatoire.
 - **Réponse.**
@@ -77,17 +77,42 @@ Date : 24 octobre 2026. Branche : `lot-6`.
 
 **Démonstration.**
 - Les 5 annonces du prototype (2 épinglées, lectures).
-- Les 4 questionnaires, écrits par les services : ouvert avec 14 réponses, « Intégration » avec 2 réponses, clos avec 18 réponses, brouillon.
+- Les 4 questionnaires, écrits par les services : ouvert avec 14 réponses, « Intégration » clos avec 3 réponses (résultats masqués, seuil de 5), clos avec 18 réponses, brouillon.
 - Écarts : voir `07-donnees-de-demo.md` et L6-15.
 
 **Correctif de stabilité.** L'aide de connexion des parcours attend la fenêtre TOTP suivante si la fenêtre en cours se termine dans moins de 3 s. Un parcours mobile de l'administrateur avait échoué ainsi.
+
+## Corrections de l'audit du lot 6 (25 oct. 2026)
+
+- **Seuil d'anonymat à 5 (L6-17).**
+  - Public minimal de 5 personnes ; résultats et commentaires à partir de 5 réponses.
+  - Contrainte en base ≥ 5, avec la migration `surveys/0002`, qui porte aussi les questionnaires existants à 5.
+  - Raison : à 3, deux répondants qui comparent leurs réponses déduisent celles du troisième.
+  - Démonstration : « Intégration » est clos avec 3 réponses (résultats masqués) ; « Enquête télétravail 2025 » est clos avec 18 réponses (résultats visibles).
+- **Annonce épinglée supprimée (L6-18).**
+  - La suppression retire les notifications dont l'e-mail n'est pas parti, et « Annuler » les recrée sans renvoyer d'e-mail déjà parti.
+  - La tâche d'envoi vérifie que l'objet source existe toujours (registre des sources de notification).
+- **Caractères invisibles (L6-19).** `apps/core/text.py` retire les caractères de contrôle C0 et C1 et les caractères de mise en forme bidirectionnelle. Il est branché sur tous les `forms.CharField` (sauf les mots de passe) et sur l'import CSV. La règle est ajoutée à CLAUDE.md.
+- **Questionnaires.**
+  - « Répondre » disparaît après l'échéance.
+  - Une confirmation ne s'ouvre que si l'action est possible, avec un message d'état exact (L6-20).
+  - « Prolonger l'échéance » est journalisé (L6-21).
+  - Commentaires : 5 par question, puis « Afficher plus » par paquets de 20 (L6-22).
+- **Tests.**
+  - Test renommé `test_response_keys_do_not_follow_the_order_of_receipts`.
+  - Lien résiduel `xmin` documenté par un test, à changer au lot 8.
+  - Nouveaux cas : aucun log lors d'une réponse, commentaires à note égale, jour de l'échéance, annonce épinglée supprimée.
+- **Qualité.**
+  - Chaque `noqa` porte sa raison.
+  - Annotations de type sur `actor`, `viewer` et `employee`.
+  - Les annonces passent au service un objet `AnnouncementData`.
 
 ## Tests
 
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make test` | 748 tests : 746 réussis, 2 sautés (couverture 96 %) ; puis 6 tests de performance |
+| `make test` | 771 tests : 769 réussis, 2 sautés (couverture 96 %) ; puis 6 tests de performance (après l'audit du 25 oct. ; 746 réussis avant) |
 | `make e2e` | 47 parcours, dont : annonce publiée puis lue (texte affiché sans HTML) ; suppression puis « Annuler » ; questionnaire créé, modifié, publié, rempli, résultats masqués puis visibles après la clôture ; largeur mobile des pages Annonces et Questionnaires pour les 4 profils |
 | `make check` | aucune alerte ; `makemigrations --check` avec les réglages de production |
 
@@ -104,10 +129,10 @@ Les deux tests sautés sont les mêmes qu'au lot 5 : S3, sans MinIO local ; rela
 | Ouvrir une annonce la marque comme lue pour cette seule personne et met à jour le compteur | Fait |
 | Un salarié ne voit aucun bouton de gestion et reçoit 403 sur les URL de modification | Fait (manager aussi) |
 | Un message contenant `<script>` est affiché comme du texte | Fait (test et parcours) |
-| Aucune requête ni aucun export ne relie une réponse à une personne | Fait : tests de structure, d'ordre et d'absence de traces ; pas d'export de résultats en V1 |
+| Aucune requête ni aucun export ne relie une réponse à une personne | Fait au niveau de l'application ; risque résiduel L1-09 en base (ordre physique, `xmin` du reçu = `xmin` de la réponse + 1, sauvegardes), documenté par un test |
 | Répondre deux fois est impossible, même en renvoyant le formulaire | Fait (contrainte unique) |
 | Un commentaire saisi apparaît sous sa question, avec sa note | Fait (après la clôture, L6-01) |
-| Avec 2 réponses, les résultats et commentaires sont masqués | Fait |
+| Avec 2 réponses, les résultats et commentaires sont masqués | Fait (seuil porté à 5 : masqués jusqu'à 4 réponses) |
 | Un salarié n'accède pas aux résultats (403) | Fait |
 
 ## Écarts au prototype
@@ -156,11 +181,22 @@ Relevé sur le code des lots 1 à 6. Je n'ai rien repris au-delà de l'étape 0 
 - `people.services._update_employee` : 9 ;
 - 8 : `approvals.exports.campaign_summary`, `files.clean_image`, `equipment.services.assign`, `people.importer.read`, deux `get` de l'annuaire, `people.views.import_people`, `planning.services._cell`, `planning.services.count_today`.
 
+### Points relevés par l'audit (B2)
+
+11. **Boucles de `notify`.** Les notifications d'un même texte à plusieurs personnes sont créées une à une dans `administration/services.py` (fermeture : RH ou administrateurs) et dans `equipment/services.py` (signalement, archivage d'un détenteur), au lieu de `notify_many`.
+12. **Formats de date hors de `dates.py`.**
+    - Le journal exporté utilise `strftime("%d/%m/%Y")` et `strftime("%H:%M")` (`administration/services.py`).
+    - Les noms de fichiers (`{first:%Y-%m}`) et le calendrier ICS ont des formats techniques. Ceux-là peuvent rester, mais il faut les nommer dans `dates.py`.
+13. **Classes d'erreur hors de `ServiceError`.** Huit classes : `WorkflowError`, `AdministrationError`, `PeopleError`, `ExportDeniedError`, `ImportFileError`, `EquipmentError`, `InvitationError`, `UndoError`. `StorageUnavailableError` reste à part : c'est une panne technique, pas un refus métier.
+14. **Rendus `#form` avec 422 écrits à la main.** 21 occurrences dans l'administration, le matériel, les demandes et l'annuaire (`modal_form_response`).
+15. **`components/confirm.html` rendu directement.** Deux fois dans le matériel (`confirm_response`).
+16. **Contexte de l'action.** 27 appels de service passent `actor=request.employee, request=request`. Un petit objet de contexte (personne, adresse IP, requête) passé une seule fois simplifierait les signatures et le journal d'audit.
+
 ### Ce que je propose, et quand
 
-- **Avant le lot 7, en un petit lot de reprise (environ une demi-journée, à couverture de tests égale).**
-  - Points 1 à 7 et 10 : remplacement mécanique par les briques communes.
-  - Point 8 : choisir HX-Location comme règle unique.
+- **Avant le lot 7, en un lot de reprise d'environ une journée**, à couverture de tests égale :
+  - points 1 à 7 et 10 à 16 : remplacement mécanique par les briques communes ;
+  - point 8 : choisir HX-Location comme règle unique de navigation après une action.
 - **Au début du lot 7.** Découper `approvals/workflow.py` en transitions, contrôles et campagnes. Le suivi d'intervention réutilise la validation : c'est le bon moment.
 - **Lot 8.**
   - Catalogue `locale/fr` (point 9).

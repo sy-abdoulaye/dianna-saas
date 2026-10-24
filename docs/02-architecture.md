@@ -159,7 +159,7 @@ Services sous verrou de l'équipement (`select_for_update`), historique `Equipme
 
 ## Tâches quotidiennes
 
-`manage.py enqueue_daily_tasks` met en file, pour chaque entreprise active, la relance des abonnements annuels de transport (L5-12), exécutée par le travailleur. Le service `scheduler` du profil `taches` l'enchaîne avec `purge_task_results` une fois par jour ; en production, au lot 8.
+`manage.py enqueue_daily_tasks` met en file, pour chaque entreprise active, la relance des abonnements annuels de transport (L5-12) et la clôture des questionnaires échus (L6-06), exécutées par le travailleur. Le service `scheduler` du profil `taches` l'enchaîne avec `purge_task_results` une fois par jour ; en production, au lot 8. Sans planificateur en production avant le lot 8, un questionnaire échu garde le statut « Ouvert » : il refuse quand même les réponses et ses résultats deviennent visibles (échéance passée), mais il faut le clore à la main pour que son statut change.
 
 ## HTMX : modèles d'interaction
 
