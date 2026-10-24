@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.core import audit
 from apps.core.csv_export import csv_content
+from apps.core.dates import format_date
 from apps.core.errors import ServiceError
 from apps.core.files import delete_after_commit, file_writes
 from apps.core.models import AuditLog, Company, Service, Site
@@ -165,8 +166,8 @@ def export_journal_csv(*, q, start, end, actor, request=None) -> str:
         for entry in entries:
             moment = timezone.localtime(entry.created_at)
             yield [
-                moment.strftime("%d/%m/%Y"),
-                moment.strftime("%H:%M"),
+                format_date(moment, "numeric"),
+                format_date(moment, "time"),
                 entry.actor.full_name if entry.actor else _("Dianna"),
                 entry.action,
                 entry.summary,
@@ -176,7 +177,7 @@ def export_journal_csv(*, q, start, end, actor, request=None) -> str:
     audit.log(
         "audit.exported",
         _("Journal exporté du %(start)s au %(end)s")
-        % {"start": start.strftime("%d/%m/%Y"), "end": end.strftime("%d/%m/%Y")},
+        % {"start": format_date(start, "numeric"), "end": format_date(end, "numeric")},
         actor=actor,
         request=request,
     )

@@ -6,7 +6,7 @@ Dans un gabarit : {{ day|fr_date:"long" }} ; en Python : format_date(day, "long"
 """
 
 import re
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -24,6 +24,7 @@ STYLES = {
     "long_time": "j F Y à H:i",
     "short_time": "j N à H:i",
     "short_year_time": "j N Y à H:i",
+    "time": "H:i",  # 09:05
 }
 # Styles avec le jour de la semaine abrégé : « mer. 21 oct. », « mer. 21/10 ».
 WEEKDAY_STYLES = {"weekday_short": "j N", "weekday_numeric": "d/m"}
@@ -45,3 +46,26 @@ def _first(value, text: str) -> str:
     """« 1 novembre » → « 1er novembre » (seulement le jour du mois, suivi du nom du mois)."""
     day = value.day if isinstance(value, date) else None
     return FIRST.sub("1er ", text, count=1) if day == 1 else text
+
+
+# ---------- Formats techniques : noms de fichiers et iCalendar, jamais affichés ----------
+
+
+def month_stamp(day: date) -> str:
+    """« 2026-10 » (nom d'un export mensuel)."""
+    return f"{day:%Y-%m}"
+
+
+def day_stamp(day: date) -> str:
+    """« 2026-10-21 » (nom d'un export sur une période)."""
+    return f"{day:%Y-%m-%d}"
+
+
+def compact_day_stamp(day: date) -> str:
+    """« 20261021 » (nom du journal exporté, date iCalendar)."""
+    return f"{day:%Y%m%d}"
+
+
+def ics_utc_stamp(moment: datetime) -> str:
+    """« 20261021T080500Z » : horodatage iCalendar en UTC."""
+    return moment.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")

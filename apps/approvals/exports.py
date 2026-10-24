@@ -25,7 +25,7 @@ from apps.approvals.models import (
 )
 from apps.core import audit, permissions
 from apps.core.csv_export import csv_content
-from apps.core.dates import format_date
+from apps.core.dates import format_date, month_stamp
 from apps.core.errors import ServiceError
 from apps.core.models import Service
 from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Number, Styled, xlsx_content
@@ -113,7 +113,7 @@ def telework_month(viewer, month: date, fmt: str, *, request=None):
         for person in people
     ]
     _log(viewer, _("Récapitulatif du télétravail"), month_label(month), fmt, request)
-    return _file(fmt, _("Télétravail"), header, rows, f"teletravail-{first:%Y-%m}")
+    return _file(fmt, _("Télétravail"), header, rows, f"teletravail-{month_stamp(first)}")
 
 
 def _in_post_or(by_person):
@@ -165,7 +165,7 @@ def on_call_month(viewer, month: date, fmt: str, *, request=None):
         )
     ]
     _log(viewer, _("Export paie des astreintes"), month_label(month), fmt, request)
-    return _file(fmt, _("Astreintes"), header, rows, f"astreintes-{first:%Y-%m}")
+    return _file(fmt, _("Astreintes"), header, rows, f"astreintes-{month_stamp(first)}")
 
 
 # ---------- Transport (paie) ----------
@@ -225,7 +225,7 @@ def transport_month(viewer, month: date, fmt: str, *, request=None):
             ]
         )
     _log(viewer, _("Export paie des justificatifs de transport"), month_label(month), fmt, request)
-    return _file(fmt, _("Transport"), header, rows, f"transport-{first:%Y-%m}")
+    return _file(fmt, _("Transport"), header, rows, f"transport-{month_stamp(first)}")
 
 
 # ---------- Synthèse de campagne ----------

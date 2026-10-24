@@ -8,7 +8,7 @@ from django.utils.translation import gettext as _
 from apps.agenda.models import CalendarEvent
 from apps.core import audit
 from apps.core.csv_export import csv_content
-from apps.core.dates import format_date
+from apps.core.dates import day_stamp, format_date
 from apps.core.ics_export import ICS_CONTENT_TYPE, IcsEvent, ics_content
 from apps.core.pdf import PDF_CONTENT_TYPE, render_pdf
 from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Styled, xlsx_content
@@ -37,7 +37,7 @@ def build(viewer, *, first, last, service, fmt, company, people=None):
     header, lines, rows, working = services.export_rows(
         viewer, first, last, service=service, people=people
     )
-    stem = f"planning-{first:%Y-%m-%d}-{last:%Y-%m-%d}"
+    stem = f"planning-{day_stamp(first)}-{day_stamp(last)}"
     if fmt == "csv":
         return csv_content(header, lines), CSV_CONTENT_TYPE, f"{stem}.csv"
     if fmt == "xlsx":

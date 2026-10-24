@@ -24,6 +24,7 @@ from apps.administration.forms import (
 )
 from apps.core import permissions
 from apps.core.access import enabled_modules, permission_required
+from apps.core.dates import compact_day_stamp
 from apps.core.files import signed_url
 from apps.core.htmx import Toast, is_htmx, toast_response, trigger
 from apps.core.models import AuditLog, Company, Module
@@ -474,6 +475,6 @@ def journal_export(request):
         q=q, start=start, end=end, actor=request.employee, request=request
     )
     response = HttpResponse(content, content_type="text/csv; charset=utf-8")
-    filename = f"journal-{start:%Y%m%d}-{end:%Y%m%d}.csv"
+    filename = f"journal-{compact_day_stamp(start)}-{compact_day_stamp(end)}.csv"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
