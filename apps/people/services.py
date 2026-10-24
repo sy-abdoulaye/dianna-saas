@@ -234,7 +234,7 @@ def archive(employee: Employee, *, actor, departure_date=None, request=None) -> 
     employee.status = EmployeeStatus.LEFT
     employee.departure_date = departure_date or timezone.localdate()
     employee.save(update_fields=["status", "departure_date", "updated_at"])
-    if employee.user_id:
+    if employee.user is not None:
         employee.user.is_active = False
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
@@ -263,7 +263,7 @@ def undo_archive(employee: Employee, previous: dict, *, actor, request=None) -> 
         date.fromisoformat(previous["departure_date"]) if previous["departure_date"] else None
     )
     employee.save(update_fields=["status", "departure_date", "updated_at"])
-    if employee.user_id:
+    if employee.user is not None:
         employee.user.is_active = True
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
@@ -283,7 +283,7 @@ def reactivate(employee: Employee, *, actor, request=None) -> None:
     employee.status = EmployeeStatus.ACTIVE
     employee.departure_date = None
     employee.save(update_fields=["status", "departure_date", "updated_at"])
-    if employee.user_id:
+    if employee.user is not None:
         employee.user.is_active = True
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(

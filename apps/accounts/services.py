@@ -114,7 +114,7 @@ def mark_send_failed(invitation: Invitation) -> None:
 
 def latest_open_invitations(employees) -> dict:
     """Dernière invitation ni acceptée ni remplacée de chaque fiche : {employee_id: invitation}."""
-    latest = {}
+    latest: dict[int, Invitation] = {}
     for invitation in Invitation.objects.filter(
         employee__in=employees, accepted_at__isnull=True, revoked_at__isnull=True
     ).order_by("-created_at", "-pk"):

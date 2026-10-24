@@ -13,6 +13,7 @@ from apps.agenda.models import CalendarEvent
 from apps.approvals import workflow
 from apps.approvals.kinds import kind_of
 from apps.approvals.models import (
+    ApprovalRequest,
     RequestEvent,
     RequestStatus,
 )
@@ -58,7 +59,7 @@ CAMPAIGN_ALREADY_OPEN = _("Une campagne est déjà ouverte.")
 class TransitionResult:
     """Ce qu'il faut pour annuler immédiatement la transition (jeton signé de 30 s)."""
 
-    request: object
+    request: ApprovalRequest
     previous_status: str = ""
     previous_comment: str = ""
     notification_ids: list = field(default_factory=list)

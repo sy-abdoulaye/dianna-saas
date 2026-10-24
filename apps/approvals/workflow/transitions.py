@@ -26,7 +26,7 @@ def submit(model, requester: Employee, data: dict, *, http_request=None) -> Tran
     liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit avant
     l'INSERT, et il est supprimé si quoi que ce soit échoue ensuite (transaction annulée).
     Lève StorageUnavailableError si le stockage ne répond pas : rien n'est enregistré."""
-    cleanup = []
+    cleanup: list[str] = []
     try:
         return workflow._submit(model, requester, data, http_request=http_request, cleanup=cleanup)
     except Exception:

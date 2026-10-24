@@ -27,6 +27,8 @@ jobs:
           version: "0.13.1"
       - run: uv sync --frozen
       - run: make lint
+      # Types : bloquant sur tous les services.py et selectors.py (refacto-1).
+      - run: make typecheck
       # make check : vérifications de production (S3 compris) et
       # « makemigrations --check --dry-run » avec les réglages de production.
       - run: make check

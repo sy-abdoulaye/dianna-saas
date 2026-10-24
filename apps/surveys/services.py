@@ -121,7 +121,7 @@ def create_draft(data: DraftData, *, actor: Employee, request=None) -> Survey:
     return survey
 
 
-STATE_MESSAGES = {
+STATE_MESSAGES: dict[str, str] = {
     Survey.Status.DRAFT: _("Ce questionnaire n'est pas encore publié."),
     Survey.Status.OPEN: _("Ce questionnaire est déjà publié."),
     Survey.Status.CLOSED: _("Ce questionnaire est déjà clos."),

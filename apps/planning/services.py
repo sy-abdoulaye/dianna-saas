@@ -224,7 +224,7 @@ def leave_types(source_ids) -> dict:
 
 def _events(employee_ids, first, last):
     """{(employee_id, jour): {type: (statut, libellé du congé)}} pour la période (2 requêtes)."""
-    found = {}
+    found: dict[tuple, dict] = {}
     rows = list(
         CalendarEvent.objects.filter(
             employee_id__in=employee_ids, start__lte=last, end__gte=first
@@ -317,7 +317,7 @@ def count_today(people, today, viewer=None) -> dict:
     counts = {SITE: 0, TELEWORK: 0, LEAVE: 0, "on_call": 0}
     if not people:
         return counts
-    kinds = {}
+    kinds: dict[int, dict[str, str]] = {}
     for employee_id, kind, status in CalendarEvent.objects.filter(
         employee_id__in=[p[0] for p in people], start__lte=today, end__gte=today
     ).values_list("employee_id", "kind", "status"):

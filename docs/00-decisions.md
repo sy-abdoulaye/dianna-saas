@@ -272,6 +272,12 @@ Réponses aux questions Q1 à Q11 de la préparation du lot 6, et choix faits pe
 
 Aucune nouvelle dépendance au lot 6.
 
+## Reprise technique refacto-1 (26 oct. 2026)
+
+| N° | Sujet | Décision | Statut |
+|---|---|---|---|
+| R1-01 | Vérification des types | mypy **2.4.0** et django-stubs **6.1.2** (avec django-stubs-ext 6.1.2), dépendances de développement (accord du 26 oct. 2026). `make typecheck`, bloquant dans l'intégration continue, sur tous les `services.py`, `selectors.py` et le moteur des demandes (`apps/approvals/workflow/`). Le reste du code est vérifié au lot 8. Bornes : `mypy>=2.4,<3`, `django-stubs[compatible-mypy]>=6.1,<6.2` | Validé (26 oct. 2026) |
+
 ## Pour plus tard
 
 - **Lot 7 :** un manager ne signe pas son propre entretien côté manager ; la note de suivi d'un salarié est limitée au type « Souhait ».
