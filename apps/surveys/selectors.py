@@ -8,6 +8,7 @@ répondants ni des non-répondants."""
 from dataclasses import dataclass, field
 from datetime import date
 
+from django.db import connection, transaction
 from django.db.models import (
     BooleanField,
     Count,
@@ -180,8 +181,22 @@ def _text_result(question: Question) -> TextResult:
     return TextResult(question, list(texts[:PREVIEW_SIZE]), texts.count())
 
 
+def _share_lock(survey: Survey) -> None:
+    """Verrou partagé sur le questionnaire (SELECT … FOR SHARE, que Django n'expose pas) :
+    une lecture des résultats attend qu'une réponse en cours, qui tient le verrou exclusif
+    (submit_answers), soit validée ou refusée. Plusieurs lectures ne s'attendent pas entre
+    elles. Course à minuit : aucune réponse ne peut entrer après une lecture des résultats."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT 1 FROM surveys_survey WHERE id = %s AND company_id = %s FOR SHARE",
+            [survey.pk, survey.company_id],
+        )
+
+
+@transaction.atomic
 def survey_results(survey: Survey, today: date) -> Results | None:
     """Résultats agrégés, ou None s'ils ne peuvent pas être affichés (results_visible)."""
+    _share_lock(survey)
     responses, invited = participation(survey)
     if not results_visible(survey, today, responses):
         return None
@@ -192,12 +207,14 @@ def survey_results(survey: Survey, today: date) -> Results | None:
     return Results(responses, invited, items)
 
 
+@transaction.atomic
 def more_written_answers(
     survey: Survey, order: int, start: int, today: date
 ) -> tuple[Question, list, int] | None:
     """Suite des commentaires (ou réponses libres) d'une question à partir de `start` :
     (question, paquet, nombre total). None si les résultats ne sont pas visibles : même
     règle que la page de résultats (results_visible)."""
+    _share_lock(survey)
     responses, _invited = participation(survey)
     question = survey.questions.filter(order=order).first()
     if question is None or not results_visible(survey, today, responses):

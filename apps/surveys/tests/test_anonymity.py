@@ -113,3 +113,64 @@ def test_answering_writes_no_log_line(company_a, open_survey, caplog):
     with caplog.at_level(logging.DEBUG):
         answer(survey, person, comments=("Commentaire", ""), text="Réponse libre")
     assert caplog.records == []
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("read", ["results", "more"])
+def test_reading_results_waits_for_an_answer_in_progress(company_a, open_survey, read):
+    """Course à minuit (deux connexions réelles) : une réponse en cours tient le verrou
+    exclusif du questionnaire ; une lecture des résultats (verrou partagé) attend qu'elle soit
+    validée, et ne peut donc jamais précéder une réponse qui entrerait ensuite."""
+    import threading
+    import time
+
+    from django.db import connection, transaction
+    from django.utils import timezone
+
+    from apps.core.models import Company
+    from apps.core.tenancy import tenant_context
+    from apps.surveys import selectors, services
+    from apps.surveys.models import Question, Survey
+
+    survey = open_survey()
+    person = invited_people(survey)[0]
+    company = Company.objects.get(pk=company_a.company.pk)
+    locked, events = threading.Event(), []
+
+    def answer_slowly():
+        try:
+            with tenant_context(company), transaction.atomic():
+                current = Survey.objects.select_for_update().get(pk=survey.pk)
+                locked.set()
+                time.sleep(0.5)
+                scores = {
+                    q.pk: {"score": 4}
+                    for q in Question.objects.filter(survey=current, kind=Question.Kind.SCALE)
+                }
+                services.submit_answers(current, person, scores)
+            events.append(("answer committed", time.monotonic()))
+        finally:
+            connection.close()
+
+    def read_results():
+        try:
+            locked.wait(5)
+            with tenant_context(company):
+                current = Survey.objects.get(pk=survey.pk)
+                if read == "results":
+                    selectors.survey_results(current, timezone.localdate())
+                else:
+                    selectors.more_written_answers(current, 1, 0, timezone.localdate())
+            events.append(("results read", time.monotonic()))
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=answer_slowly), threading.Thread(target=read_results)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(10)
+    assert [name for name, _at in sorted(events, key=lambda e: e[1])] == [
+        "answer committed",
+        "results read",
+    ]

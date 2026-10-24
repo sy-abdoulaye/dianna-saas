@@ -333,6 +333,8 @@ def submit_answers(survey: Survey, employee: Employee, raw: dict) -> None:
     Le reçu (qui a répondu) et la réponse (ce qui a été répondu) sont créés dans la même
     transaction, sans clé commune ; une seconde réponse est refusée par la contrainte
     unique du reçu, même si le formulaire est renvoyé."""
+    # Verrou exclusif AVANT de lire la date : une lecture des résultats en cours (verrou
+    # partagé, selectors._share_lock) passe d'abord, puis la date est relue (course à minuit).
     survey = Survey.objects.select_for_update().get(pk=survey.pk)
     if not accepts_answers(survey, timezone.localdate()):
         raise SurveyError(NOT_OPEN)
