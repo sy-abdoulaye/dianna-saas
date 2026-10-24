@@ -10,6 +10,10 @@
     « Filtrer ».
   - Bouton « Réinitialiser » ; no_reset=True pour ne pas l'afficher.
   - extra_template : gabarit inclus en fin de barre (choix d'affichage, action principale).
+  Déclencheur « input » sans le modificateur « changed » : celui-ci compare la valeur de
+  l'élément à la précédente ; celle d'un bouton radio ne change jamais, et un second clic
+  sur « Mois » ou « Cartes » était ignoré. Un champ texte n'émet « input » que si son texte
+  change.
 {% endcomment %}
 <form class="filters"
       method="get"
@@ -20,7 +24,7 @@
         hx-get="{{ action }}"
         hx-target="{{ target|default:'#results' }}"
         hx-push-url="true"
-        hx-trigger="input changed delay:300ms, submit"
+        hx-trigger="input delay:300ms, submit"
         hx-sync="this:replace"
       {% endif %}>
   {% for field in form.hidden_fields %}{{ field }}{% endfor %}
