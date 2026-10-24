@@ -1,8 +1,8 @@
 {% for row in rows %}
   {% if question.kind == "scale" %}
-    {% include "surveys/partials/answer_item.html" with score=row.0 text=row.1 %}
+    {% include "surveys/partials/answer_item.html" with score=row.0 text=row.1 focus_on_load=forloop.first %}
   {% else %}
-    {% include "surveys/partials/answer_item.html" with score=None text=row %}
+    {% include "surveys/partials/answer_item.html" with score=None text=row focus_on_load=forloop.first %}
   {% endif %}
 {% endfor %}
 {% if next_start %}{% include "surveys/partials/more_button.html" %}{% endif %}

@@ -147,3 +147,40 @@ def test_survey_from_draft_to_results_after_closing(browser, urls, company_a, co
     shot(page, "questionnaire-resultats")
     hr.close()
     assert console_errors == []
+
+
+def test_show_more_moves_the_keyboard_focus_to_the_first_loaded_comment(
+    page, urls, company_a, console_errors
+):
+    """WCAG 2.4.3 : après « Afficher plus » (clavier), le focus va sur le premier commentaire
+    chargé au lieu d'être perdu avec le bouton remplacé."""
+    people = [
+        EmployeeFactory(company=company_a.company, last_name=f"Avis{index}", user=None)
+        for index in range(12)
+    ]
+    with tenant_context(company_a.company):
+        survey = services.create_draft(
+            services.DraftData("Ambiance", "all", None, ["Je me sens bien."]),
+            actor=company_a.hr,
+        )
+        services.publish(survey, actor=company_a.hr)
+        question = survey.questions.get(order=1)
+        for index, person in enumerate(people):
+            services.submit_answers(
+                survey,
+                person,
+                {question.pk: {"score": 4, "comment": f"Commentaire numéro {index:02d}"}},
+            )
+        services.close(Survey.objects.get(pk=survey.pk), actor=company_a.hr)
+    sign_in(page, urls, company_a.hr)
+    page.goto(urls(f"/questionnaires/{survey.public_id}/"))
+    more = page.get_by_role("button", name="Afficher plus (7 restants)")
+    more.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("main")).to_contain_text("Commentaires (12)")
+    expect(more).to_have_count(0)
+    focused = page.locator(":focus")
+    expect(focused).to_have_attribute("tabindex", "-1")
+    expect(focused).to_contain_text("Commentaire numéro")
+    assert page.locator(".comments li").count() == 12
+    assert console_errors == []
