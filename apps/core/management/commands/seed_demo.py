@@ -897,14 +897,13 @@ class DemoRequestWriter:
         from apps.core import notifications
         from apps.core.models import Notification
 
-        for validator in workflow.first_validators(request):
-            notifications.notify(
-                validator,
-                f"{request.requester.full_name} : {request._meta.verbose_name} à valider",
-                url=workflow._module_url(request, "a-valider"),
-                kind=Notification.Kind.REQUEST,
-                source=request,
-            )
+        notifications.notify_many(
+            workflow.first_validators(request),
+            f"{request.requester.full_name} : {request._meta.verbose_name} à valider",
+            url=workflow._module_url(request, "a-valider"),
+            kind=Notification.Kind.REQUEST,
+            source=request,
+        )
 
 
 def demo_proof(name: str, data: bytes, mime: str) -> dict:

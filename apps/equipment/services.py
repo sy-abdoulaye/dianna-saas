@@ -336,8 +336,7 @@ def report_issue(item, *, reporter, description, request=None) -> EquipmentIssue
         "name": reporter.full_name,
         "item": _label(item),
     }
-    for person in _hr():
-        notifications.notify(person, text, url="/materiel/?onglet=signalements")
+    notifications.notify_many(_hr(), text, url="/materiel/?onglet=signalements")
     audit.log(
         "equipment.issue_reported",
         _("Problème signalé : %(item)s") % {"item": _label(item)},
@@ -409,6 +408,5 @@ def alert_hr_on_departure(employee, *, actor) -> int:
     if len(text) > 255:
         text = text[:254] + "…"
     recipients = [p for p in _hr() if actor is None or p.pk != actor.pk] or _hr()
-    for person in recipients:
-        notifications.notify(person, text, url="/materiel/?onglet=parc")
+    notifications.notify_many(recipients, text, url="/materiel/?onglet=parc")
     return len(items)

@@ -479,17 +479,15 @@ def _notify_validators(request, validators) -> list[int]:
         "kind": kind.lower,
         "summary": summary(request),
     }
-    return [
-        _notify(
-            v,
-            text,
-            _module_url(request, kind.todo_tab),
-            Notification.Kind.REQUEST,
-            email_subject=_("Demande à valider : %(kind)s") % {"kind": kind.lower},
-            request=request,
-        )
-        for v in validators
-    ]
+    created = notifications.notify_many(
+        validators,
+        text,
+        _module_url(request, kind.todo_tab),
+        Notification.Kind.REQUEST,
+        email_subject=_("Demande à valider : %(kind)s") % {"kind": kind.lower},
+        source=request,
+    )
+    return [notification.pk for notification in created]
 
 
 def _notify_requester(request, verb: str, reason: str = "", *, email: bool = True) -> int:

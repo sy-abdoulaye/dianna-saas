@@ -82,7 +82,7 @@ def publish(data: AnnouncementData, *, actor: Employee, request=None) -> Announc
     return announcement
 
 
-def _notify(announcement: Announcement, people: QuerySet[Employee]) -> int:
+def _notify(announcement: Announcement, people: QuerySet[Employee]) -> list[Notification]:
     """Notification « Nouvelle annonce » ; e-mail 45 s plus tard si elle est épinglée."""
     text = _("Nouvelle annonce : %(title)s") % {"title": announcement.title}
     return notifications.notify_many(

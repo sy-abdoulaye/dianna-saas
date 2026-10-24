@@ -265,8 +265,7 @@ def add_closure(*, day, label, site, actor, request=None):
                 role=Role.ADMIN, status__in=IN_POST_STATUSES, user__is_active=True
             ).select_related("user")
         )
-        for person in recipients:
-            notifications.notify(person, text, url=url, kind="info")
+        notifications.notify_many(recipients, text, url=url, kind="info")
     return closure, concerned
 
 

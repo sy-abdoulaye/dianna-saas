@@ -165,12 +165,11 @@ def request_renewal(invitation: Invitation, *, request=None) -> bool:
     admins = Employee.objects.filter(role=Role.ADMIN, user__is_active=True).exclude(
         status=EmployeeStatus.LEFT
     )
-    for admin in admins:
-        notifications.notify(
-            admin,
-            _("%(name)s demande une nouvelle invitation.") % {"name": employee.full_name},
-            kind="account",
-        )
+    notifications.notify_many(
+        admins.select_related("user"),
+        _("%(name)s demande une nouvelle invitation.") % {"name": employee.full_name},
+        kind="account",
+    )
     audit.log(
         "account.invitation_renewal_requested",
         _("Nouvelle invitation demandée par %(name)s") % {"name": employee.full_name},
