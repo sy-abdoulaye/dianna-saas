@@ -75,6 +75,19 @@ Reprise technique avant le lot 7, en deux temps.
   - Un jeton présenté à l'URL d'une autre application donne une page absente.
   - Une erreur de l'annulation d'un archivage, qui donnait une erreur 500, donne maintenant un refus (409).
 
+### Avant la vérification (25 oct.)
+
+- **Planning : second clic ignoré sur « Semaine » ou « Mois ».**
+  - Le défaut existait aussi sur `main` : je l'ai reproduit avec le même parcours sur une copie de `main`. Il venait des barres de filtres du planning et de l'annuaire, avant la brique commune.
+  - Cause : le déclencheur HTMX `input changed`. Le modificateur `changed` n'envoie la requête que si la valeur de l'élément qui émet l'événement a changé ; celle d'un bouton radio (« mois ») ne change jamais, et un second clic sur le même bouton était ignoré.
+  - Correction dans la brique commune (`input delay:300ms`) : elle vaut pour tout sélecteur segmenté (planning, annuaire). Un champ texte n'émet « input » que si son texte change : le modificateur n'apportait rien.
+  - Parcours ajoutés (`test_round_trips.py`) : Semaine, Mois, Semaine, Mois, puis deux retours ; Liste, Cartes, Liste, Cartes, puis deux retours. La vue affichée, le bouton coché et l'adresse sont vérifiés à chaque étape.
+  - Autres contrôles testés en aller-retour, sans défaut : liste à choix d'un filtre, onglets, pagination, période précédente et suivante du planning.
+- **Test du lien résiduel `xmin` rendu déterministe.** Il vérifie une relation toujours vraie : le `xmin` de chaque reçu est supérieur à celui de sa réponse et inférieur à celui de la réponse suivante. L'écart exact de 1 était faux dès qu'une autre transaction s'intercalait. Le test est passé six fois de suite avec une boucle parallèle d'environ 4 600 transactions par seconde. La documentation (L1-09, L6-03, fiches 03 et 09, `lot-6.md`) décrit la même relation.
+- **Moteur des demandes et `ActionContext`.**
+  - `submit`, `approve`, `refuse`, `cancel`, `cancel_approved`, `undo` et les trois fonctions des campagnes prennent `context: ActionContext`, comme les autres services. La personne n'est plus un argument positionnel, et `http_request` disparaît des signatures publiques.
+  - Commit séparé, mécanique : 61 appels dans 8 fichiers de tests.
+
 ## Chiffres avant et après
 
 | Mesure | Avant | Après |
@@ -105,7 +118,6 @@ Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lig
 - Catalogue `locale/fr` (pluriels avec 0).
 - Découpage de `seed_demo` (1 072 lignes) en un module par domaine.
 - Les 11 fonctions entre 8 et 10 de complexité (`ui.control`, `_update_employee`, `count_today`…).
-- Le moteur des demandes (`workflow.approve`, `refuse`…) garde sa convention propre : la personne en argument positionnel et `http_request`, que 61 appels de tests utilisent. Il peut passer à `ActionContext` de la même façon, avec ton accord pour ces tests.
 
 ## Tests
 
@@ -114,5 +126,5 @@ Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lig
 | `make lint` | sans erreur |
 | `make typecheck` | 19 fichiers, aucune erreur |
 | `make test` | 784 tests : 782 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; puis 6 tests de performance |
-| `make e2e` | 50 parcours (2 nouveaux pour la navigation) ; aucun parcours existant modifié |
+| `make e2e` | 56 parcours (2 nouveaux pour la navigation, 6 pour les allers-retours) ; aucun parcours existant modifié |
 | `make check` | aucune alerte |

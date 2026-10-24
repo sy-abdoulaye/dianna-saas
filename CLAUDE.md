@@ -57,6 +57,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Pour tout nouvel écran :
   - fin d'une action réussie : toujours `htmx.after_action` (R1-02) : même page, `refresh` (zone ou `PAGE_CHANGED`) ; autre page, `go_to` (HX-Location) ; formulaire de page complète, `page_form=True`. Jamais `messages` puis `redirect`, ni `HX-Location` ou `HX-Refresh` écrits à la main ;
   - filtres d'une liste : toujours `components/filters.html` avec un formulaire de filtres (options `classic`, `no_reset`, `form_id`, `extra_template`) ;
+  - tout contrôle qui change l'affichage (vue, onglet, filtre, page) : un parcours Playwright en aller-retour, bouton Retour compris (`tests/e2e/test_round_trips.py`) ;
   - annulation immédiate : `undo.register(action, traitement, refresh=…)` et la vue commune `apps.core.views.undo_action` (URL avec le préfixe des actions) ; jamais une nouvelle vue d'annulation ;
   - contrainte de base : l'inscrire dans la table commune (`apps/core/constraints.register`) et traduire l'erreur par `constraints.translate`.
 - Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
