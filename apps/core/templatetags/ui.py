@@ -283,3 +283,20 @@ def plain_text(value) -> str:
 
     escaped = make_links(str(value or ""), nofollow=True, autoescape=True)
     return mark_safe(linebreaks(escaped))  # noqa: S308 (texte déjà échappé par urlize)
+
+
+@register.filter
+def filter_fields(form) -> list:
+    """Champs visibles d'une barre de filtres avec leur rendu : « search » (premier champ
+    texte), « segmented » (boutons radio) ou « field » (liste, date…)."""
+    fields, search_done = [], False
+    for field in form.visible_fields():
+        widget = field.field.widget
+        if isinstance(widget, forms.RadioSelect):
+            kind = "segmented"
+        elif not search_done and isinstance(widget, forms.TextInput):
+            kind, search_done = "search", True
+        else:
+            kind = "field"
+        fields.append((field, kind))
+    return fields

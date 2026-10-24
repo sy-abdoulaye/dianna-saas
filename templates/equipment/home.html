@@ -54,22 +54,8 @@
         {% translate "En réparation" as l3 %}{% include "components/kpi.html" with label=l3 value=kpi_repair %}
       </div>
       <div class="card">
-        <form class="filters" method="get" action="{% url 'equipment:home' %}" role="search">
-          <input type="hidden" name="onglet" value="parc">
-          <div class="field grow">
-            <label class="label" for="park-q">{% translate "Recherche" %}</label>
-            <div class="search-input">{% icon "search" %}<input class="input" id="park-q" type="search" name="q" value="{{ query }}" placeholder="{% translate 'Modèle, n° de série ou personne' %}"></div>
-          </div>
-          <div class="field">
-            <label class="label" for="park-type">{% translate "Type" %}</label>
-            <span class="select-wrap"><select class="select" id="park-type" name="type"><option value="">{% translate "Tous" %}</option>{% for value, label in kinds %}<option value="{{ value }}" {% if value == kind %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></span>
-          </div>
-          <div class="field">
-            <label class="label" for="park-status">{% translate "État" %}</label>
-            <span class="select-wrap"><select class="select" id="park-status" name="etat"><option value="">{% translate "Tous (hors retirés)" %}</option>{% for value, label in statuses %}<option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></span>
-          </div>
-          {% button _("Filtrer") type="submit" %}
-        </form>
+        {% url "equipment:home" as park_url %}
+        {% include "components/filters.html" with form=filter_form action=park_url classic=True no_reset=True %}
         {% if page_obj.paginator.count %}
           {% include "equipment/partials/items_table.html" with items=page_obj.object_list park=True %}
           {% pagination page_obj "#equipment-content" %}

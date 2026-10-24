@@ -36,6 +36,7 @@ from apps.equipment.forms import (
     CloseIssueForm,
     IssueForm,
     ItemForm,
+    ParkFilterForm,
     StockChoiceForm,
 )
 from apps.equipment.models import (
@@ -165,6 +166,7 @@ def _park(request) -> dict:
         "query": q,
         "kind": kind,
         "status": status,
+        "filter_form": ParkFilterForm(request.GET, statuses=EquipmentItem.Status.choices),
         "filtered": bool(q or kind or status),
         "kpi_total": everything.count(),
         "kpi_stock": everything.filter(status=EquipmentItem.Status.IN_STOCK).count(),

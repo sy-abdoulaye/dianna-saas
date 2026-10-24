@@ -19,6 +19,7 @@ from apps.approvals.forms import (
     CampaignForm,
     MonthExportForm,
     ReasonForm,
+    RequestFilterForm,
 )
 from apps.approvals.kinds import KINDS, euros, summary
 from apps.approvals.models import (
@@ -126,13 +127,7 @@ def request_list(request, kind):
         "list_url": url,
         "filtered": bool(q or status),
         "query": q,
-        "status_choices": [
-            ("", _("Tous")),
-            ("pending", _("En attente")),
-            ("approved", _("Validées")),
-            ("refused", _("Refusées")),
-            ("cancelled", _("Annulées")),
-        ],
+        "filter_form": RequestFilterForm(request.GET, tab=tab, mine=tab == TAB_MINE),
         "status": status,
         "new_url": reverse("approvals:new", args=[kind]),
         "is_hr": workflow.is_hr_or_admin(me),

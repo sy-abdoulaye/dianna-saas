@@ -24,7 +24,7 @@ from apps.core.ratelimit import (
     record_export,
 )
 from apps.planning import exports, services
-from apps.planning.forms import FORMAT_LABELS, ExportForm
+from apps.planning.forms import FORMAT_LABELS, ExportForm, PlanningFilterForm
 
 VIEWS = {"semaine", "mois"}
 
@@ -95,8 +95,12 @@ def planning(request):
         "query": q,
         "service": service,
         "site": site,
-        "services": Service.objects.order_by("name") if company_wide else [],
-        "sites": Site.objects.order_by("name"),
+        "filter_form": PlanningFilterForm(
+            request.GET,
+            view=view,
+            services_list=Service.objects.order_by("name") if company_wide else None,
+            sites=Site.objects.order_by("name"),
+        ),
         "company_wide": company_wide,
         "scope_label": _("Toute l'entreprise")
         if company_wide

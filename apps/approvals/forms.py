@@ -343,3 +343,38 @@ FORMS = {
     "on_call": OnCallForm,
     "transport": TransportForm,
 }
+
+
+STATUS_FILTER_CHOICES = [
+    ("", _("Tous")),
+    ("pending", _("En attente")),
+    ("approved", _("Validées")),
+    ("refused", _("Refusées")),
+    ("cancelled", _("Annulées")),
+]
+
+
+class RequestFilterForm(forms.Form):
+    """Filtres de la page d'un type de demande. « Mes demandes » : recherche dans le résumé ;
+    autres onglets : nom du collaborateur."""
+
+    onglet = forms.CharField(required=False, widget=forms.HiddenInput)
+    q = forms.CharField(
+        label=_("Recherche"),
+        required=False,
+        widget=forms.TextInput(attrs={"type": "search", "id": "request-q"}),
+    )
+    statut = forms.ChoiceField(
+        label=_("Statut"),
+        required=False,
+        choices=STATUS_FILTER_CHOICES,
+        widget=forms.Select(attrs={"id": "request-status"}),
+    )
+
+    def __init__(self, data, *, tab: str, mine: bool):
+        data = data.copy()
+        data["onglet"] = tab
+        super().__init__(data)
+        self.fields["q"].widget.attrs["placeholder"] = (
+            _("Rechercher dans mes demandes") if mine else _("Nom du collaborateur")
+        )

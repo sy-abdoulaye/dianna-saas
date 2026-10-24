@@ -2,22 +2,7 @@
 {% load i18n ui %}
 {% block admin_content %}
   <div class="card">
-    <form class="filters" method="get" action="{{ results_url }}" role="search" hx-get="{{ results_url }}" hx-target="#results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
-      <div class="field grow">
-        <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
-        <div class="search-input">{% icon "search" %}{% control filter_form.q %}</div>
-      </div>
-      <div class="field">
-        <label class="label" for="{{ filter_form.profil.id_for_label }}">{{ filter_form.profil.label }}</label>
-        {% control filter_form.profil %}
-      </div>
-      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
-      {% button _("Réinitialiser") variant="ghost" href=results_url hx_get=results_url hx_target="#results" hx_push_url="true" data_filters_reset=True %}
-      <div class="ml-auto self-end">
-        {% url "people:create" as invite_url %}
-        {% button _("Inviter un utilisateur") variant="primary" icon="plus" href=invite_url %}
-      </div>
-    </form>
+    {% include "components/filters.html" with form=filter_form action=results_url extra_template="administration/partials/invite_button.html" %}
     <div id="results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="usersChanged from:body, modalClosed from:body" hx-target="this" hx-sync="this:replace" hx-disinherit="*">
       {% partialdef results inline %}
         {% if page_obj.paginator.count %}

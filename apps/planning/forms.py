@@ -120,3 +120,41 @@ class ExportForm(forms.Form):
         if self.company_wide:
             return _("toute l'entreprise")
         return _("mon périmètre")
+
+
+class PlanningFilterForm(forms.Form):
+    """Filtres de la grille : vue, recherche, service (périmètre entreprise), site."""
+
+    vue = forms.ChoiceField(
+        label=_("Vue"),
+        required=False,
+        choices=[("semaine", _("Semaine")), ("mois", _("Mois"))],
+        widget=forms.RadioSelect,
+    )
+    q = forms.CharField(
+        label=_("Recherche"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={"type": "search", "id": "planning-q", "placeholder": _("Filtrer par nom")}
+        ),
+    )
+    service = forms.ChoiceField(
+        label=_("Service"), required=False, widget=forms.Select(attrs={"id": "planning-service"})
+    )
+    site = forms.ChoiceField(
+        label=_("Site"), required=False, widget=forms.Select(attrs={"id": "planning-site"})
+    )
+
+    def __init__(self, data, *, view: str, services_list, sites):
+        data = data.copy()
+        data["vue"] = view
+        super().__init__(data)
+        if services_list is None:
+            del self.fields["service"]
+        else:
+            self.fields["service"].choices = [("", _("Tous les services"))] + [
+                (str(item.pk), item.name) for item in services_list
+            ]
+        self.fields["site"].choices = [("", _("Tous les sites"))] + [
+            (str(item.pk), item.name) for item in sites
+        ]
