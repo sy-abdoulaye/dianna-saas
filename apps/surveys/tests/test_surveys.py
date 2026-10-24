@@ -7,6 +7,7 @@ from datetime import timedelta
 import pytest
 from django.core.management import call_command
 
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Notification
 from apps.core.tenancy import tenant_context
 from apps.surveys import services
@@ -129,7 +130,7 @@ def test_audience_smaller_than_the_threshold_cannot_be_published(client_for, com
     with tenant_context(company_a.company):
         survey = services.create_draft(
             services.DraftData("Intégration", "new_hires", None, ["Mon accueil s'est bien passé."]),
-            actor=company_a.hr,
+            context=ActionContext(company_a.hr),
         )
     EmployeeFactory(company=company_a.company, arrival_date=today() - timedelta(days=30))
     response = client_for(company_a.hr).post(url(survey, "publier/"))
@@ -200,9 +201,10 @@ def test_employee_does_not_see_a_survey_that_is_not_for_them(client_for, company
             report.manager = EmployeeFactory(company=company_a.company, last_name=f"Chef{index}")
             report.save()
         survey = services.create_draft(
-            services.DraftData("Managers", "managers", None, ["Question"]), actor=company_a.hr
+            services.DraftData("Managers", "managers", None, ["Question"]),
+            context=ActionContext(company_a.hr),
         )
-        services.publish(survey, actor=company_a.hr)
+        services.publish(survey, context=ActionContext(company_a.hr))
     client = client_for(company_a.employee)
     assert (
         "Managers" not in client.get("/questionnaires/").content.decode().split('id="results"')[1]
@@ -313,12 +315,13 @@ def test_audience_of_four_is_refused_and_of_five_is_published(company_a):
         for index in range(3):  # + la manager de la fixture = 4
             add_manager(index)
         survey = services.create_draft(
-            services.DraftData("Managers", "managers", None, ["Question"]), actor=company_a.hr
+            services.DraftData("Managers", "managers", None, ["Question"]),
+            context=ActionContext(company_a.hr),
         )
         with pytest.raises(services.SurveyError, match="moins de 5 personnes"):
-            services.publish(survey, actor=company_a.hr)
+            services.publish(survey, context=ActionContext(company_a.hr))
         add_manager(3)
-        assert services.publish(survey, actor=company_a.hr) == 5
+        assert services.publish(survey, context=ActionContext(company_a.hr)) == 5
 
 
 def test_results_appear_at_exactly_five_answers(company_a, open_survey):
@@ -382,7 +385,7 @@ def test_publish_confirmation_is_refused_up_front_when_the_audience_is_too_small
     with tenant_context(company_a.company):
         survey = services.create_draft(
             services.DraftData("Intégration", "new_hires", None, ["Question"]),
-            actor=company_a.hr,
+            context=ActionContext(company_a.hr),
         )
     response = client_for(company_a.hr).get(url(survey, "publier/"))
     assert response.status_code == 409

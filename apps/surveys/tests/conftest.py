@@ -1,6 +1,7 @@
 import pytest
 from django.utils import timezone
 
+from apps.core.context import ActionContext
 from apps.core.tenancy import tenant_context
 from apps.surveys import services
 from apps.surveys.models import Question, Survey
@@ -27,9 +28,9 @@ def open_survey(company_a):
                     ],
                     open_question="Qu'est-ce qui pourrait améliorer votre quotidien ?",
                 ),
-                actor=company_a.hr,
+                context=ActionContext(company_a.hr),
             )
-            services.publish(survey, actor=company_a.hr)
+            services.publish(survey, context=ActionContext(company_a.hr))
             survey.refresh_from_db()
         return survey
 
@@ -53,7 +54,7 @@ def answer(survey, employee, *, scores=(4, 3), comments=("", ""), text=""):
 
 def close(survey, actor):
     with tenant_context(survey.company):
-        services.close(Survey.objects.get(pk=survey.pk), actor=actor)
+        services.close(Survey.objects.get(pk=survey.pk), context=ActionContext(actor))
 
 
 def invited_people(survey):

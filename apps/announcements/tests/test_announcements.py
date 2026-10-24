@@ -7,6 +7,7 @@ import pytest
 
 from apps.announcements import services
 from apps.announcements.models import Announcement, AnnouncementRead
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Notification
 from apps.core.tenancy import tenant_context
 from tests.factories import EmployeeFactory
@@ -35,7 +36,7 @@ def location(response) -> str:
 def publish(company_data, **changes):
     with tenant_context(company_data.company):
         data = services.AnnouncementData(**{**FORM, **changes})
-        return services.publish(data, actor=company_data.hr)
+        return services.publish(data, context=ActionContext(company_data.hr))
 
 
 # ---------- Lecture ----------
@@ -156,7 +157,10 @@ def test_short_message_is_refused(client_for, company_a):
     assert response.status_code == 422
     assert "Le message est trop court (15 caractères minimum)." in response.content.decode()
     with tenant_context(company_a.company), pytest.raises(services.AnnouncementError):
-        services.publish(services.AnnouncementData(**{**FORM, "body": "court"}), actor=company_a.hr)
+        services.publish(
+            services.AnnouncementData(**{**FORM, "body": "court"}),
+            context=ActionContext(company_a.hr),
+        )
 
 
 def test_editing_and_pinning_do_not_notify_again(client_for, company_a):
@@ -266,7 +270,7 @@ def test_email_task_skips_a_notification_whose_announcement_is_gone(company_a, r
 
     with tenant_context(company_a.company):
         announcement = services.publish(
-            services.AnnouncementData(**FORM, pinned=True), actor=company_a.hr
+            services.AnnouncementData(**FORM, pinned=True), context=ActionContext(company_a.hr)
         )
     Announcement.all_companies.filter(pk=announcement.pk).update(
         deleted_at=announcement.published_at

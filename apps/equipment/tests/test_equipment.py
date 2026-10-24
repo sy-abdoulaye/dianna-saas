@@ -7,6 +7,7 @@ import pytest
 from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Company, Notification
 from apps.core.tenancy import tenant_context
 from apps.equipment import services
@@ -126,7 +127,7 @@ def test_two_simultaneous_assignments_give_one_holder(company_a):
         try:
             with tenant_context(company):
                 barrier.wait()
-                services.assign(item, person, actor=hr)
+                services.assign(item, person, context=ActionContext(hr))
                 outcomes.append("ok")
         except services.EquipmentError as error:
             outcomes.append(str(error.message))

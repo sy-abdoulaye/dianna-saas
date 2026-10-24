@@ -12,6 +12,7 @@ from apps.agenda.models import Closure
 from apps.approvals import workflow
 from apps.approvals.models import LeaveRequest, OnCallDeclaration, TeleworkRequest
 from apps.approvals.tests.conftest import next_weekday
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Notification, Site
 from apps.core.tenancy import tenant_context
 from tests.factories import EmployeeFactory
@@ -175,12 +176,15 @@ def test_service_refuses_past_dates_and_duplicates(company_a):
     with tenant_context(company_a.company):
         with pytest.raises(services.ClosureError) as past:
             services.add_closure(
-                day=date(2020, 1, 6), label="Ancien", site=None, actor=company_a.admin
+                day=date(2020, 1, 6),
+                label="Ancien",
+                site=None,
+                context=ActionContext(company_a.admin),
             )
         closure = company_a.requests["closure"]
         with pytest.raises(services.ClosureError) as twice:
             services.add_closure(
-                day=closure.date, label="Doublon", site=None, actor=company_a.admin
+                day=closure.date, label="Doublon", site=None, context=ActionContext(company_a.admin)
             )
     assert str(past.value.message) == "La date est passée."
     assert str(twice.value.message) == "Une fermeture existe déjà ce jour-là pour ce périmètre."
@@ -197,7 +201,7 @@ def test_integrity_error_becomes_a_message(company_a, monkeypatch):
         monkeypatch.setattr(QuerySet, "exists", lambda self: False)
         with pytest.raises(services.ClosureError) as error:
             services.add_closure(
-                day=closure.date, label="Doublon", site=None, actor=company_a.admin
+                day=closure.date, label="Doublon", site=None, context=ActionContext(company_a.admin)
             )
         monkeypatch.undo()
         assert Closure.objects.filter(date=closure.date).count() == 1
@@ -224,7 +228,7 @@ def test_two_simultaneous_closures_for_the_same_day(company_a):
         try:
             with tenant_context(company):
                 barrier.wait()
-                services.add_closure(day=day, label="Pont", site=None, actor=admin)
+                services.add_closure(day=day, label="Pont", site=None, context=ActionContext(admin))
                 outcomes.append("ok")
         except services.ClosureError as error:
             outcomes.append(str(error.message))
@@ -250,6 +254,6 @@ def test_hr_list_is_computed_with_the_closure(company_a):
             requester=company_a.employee, date=day, submitted_at=timezone.now()
         )
         _closure, concerned = services.add_closure(
-            day=day, label="Pont", site=None, actor=company_a.admin
+            day=day, label="Pont", site=None, context=ActionContext(company_a.admin)
         )
     assert [r.requester_id for r in concerned] == [company_a.employee.pk]

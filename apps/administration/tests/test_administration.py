@@ -7,6 +7,7 @@ import json
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Company, CompanyModule, Module, Service
 from apps.core.tenancy import tenant_context
 from apps.people.models import Employee, Role
@@ -125,7 +126,7 @@ def test_demoting_the_last_admin_is_refused(client_for, company_a):
     assert json.loads(response["HX-Trigger"])["toast"]["title"] == "Profil modifié"
     # Il n'en reste qu'un : toute rétrogradation est refusée avec un message explicite.
     with tenant_context(company_a.company), pytest.raises(people.PeopleError) as error:
-        people.change_role(company_a.admin, Role.EMPLOYEE, actor=None)
+        people.change_role(company_a.admin, Role.EMPLOYEE, context=ActionContext(None))
     assert "dernier administrateur actif" in str(error.value.message)
     assert Employee.all_companies.get(pk=company_a.admin.pk).role == Role.ADMIN
 

@@ -18,6 +18,7 @@ from django.utils.functional import empty
 from apps.approvals import workflow
 from apps.approvals.models import TransportProof
 from apps.core import files
+from apps.core.context import ActionContext
 from apps.core.tenancy import tenant_context
 from apps.equipment import services as equipment
 from apps.equipment.models import EquipmentItem
@@ -168,7 +169,7 @@ def test_photo_is_removed_when_the_creation_fails(company_a):
     with tenant_context(company_a.company), pytest.raises(people.PeopleError):
         people.create_employee(
             {"first_name": "x" * 300, "last_name": "Long", "email": "long@exemple.fr"},
-            actor=company_a.admin,
+            context=ActionContext(company_a.admin),
             photo=photo,
         )
     assert stored_files(company_a.company) == before
@@ -217,13 +218,19 @@ def test_integrity_errors_are_translated_by_constraint_name(company_a, monkeypat
 def test_serial_numbers_are_normalized_in_the_service(company_a):
     with tenant_context(company_a.company):
         item = equipment.add_item(
-            kind="laptop", model="X", serial_number="ＡＢ-123", actor=company_a.hr
+            kind="laptop",
+            model="X",
+            serial_number="ＡＢ-123",
+            context=ActionContext(company_a.hr),
         )
         assert item.serial_number == "AB-123"
         for duplicate in ("ab-123", "AB - 123", " a b - 1 2 3 "):
             with pytest.raises(equipment.EquipmentError) as error:
                 equipment.add_item(
-                    kind="laptop", model="X", serial_number=duplicate, actor=company_a.hr
+                    kind="laptop",
+                    model="X",
+                    serial_number=duplicate,
+                    context=ActionContext(company_a.hr),
                 )
             assert str(error.value.message) == "Ce numéro de série existe déjà dans le parc."
         assert EquipmentItem.objects.filter(serial_number="AB-123").count() == 1

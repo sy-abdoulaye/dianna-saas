@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog
 from apps.core.tenancy import tenant_context
 from apps.core.tests.test_files import bomb_png
@@ -296,7 +297,7 @@ def test_last_admin_cannot_be_demoted_from_the_record(client_for, company_a):
         pk=third.pk
     ).update(role=Role.HR)
     with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
-        services.update_employee(third, {"role": Role.EMPLOYEE}, actor=None)
+        services.update_employee(third, {"role": Role.EMPLOYEE}, context=ActionContext(None))
     assert "dernier administrateur actif" in str(error.value.message)
 
 
@@ -329,7 +330,7 @@ def test_update_employee_refuses_a_change_of_ones_own_role(company_a):
     admin = company_a.admin
     EmployeeFactory(company=company_a.company, role=Role.ADMIN)
     with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
-        services.update_employee(admin, {"role": Role.EMPLOYEE}, actor=admin)
+        services.update_employee(admin, {"role": Role.EMPLOYEE}, context=ActionContext(admin))
     assert str(error.value.message) == "Vous ne pouvez pas modifier votre propre profil."
     assert Employee.all_companies.get(pk=admin.pk).role == Role.ADMIN
 
@@ -549,7 +550,7 @@ def test_hr_cannot_archive_themselves_nor_the_last_admin(client_for, company_a):
     assert "Seul un administrateur peut archiver un administrateur." in admin.content.decode()
     # Le dernier administrateur reste protégé, même hors requête (plateforme, commande).
     with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
-        services.archive(company_a.admin, actor=None)
+        services.archive(company_a.admin, context=ActionContext(None))
     assert "dernier administrateur actif" in str(error.value.message)
 
 
@@ -754,7 +755,7 @@ def test_duplicate_email_reaching_the_service_is_a_message_not_a_500(
         with pytest.raises(services.PeopleError) as error:
             services.create_employee(
                 {"first_name": "Léa", "last_name": "Double", "email": company_a.manager.email},
-                actor=company_a.hr,
+                context=ActionContext(company_a.hr),
             )
         assert error.value.field == "email"
         assert Employee.objects.filter(last_name="Double").count() == 0
