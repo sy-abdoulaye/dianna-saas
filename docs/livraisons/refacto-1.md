@@ -106,7 +106,6 @@ Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lig
 - Découpage de `seed_demo` (1 072 lignes) en un module par domaine.
 - Les 11 fonctions entre 8 et 10 de complexité (`ui.control`, `_update_employee`, `count_today`…).
 - Le moteur des demandes (`workflow.approve`, `refuse`…) garde sa convention propre : la personne en argument positionnel et `http_request`, que 61 appels de tests utilisent. Il peut passer à `ActionContext` de la même façon, avec ton accord pour ces tests.
-- Test du lien résiduel `xmin` (L1-09) : il a échoué une fois sur cinq suites complètes. Le reçu suit la réponse de 1 seulement si aucune autre transaction ne s'intercale. Il sera réécrit avec la réécriture groupée des réponses.
 
 ## Tests
 

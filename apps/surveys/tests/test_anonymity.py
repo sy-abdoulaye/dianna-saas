@@ -78,9 +78,12 @@ def test_answering_writes_no_journal_line_no_notification_and_no_task(company_a,
 
 @pytest.mark.django_db(transaction=True)
 def test_residual_link_in_the_database_by_transaction_number(company_a, open_survey):
-    """Documente le risque résiduel L1-09 : le reçu est créé dans une sous-transaction de
-    celle de la réponse, donc son numéro de transaction (xmin) vaut celui de la réponse + 1.
-    Un accès SQL direct peut ainsi relier une personne à sa réponse ; l'application ne lit
+    """Documente le risque résiduel L1-09. Chaque réponse est écrite dans sa transaction de
+    premier niveau (son xmin est le numéro de cette transaction) ; le reçu l'est dans une
+    sous-transaction ouverte ensuite, dont le numéro est plus grand. Les réponses étant
+    enregistrées l'une après l'autre, le xmin de chaque reçu est donc toujours compris entre
+    celui de sa réponse et celui de la réponse suivante, même si d'autres transactions
+    s'intercalent : un accès SQL direct relie une personne à sa réponse. L'application ne lit
     jamais cette colonne. CE TEST DEVRA CHANGER avec la réécriture groupée des réponses du
     lot 8 (le lien devra disparaître)."""
     from django.db import connection
@@ -97,11 +100,15 @@ def test_residual_link_in_the_database_by_transaction_number(company_a, open_sur
         )
         receipts = dict(cursor.fetchall())
         cursor.execute(
-            "SELECT xmin::text::bigint FROM surveys_surveyresponse WHERE survey_id = %s",
+            "SELECT xmin::text::bigint FROM surveys_surveyresponse WHERE survey_id = %s ORDER BY 1",
             [survey.pk],
         )
-        responses = {row[0] for row in cursor.fetchall()}
-    assert {xmin - 1 for xmin in receipts.values()} == responses
+        responses = [row[0] for row in cursor.fetchall()]
+    bounds = [*responses[1:], float("inf")]
+    for person, response_xmin, next_response_xmin in zip(
+        respondents, responses, bounds, strict=True
+    ):
+        assert response_xmin < receipts[person.pk] < next_response_xmin
 
 
 def test_answering_writes_no_log_line(company_a, open_survey, caplog):

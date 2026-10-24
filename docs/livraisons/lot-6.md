@@ -45,7 +45,7 @@ Date : 24 octobre 2026. Branche : `lot-6`.
 - **Anonymat réel.**
   - Les réponses (`SurveyResponse`, `Answer`) héritent de `TenantBase`, la nouvelle base sans horodatage (L6-12).
   - Elles ont une clé UUID4 aléatoire, aucune date (`submitted_on` supprimé, L6-02) et aucun lien vers la personne ou le reçu.
-  - Le reçu et la réponse sont créés dans la même transaction : la réponse dans la transaction du service, le reçu dans une sous-transaction. Le `xmin` du reçu vaut donc celui de la réponse + 1, ce qui est un lien résiduel en base (L1-09).
+  - Le reçu et la réponse sont créés dans la même transaction : la réponse dans la transaction du service, le reçu dans une sous-transaction. Le `xmin` du reçu est donc supérieur à celui de la réponse et inférieur à celui de la réponse suivante, ce qui est un lien résiduel en base (L1-09).
   - Répondre n'écrit ni journal, ni notification, ni tâche.
 - **Public figé à la publication** (L6-04). Un public de moins de 5 personnes ne peut pas être publié (L6-05, L6-17).
 - **Seuil d'anonymat appliqué partout.**
@@ -136,7 +136,7 @@ Les deux tests sautés sont les mêmes qu'au lot 5 : S3, sans MinIO local ; rela
 | Ouvrir une annonce la marque comme lue pour cette seule personne et met à jour le compteur | Fait |
 | Un salarié ne voit aucun bouton de gestion et reçoit 403 sur les URL de modification | Fait (manager aussi) |
 | Un message contenant `<script>` est affiché comme du texte | Fait (test et parcours) |
-| Aucune requête ni aucun export ne relie une réponse à une personne | Fait au niveau de l'application ; risque résiduel L1-09 en base (ordre physique, `xmin` du reçu = `xmin` de la réponse + 1, sauvegardes), documenté par un test |
+| Aucune requête ni aucun export ne relie une réponse à une personne | Fait au niveau de l'application ; risque résiduel L1-09 en base (ordre physique, `xmin` du reçu supérieur à celui de la réponse et inférieur à celui de la réponse suivante, sauvegardes), documenté par un test |
 | Répondre deux fois est impossible, même en renvoyant le formulaire | Fait (contrainte unique) |
 | Un commentaire saisi apparaît sous sa question, avec sa note | Fait (après la clôture, L6-01) |
 | Avec 2 réponses, les résultats et commentaires sont masqués | Fait (seuil porté à 5 : masqués jusqu'à 4 réponses) |
