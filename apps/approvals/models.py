@@ -329,4 +329,18 @@ REQUEST_MODELS = {
 def register_request_model(model):
     """Types de demande définis dans d'autres applications (matériel)."""
     REQUEST_MODELS[model.request_type] = model
+    _register_notification_source(model)
     return model
+
+
+def _register_notification_source(model) -> None:
+    """Notifications d'une demande : leur e-mail ne part pas si la demande a disparu."""
+    from apps.core import notifications
+
+    notifications.register_source(
+        model.request_type, lambda pk: model.objects.filter(pk=pk).exists()
+    )
+
+
+for _model in REQUEST_MODELS.values():
+    _register_notification_source(_model)

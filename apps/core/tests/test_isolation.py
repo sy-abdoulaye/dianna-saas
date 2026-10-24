@@ -10,6 +10,7 @@ from django.urls import URLPattern, URLResolver, get_resolver
 
 from apps.accounts.models import Invitation
 from apps.agenda.models import CalendarEvent, Closure
+from apps.announcements.models import Announcement, AnnouncementRead
 from apps.approvals.models import (
     LeaveRequest,
     OnCallDeclaration,
@@ -25,6 +26,7 @@ from apps.core.models import (
     Notification,
     Service,
     Site,
+    TenantBase,
     TenantManager,
     TenantModel,
 )
@@ -42,6 +44,14 @@ from apps.equipment.models import (
     EquipmentRequest,
 )
 from apps.people.models import Employee, EmployeeChange
+from apps.surveys.models import (
+    Answer,
+    Question,
+    Survey,
+    SurveyInvitation,
+    SurveyReceipt,
+    SurveyResponse,
+)
 from tests.factories import PASSWORD, EmployeeFactory
 from tests.isolation import ISOLATION_CASES, NOT_TENANT_OBJECTS
 
@@ -58,20 +68,29 @@ def project_models():
     return [m for m in apps.get_models() if m.__module__.startswith("apps.")]
 
 
-# ---------- Règle 1 : tout modèle métier hérite de TenantModel ----------
+# ---------- Règle 1 : tout modèle métier hérite de TenantModel (ou TenantBase) ----------
 
 
 def test_every_business_model_is_a_tenant_model():
     offenders = [
         m.__name__
         for m in project_models()
-        if m not in NOT_TENANT_MODELS and not issubclass(m, TenantModel)
+        if m not in NOT_TENANT_MODELS and not issubclass(m, TenantBase)
     ]
     assert offenders == []
 
 
+def test_only_anonymous_survey_answers_have_no_timestamps():
+    """TenantBase (sans horodatage) est réservée aux réponses anonymes (M-10) : tout autre
+    modèle métier hérite de TenantModel."""
+    untimed = {
+        m for m in project_models() if issubclass(m, TenantBase) and not issubclass(m, TenantModel)
+    }
+    assert untimed == {SurveyResponse, Answer}
+
+
 @pytest.mark.parametrize(
-    "model", [m for m in project_models() if issubclass(m, TenantModel)], ids=lambda m: m.__name__
+    "model", [m for m in project_models() if issubclass(m, TenantBase)], ids=lambda m: m.__name__
 )
 def test_tenant_models_filter_by_default_and_refuse_queries_without_company(model, db):
     assert isinstance(model._default_manager, TenantManager)
@@ -82,7 +101,7 @@ def test_tenant_models_filter_by_default_and_refuse_queries_without_company(mode
         with pytest.raises(NoCurrentCompanyError):
             getattr(model.objects.all(), operation)()
     with pytest.raises(NoCurrentCompanyError):
-        model.objects.update(updated_at=None)
+        model.objects.update(company=None)
     # Construire un queryset sans l'évaluer reste permis (champs de ModelForm à l'import).
     model.objects.filter(pk__gt=0)
 
@@ -199,6 +218,14 @@ TENANT_ROWS = {
     EquipmentIssue: lambda d: d.requests["issue"],
     EquipmentRequest: lambda d: d.requests["equipment_request"],
     CompanyModule: lambda d: CompanyModule.all_companies.filter(company=d.company).first(),
+    Announcement: lambda d: d.requests["announcement"],
+    AnnouncementRead: lambda d: d.requests["announcement_read"],
+    Survey: lambda d: d.requests["survey"],
+    Question: lambda d: d.requests["question"],
+    SurveyInvitation: lambda d: d.requests["invitation"],
+    SurveyReceipt: lambda d: d.requests["receipt"],
+    SurveyResponse: lambda d: d.requests["response"],
+    Answer: lambda d: d.requests["answer"],
 }
 
 
@@ -214,7 +241,7 @@ def test_queries_only_return_the_current_company(model, company_a, company_b):
 
 def test_every_tenant_model_is_covered_by_the_data_battery():
     covered = set(TENANT_ROWS)
-    tenant_models = {m for m in project_models() if issubclass(m, TenantModel)}
+    tenant_models = {m for m in project_models() if issubclass(m, TenantBase)}
     assert tenant_models - covered == set()
 
 

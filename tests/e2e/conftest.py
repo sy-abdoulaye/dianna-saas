@@ -53,3 +53,10 @@ def console_errors(page):
     )
     page.on("pageerror", lambda exc: errors.append(str(exc)))
     return errors
+
+
+@pytest.fixture
+def urls(live_server):
+    """Adresses de l'espace Exemple SAS sur le serveur de test (sous-domaine de localhost)."""
+    port = live_server.url.rsplit(":", 1)[1]
+    return lambda path="/": f"http://exemple.localhost:{port}{path}"

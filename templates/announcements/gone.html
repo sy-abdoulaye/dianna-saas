@@ -1,0 +1,12 @@
+{% extends "layouts/app.html" %}
+{% load i18n %}
+{% block title %}{% translate "Annonce supprimée" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="card">
+    {% translate "Cette annonce a été supprimée." as title %}
+    {% translate "Elle n'est plus visible dans la communication interne." as text %}
+    {% translate "Retour aux annonces" as action %}
+    {% url "announcements:list" as list_url %}
+    {% include "components/empty_state.html" with heading="h1" icon="mega" title=title text=text action_label=action action_url=list_url action_variant="secondary" %}
+  </div>
+{% endblock %}

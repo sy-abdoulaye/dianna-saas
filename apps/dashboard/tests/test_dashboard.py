@@ -38,15 +38,15 @@ def test_employee_dashboard(client_for, company_a):
     # la fixture est validée.
     assert values["Mes demandes en attente"] == "4"
     assert values["Matériel attribué"] == "1"
-    assert "Mes prochains congés" in values and len(values) == 4
+    # Quatre indicateurs, comme le prototype : les annonces non lues (lot 6) remplacent
+    # « Mes prochains congés », affiché seulement s'il reste une place (L4-08).
+    assert values["Annonces non lues"] == "1" and len(values) == 4  # annonce de la fixture
     assert "Tout est à jour" in content
     assert "Déclarer du télétravail" in content
     assert "Mes dernières demandes" in content
     assert "Voir le planning" in content
-    # Blocs des modules à venir masqués (L4-08).
     assert "Mon matériel" in content  # raccourci du lot 5
-    for hidden in ("Annonces non lues", "Annonces"):
-        assert hidden not in content
+    assert 'id="h-announcements"' in content  # bloc « Annonces » (lot 6)
 
 
 def test_manager_todo_matches_the_menu_and_leads_to_the_action(client_for, company_a):

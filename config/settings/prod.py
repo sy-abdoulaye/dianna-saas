@@ -1,12 +1,12 @@
 """Recette et production. Toutes les valeurs sensibles viennent de l'environnement."""
 
-from .base import *  # noqa: F403
+from .base import *  # noqa: F403 (réglages communs, complétés ici)
 from .base import env
 
 DEBUG = False
 STYLEGUIDE_ENABLED = False
 
-STORAGES["staticfiles"] = {  # noqa: F405
+STORAGES["staticfiles"] = {  # noqa: F405 (défini dans base)
     "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
 }
 

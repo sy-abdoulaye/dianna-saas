@@ -12,7 +12,10 @@ from apps.core.ics_export import IcsEvent, escape, fold, ics_content
 from apps.core.models import Company
 from apps.core.tokens import color, light_tokens
 from apps.core.xlsx_export import Styled, xlsx_content
-from apps.people.tests.conftest import image_bytes, private_media  # noqa: F401
+from apps.people.tests.conftest import (  # noqa: F401 (fixtures pytest utilisées par ce module)
+    image_bytes,
+    private_media,
+)
 
 
 def test_ics_escapes_text_values():
@@ -59,7 +62,7 @@ def test_tokens_come_from_app_css():
 
 
 @pytest.mark.django_db
-def test_pdf_fetcher_serves_the_current_company_logo_only(company_a, private_media):  # noqa: F811
+def test_pdf_fetcher_serves_the_current_company_logo_only(company_a, private_media):  # noqa: F811 (fixture pytest passée en argument)
     company = Company.objects.get(pk=company_a.company.pk)
     company.logo.save("logo.png", ContentFile(image_bytes()), save=True)
     fetcher = pdf.DiannaURLFetcher(company)

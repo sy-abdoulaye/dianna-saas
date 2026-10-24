@@ -1,0 +1,68 @@
+{% load i18n ui %}
+{% if results %}
+  <div class="grid gap-4 sm:grid-cols-3">
+    {% translate "Réponses" as l1 %}{% include "components/kpi.html" with label=l1 value=results.responses %}
+    {% translate "Participation" as l2 %}{% blocktranslate asvar rate with n=results.participation %}{{ n }} %{% endblocktranslate %}
+    {% include "components/kpi.html" with label=l2 value=rate %}
+    {% translate "Échéance" as l3 %}{% if survey.due_date %}{% include "components/kpi.html" with label=l3 value=survey.due_date|fr_date:"short_year" %}{% else %}{% include "components/kpi.html" with label=l3 value="—" %}{% endif %}
+  </div>
+  {% for item in results.items %}
+    <section class="card card-body stack" aria-labelledby="h-q{{ item.question.order }}">
+      {% if item.distribution %}
+        <div class="flex items-start justify-between gap-4">
+          <h2 class="h3" id="h-q{{ item.question.order }}">{{ item.question.label }}</h2>
+          <b class="score">{{ item.average|floatformat:1 }} / 5</b>
+        </div>
+        <ul class="distribution">
+          {% for score, count, percent in item.distribution %}
+            <li>
+              <span>{{ score }}</span>
+              <progress class="progress" max="100" value="{{ percent }}" aria-label="{% blocktranslate %}Note {{ score }} : {{ percent }} %{% endblocktranslate %}">{{ percent }} %</progress>
+              {# Français : 0 et 1 au singulier (pas encore de catalogue de traduction). #}
+              <span class="meta">{% if count > 1 %}{% blocktranslate %}{{ count }} réponses{% endblocktranslate %}{% else %}{% blocktranslate %}{{ count }} réponse{% endblocktranslate %}{% endif %}</span>
+            </li>
+          {% endfor %}
+        </ul>
+        {% if item.comments %}
+          <div class="stack comments">
+            <b class="meta">{% blocktranslate with n=item.comment_count %}Commentaires ({{ n }}){% endblocktranslate %}</b>
+            <ul class="rows">
+              {% for score, comment in item.comments %}
+                {% include "surveys/partials/answer_item.html" with text=comment %}
+              {% endfor %}
+              {% if item.comment_count > item.comments|length %}
+                {% include "surveys/partials/more_button.html" with question=item.question next_start=item.comments|length remaining=item.hidden_count %}
+              {% endif %}
+            </ul>
+          </div>
+        {% else %}
+          <p class="meta">{% translate "Aucun commentaire sur cette question." %}</p>
+        {% endif %}
+      {% else %}
+        <h2 class="h3" id="h-q{{ item.question.order }}">{{ item.question.label }}</h2>
+        {% if item.answers %}
+          <ul class="rows">
+            {% for text in item.answers %}{% include "surveys/partials/answer_item.html" with score=None %}{% endfor %}
+            {% if item.answer_count > item.answers|length %}
+              {% include "surveys/partials/more_button.html" with question=item.question next_start=item.answers|length remaining=item.hidden_count %}
+            {% endif %}
+          </ul>
+        {% else %}
+          <p class="meta">{% translate "Aucune réponse libre." %}</p>
+        {% endif %}
+      {% endif %}
+    </section>
+  {% endfor %}
+{% elif not finished %}
+  <div class="card">
+    {% if responses > 1 %}{% blocktranslate asvar t %}{{ responses }} réponses reçues{% endblocktranslate %}{% else %}{% blocktranslate asvar t %}{{ responses }} réponse reçue{% endblocktranslate %}{% endif %}
+    {% translate "Les résultats seront visibles à la clôture du questionnaire, pour préserver l'anonymat des réponses." as x %}
+    {% include "components/empty_state.html" with icon="lock" title=t text=x %}
+  </div>
+{% else %}
+  <div class="card">
+    {% translate "Résultats masqués" as t %}
+    {% blocktranslate asvar x with n=responses threshold=survey.anonymity_threshold %}Moins de {{ threshold }} personnes ont répondu ({{ n }}). Pour préserver l'anonymat, les résultats s'affichent à partir de {{ threshold }} réponses.{% endblocktranslate %}
+    {% include "components/empty_state.html" with icon="lock" title=t text=x %}
+  </div>
+{% endif %}

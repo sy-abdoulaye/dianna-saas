@@ -15,7 +15,7 @@ from django.utils import timezone
 from apps.approvals import workflow
 from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus, TransportProof
-from apps.approvals.tests.conftest import next_weekday  # noqa: F401
+from apps.approvals.tests.conftest import next_weekday  # noqa: F401 (fixture pytest)
 from apps.core.dates import format_date
 from apps.core.models import AuditLog, Notification
 from apps.core.tenancy import tenant_context

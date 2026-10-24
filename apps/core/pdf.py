@@ -11,7 +11,7 @@ glissé dans le document ne déclencherait aucune requête.
 """
 
 import mimetypes
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from django.contrib.staticfiles import finders
 from django.template.loader import render_to_string
@@ -52,8 +52,7 @@ class DiannaURLFetcher(URLFetcher):
         found = finders.find(str(clean))
         if not found:
             raise URLRefusedError(f"Fichier statique introuvable : {path[:80]}")
-        with open(found, "rb") as handle:
-            body = handle.read()
+        body = Path(found).read_bytes()
         return URLFetcherResponse(url, body, {"Content-Type": STATIC_ALLOWED[clean.suffix]})
 
     def _logo(self, url):

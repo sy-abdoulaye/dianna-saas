@@ -28,6 +28,8 @@ PAGES = [
     "/materiel/?onglet=parc",
     "/materiel/?onglet=demandes",
     "/materiel/?onglet=signalements",
+    "/annonces/",
+    "/questionnaires/",
     "/notifications/",
     "/compte/securite/",
     "/administration/",
@@ -54,12 +56,6 @@ OVERFLOW = """() => {
   const name = wide ? `${wide.tagName}.${wide.className}` : "?";
   return `${doc.scrollWidth} > ${doc.clientWidth} (${name})`;
 }"""
-
-
-@pytest.fixture
-def urls(live_server):
-    port = live_server.url.rsplit(":", 1)[1]
-    return lambda path="/": f"http://exemple.localhost:{port}{path}"
 
 
 @pytest.mark.parametrize("profile", ["employee", "manager", "hr", "admin"])

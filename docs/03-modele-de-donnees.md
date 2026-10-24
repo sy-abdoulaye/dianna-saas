@@ -1,6 +1,6 @@
 # Modèle de données
 
-Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (champ `company`, gestionnaire filtrant). Tous ont `created_at` et `updated_at` (mixin `Timestamped`). Tout modèle adressé par une URL (fiche salarié, demandes, équipements, annonces, questionnaires, entretiens, comptes rendus) a un champ `public_id` (UUID, unique, indexé) utilisé dans les URL à la place de l'identifiant numérique, pour ne pas révéler de volumes. Les énumérations sont des `TextChoices` dont les libellés français viennent du prototype.
+Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (champ `company`, gestionnaire filtrant). Tous ont `created_at` et `updated_at` (mixin `Timestamped`), sauf les réponses anonymes aux questionnaires, qui héritent de `TenantBase` (isolation sans horodatage, L6-12). Tout modèle adressé par une URL (fiche salarié, demandes, équipements, annonces, questionnaires, entretiens, comptes rendus) a un champ `public_id` (UUID, unique, indexé) utilisé dans les URL à la place de l'identifiant numérique, pour ne pas révéler de volumes. Les énumérations sont des `TextChoices` dont les libellés français viennent du prototype.
 
 ## Socle (`core`, `accounts`)
 
@@ -90,18 +90,19 @@ Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme
 
 ## Communication interne (`announcements`)
 
-**Announcement** (T) : `title`, `category` (company, hr, site_life, safety), `body` (texte), `pinned`, `author`, `published_at`, `audience` (all ; services et sites ciblés : lot 8).
+**Announcement** (T) : `public_id`, `title` (120), `category` (company, hr, site_life, safety), `body` (texte simple, 15 à 5 000 caractères), `pinned`, `author`, `published_at`, `deleted_at` (suppression logique, L6-09). Public : les personnes présentes ; ciblage par service ou site au lot 8.
 **AnnouncementRead** (T) : `announcement`, `employee`, `read_at`. Unique (announcement, employee).
 
 ## Questionnaires (`surveys`)
 
-**Survey** (T) : `title`, `audience` (all, managers, new_hires), `due_date`, `status` (draft, open, closed), `created_by`, `anonymity_threshold` (défaut 3).
-**Question** (T) : `survey`, `order`, `kind` (scale_1_5, text), `label`, `required`.
-**SurveyReceipt** (T) : `survey`, `employee`, `answered_at`. Unique (survey, employee). Sert uniquement à savoir qui a répondu.
-**SurveyResponse** (T) : clé primaire **UUID aléatoire**, `survey`, `submitted_on` (date seule). **Aucun lien vers le salarié.**
-**Answer** (T) : clé primaire UUID aléatoire, `response`, `question`, `score` (1 à 5, nul), `text`, `comment` (justification facultative de la note).
+**Survey** (T) : `public_id`, `title`, `audience` (all, managers, new_hires), `due_date` (facultative), `status` (draft, open, closed), `created_by`, `published_at`, `closed_at`, `anonymity_threshold` (5 par défaut, contrainte ≥ 5, L6-17).
+**Question** (T) : `survey`, `order`, `kind` (scale, text), `label` (300). Unique (survey, order).
+**SurveyInvitation** (T) : `survey`, `employee`. Unique (survey, employee). Public figé à la publication (L6-04).
+**SurveyReceipt** (T) : `survey`, `employee` (horodatage `created_at`). Unique (survey, employee). Sert uniquement à empêcher une seconde réponse ; jamais affiché.
+**SurveyResponse** (`TenantBase`) : clé primaire **UUID aléatoire**, `survey`. **Aucun lien vers le salarié, aucune date** (`submitted_on` supprimé, L6-02).
+**Answer** (`TenantBase`) : clé primaire UUID aléatoire, `response`, `question`, `score` (1 à 5, nul), `text`, `comment` (justification facultative de la note). Unique (response, question).
 
-`SurveyResponse` et `Answer` **n'héritent pas** du mixin `Timestamped` (pas d'horodatage précis, pas de clé séquentielle) : sinon on retrouverait le répondant en rapprochant l'ordre des reçus et des réponses. Le reçu et la réponse sont créés dans la même transaction, sans clé commune. Un test vérifie qu'aucun champ de `SurveyResponse` ou `Answer` ne permet de les trier dans l'ordre des reçus.
+`SurveyResponse` et `Answer` héritent de `TenantBase`, l'isolation sans le mixin `Timestamped` (pas d'horodatage, pas de clé séquentielle) : sinon on retrouverait le répondant en rapprochant l'ordre des reçus et des réponses. Le reçu et la réponse sont créés dans la même transaction, sans clé commune. Des tests vérifient qu'aucun champ ne les relie, qu'aucun ne permet de les trier dans l'ordre des reçus, et que répondre n'écrit ni journal, ni notification, ni tâche. Risque résiduel en base : L1-09 (ordre physique ; `xmin` du reçu = `xmin` de la réponse + 1, le reçu étant écrit dans une sous-transaction ; sauvegardes).
 
 ## Carrière (`careers`)
 

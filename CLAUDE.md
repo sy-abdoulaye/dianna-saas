@@ -18,7 +18,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 
 ## Règles non négociables
 
-1. **Isolation des entreprises.** Tout modèle métier hérite de `TenantModel` (champ `company`) et passe par `TenantManager`. Aucune requête métier ne doit pouvoir renvoyer les données d'une autre entreprise. Chaque nouvelle vue a un test d'isolation (voir `docs/02-architecture.md`, section Tests). `save()` et le signal `m2m_changed` vérifient que les relations vers un objet métier restent dans la même entreprise ; `QuerySet.update()` et `bulk_create` les contournent : ne les utilise jamais sur une relation vers un objet métier sans vérification explicite de l'entreprise. Pas de queryset sur un modèle métier au niveau d'une classe (attribut queryset d'une vue, champ de formulaire) : toujours dans get_queryset ou __init__.
+1. **Isolation des entreprises.** Tout modèle métier hérite de `TenantModel` (champ `company`) et passe par `TenantManager` ; seules les réponses anonymes aux questionnaires héritent de `TenantBase` (même isolation, sans horodatage, L6-12). Aucune requête métier ne doit pouvoir renvoyer les données d'une autre entreprise. Chaque nouvelle vue a un test d'isolation (voir `docs/02-architecture.md`, section Tests). `save()` et le signal `m2m_changed` vérifient que les relations vers un objet métier restent dans la même entreprise ; `QuerySet.update()` et `bulk_create` les contournent : ne les utilise jamais sur une relation vers un objet métier sans vérification explicite de l'entreprise. Pas de queryset sur un modèle métier au niveau d'une classe (attribut queryset d'une vue, champ de formulaire) : toujours dans get_queryset ou __init__.
 2. **Permissions côté serveur.** Chaque vue et chaque action vérifie le profil et le périmètre (soi, équipe, entreprise) avec les fonctions de `apps/core/permissions.py`. Masquer un bouton dans le template ne suffit jamais. La matrice fait foi : `docs/04-permissions.md`.
 3. **Design system.** Utilise uniquement les jetons et les composants définis dans `docs/05-design-system.md`. Pas de couleur en dur, pas de nouveau composant si un composant existant convient. Le prototype `docs/reference/prototype-dianna.html` est la référence visuelle et comportementale : ouvre-le dans un navigateur pour vérifier un écran.
 4. **Accessibilité.** WCAG 2.2 AA : libellé lié à chaque champ, erreurs annoncées, focus visible, navigation clavier, contrastes des jetons respectés.
@@ -32,6 +32,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Vues basées sur des classes pour le CRUD, fonctions pour les actions HTMX simples. Logique métier dans `services.py` de chaque application, pas dans les vues ni les templates.
 - Changements d'état (valider, refuser, envoyer, signer) : une fonction de service par transition, qui vérifie l'état de départ, écrit l'historique, crée la notification et l'entrée du journal d'audit.
 - Templates : `templates/<app>/` pour les pages, `templates/<app>/partials/` pour les fragments HTMX, `templates/components/` pour les composants communs.
+- Texte saisi : les caractères de contrôle et de mise en forme bidirectionnelle sont retirés par `apps/core/text.strip_unsafe_characters`, branché sur tous les `forms.CharField` (L6-19). Toute saisie qui ne passe pas par un formulaire (fichier importé, API) l'appelle explicitement.
 - Dates : `TIME_ZONE = "Europe/Paris"`, `USE_TZ = True`. Affichage au format français, toujours par `apps/core/dates.format_date` (filtre `fr_date`) : « 1er novembre », « mer. 21 oct. » ; jamais `|date:` ni `date_format` directs pour une date affichée (L5-22).
 - Nombres décimaux saisis : toujours `apps/core/fields.DecimalTextField` (texte, `inputmode="decimal"`, virgule ou point), jamais `type="number"` (L5-20).
 - Exports CSV : toujours par `apps/core/csv_export.py` (`csv_content`), qui préfixe d'une apostrophe toute cellule commençant par =, +, -, @, une tabulation ou un retour chariot (injection de formules). Jamais de `csv.writer` direct pour un export. Excel : toujours par `apps/core/xlsx_export.py` (même neutralisation, cellules texte enregistrées comme texte). PDF : toujours par `apps/core/pdf.py` (récupérateur d'URL fermé : jamais de `weasyprint.HTML` direct). Chaque export vérifie le périmètre côté serveur et s'inscrit au journal d'audit sans nom de personne.
@@ -42,6 +43,23 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Fichiers déposés : type réel vérifié par `apps/core/files.clean_document` ; stockés sous `<company_id>/…` avec un nom aléatoire (jamais le nom d'origine) ; un justificatif est servi par `serve_isolated` après contrôle de la permission, jamais par lien signé.
 - Écriture d'un fichier (justificatif, photo, logo et tout futur dépôt) : son nom est inscrit dans la liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit explicitement avant l'INSERT ou l'UPDATE, et il est supprimé si l'opération échoue (`apps/core/files.file_writes`, `workflow.submit`) ; l'ancien fichier remplacé n'est supprimé qu'après la validation de la transaction. Jamais de `FieldFile.save()` direct dans un service. Une panne du stockage (`StorageUnavailableError`) donne un message, jamais une erreur 500.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée (seule exception, sans effet sur le schéma : L5-25).
+
+## Qualité du code
+
+- Logique métier dans `services.py`, lectures complexes (filtres, périmètres, agrégats) dans `selectors.py`, vues minces : elles lisent la requête, appellent un service ou un sélecteur, rendent la réponse.
+- Une fonction fait une chose. ruff le vérifie (`pyproject.toml`) : complexité ≤ 10, 6 `return`, 12 branches, 8 arguments, 50 instructions au plus. Un `noqa` n'est admis qu'avec sa raison sur la même ligne.
+- Pas de duplication : réutiliser les briques existantes au lieu de les recopier :
+  - jeton d'annulation (`apps/core/undo.py`) et confirmation (`components/confirm.html`) ;
+  - notifications (`apps/core/notifications.py`), journal (`apps/core/audit.py`), e-mails (`apps/core/mail.py`) ;
+  - exports (`csv_export`, `xlsx_export`, `pdf`) et limites de fréquence (`ratelimit.py`) ;
+  - fichiers (`files.py`) et format des dates (`dates.py`).
+  - erreur de service (`core/errors.ServiceError`), réponses HTMX (`htmx.py` : `error_response`, `confirm_response`, `modal_form_response`, `location`), notifications groupées (`notify_many`), filtres de liste (`components/filters.html`), texte saisi affiché sans HTML (filtre `plain_text`).
+- Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
+- Annotations de type sur les fonctions de service et de sélection.
+- Noms explicites en anglais.
+- Docstring courte qui dit pourquoi, pas quoi.
+- Pas de code mort, pas de TODO sans décision inscrite dans `docs/00-decisions.md`.
+- Tests lisibles dont le nom dit le comportement vérifié (`test_employee_cannot_see_results`).
 
 ## Commandes
 

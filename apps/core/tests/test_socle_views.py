@@ -5,6 +5,7 @@ from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import Client
+from django.utils import timezone
 
 from apps.core.models import AuditLog, Company, CompanyModule, Module, Notification
 from apps.core.tenancy import tenant_context
@@ -196,6 +197,39 @@ def test_seed_demo_loads_both_companies(settings, db):
     assert to_validate.exists()
     assert not to_validate.filter(source_id__isnull=True).exists()
     assert not to_validate.filter(source_type="").exists()
+    # Lot 6 : 5 annonces (2 épinglées), 4 questionnaires écrits par les services : ouvert,
+    # clos sous le seuil de 5 (résultats masqués), clos au-dessus (visibles), brouillon.
+    from apps.announcements.models import Announcement
+    from apps.surveys.models import Survey
+
+    announcements = Announcement.all_companies.filter(company=exemple)
+    assert announcements.count() == 5 and announcements.filter(pinned=True).count() == 2
+    from apps.surveys.models import SurveyReceipt, SurveyResponse
+
+    surveys = {
+        s.title: (
+            s.status,
+            SurveyReceipt.all_companies.filter(survey=s).count(),
+            SurveyResponse.all_companies.filter(survey=s).count(),
+        )
+        for s in Survey.all_companies.filter(company=exemple)
+    }
+    assert surveys["Baromètre de qualité de vie au travail 2026"] == ("open", 14, 14)
+    assert surveys["Retour sur l'intégration des nouveaux arrivants"] == ("closed", 3, 3)
+    assert surveys["Enquête télétravail 2025"] == ("closed", 18, 18)
+    assert surveys["Besoins de formation 2027"] == ("draft", 0, 0)
+    from apps.surveys import selectors
+
+    with tenant_context(exemple):
+        visible = {
+            s.title: selectors.survey_results(s, timezone.localdate()) is not None
+            for s in Survey.objects.exclude(status="draft")
+        }
+    assert visible == {
+        "Baromètre de qualité de vie au travail 2026": False,  # ouvert
+        "Retour sur l'intégration des nouveaux arrivants": False,  # 3 réponses < 5
+        "Enquête télétravail 2025": True,
+    }
     with pytest.raises(CommandError):
         call_command("seed_demo")
     call_command("seed_demo", "--reset")

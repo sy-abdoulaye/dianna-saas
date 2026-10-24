@@ -13,7 +13,7 @@ urlpatterns = [
 if settings.DEBUG:
     # Développement uniquement (L0-13) : administration éditeur sur /editeur/ ; en production
     # elle est servie seulement sur admin.<BASE_DOMAIN>.
-    import config.urls_platform  # noqa: F401  (connexion de l'administration par allauth)
+    import config.urls_platform  # noqa: F401 (connexion de l'administration par allauth)
     from apps.accounts.urls import auth_patterns
 
     urlpatterns += [*auth_patterns, path("editeur/", admin.site.urls)]

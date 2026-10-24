@@ -257,64 +257,83 @@ def check_request(request, *, campaign=None) -> dict:
     """Contrôles qui dépendent des autres demandes du demandeur. Renvoie {champ: message}
     (vide si tout va bien). `request` peut ne pas être enregistrée (envoi) ; si elle l'est,
     elle est exclue des comptes (annulation immédiate)."""
-    requester, pk = request.requester, request.pk
     if isinstance(request, TeleworkRequest):
-        # Jours fériés et fermetures : pas de télétravail ces jours-là (T-16, L3-12).
-        off = day_off(request.date, requester.site_id)
-        if off is not None:
-            return {"date": day_off_message(request.date, off)}
-        same_day = TeleworkRequest.objects.filter(
-            requester=requester,
-            date=request.date,
-            status__in=(RequestStatus.PENDING, RequestStatus.APPROVED),
-        ).exclude(pk=pk)
-        if same_day.exists():
-            return {"date": SAME_DAY}
-        quota = rules.weekly_quota(requester)
-        used = rules.telework_days_in_week(requester, request.date, exclude_pk=pk)
-        if used >= quota:
-            return {
-                "date": _(
-                    "Vous avez déjà %(n)s jours de télétravail la semaine du %(week)s "
-                    "(maximum %(quota)s)."
-                )
-                % {
-                    "n": used,
-                    "week": format_date(rules.monday_of(request.date), "short"),
-                    "quota": quota,
-                }
-            }
-        return {}
+        return _check_telework(request)
     if isinstance(request, LeaveRequest):
-        if request.leave_type == LeaveRequest.LeaveType.SUMMER:
-            if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
-                return {
-                    "leave_type": _(
-                        "Aucune campagne de congés d'été n'est ouverte : choisissez « Autre "
-                        "absence »."
-                    )
-                }
-            if request.start < campaign.period_start or request.end > campaign.period_end:
-                return {
-                    "start": _(
-                        "Les congés d'été de la campagne %(label)s sont compris entre le "
-                        "%(a)s et le %(b)s."
-                    )
-                    % {
-                        "label": campaign.label,
-                        "a": format_date(campaign.period_start, "long"),
-                        "b": format_date(campaign.period_end, "long"),
-                    }
-                }
-        if rules.leave_overlaps(requester, request.start, request.end, exclude_pk=pk):
-            return {"start": _("Cette période chevauche une de vos demandes existantes.")}
-        return {}
+        return _check_leave(request, campaign)
     if isinstance(request, TransportProof):
         return _check_transport(request)
-    if (
-        isinstance(request, OnCallDeclaration)
-        and request.kind == OnCallDeclaration.Kind.ON_CALL
-        and rules.on_call_overlaps(requester, request.start, request.end, exclude_pk=pk)
+    if isinstance(request, OnCallDeclaration):
+        return _check_on_call(request)
+    return {}
+
+
+def _check_telework(request) -> dict:
+    """Jour non férié ni fermé (T-16, L3-12), une seule demande par jour, quota de la
+    semaine."""
+    requester, pk = request.requester, request.pk
+    off = day_off(request.date, requester.site_id)
+    if off is not None:
+        return {"date": day_off_message(request.date, off)}
+    same_day = TeleworkRequest.objects.filter(
+        requester=requester,
+        date=request.date,
+        status__in=(RequestStatus.PENDING, RequestStatus.APPROVED),
+    ).exclude(pk=pk)
+    if same_day.exists():
+        return {"date": SAME_DAY}
+    quota = rules.weekly_quota(requester)
+    used = rules.telework_days_in_week(requester, request.date, exclude_pk=pk)
+    if used < quota:
+        return {}
+    return {
+        "date": _(
+            "Vous avez déjà %(n)s jours de télétravail la semaine du %(week)s (maximum %(quota)s)."
+        )
+        % {
+            "n": used,
+            "week": format_date(rules.monday_of(request.date), "short"),
+            "quota": quota,
+        }
+    }
+
+
+def _check_leave(request, campaign) -> dict:
+    """Congés d'été : campagne ouverte et période comprise dans la sienne ; tout congé : pas
+    de chevauchement avec une autre demande."""
+    if request.leave_type == LeaveRequest.LeaveType.SUMMER:
+        errors = _check_summer_campaign(request, campaign)
+        if errors:
+            return errors
+    if rules.leave_overlaps(request.requester, request.start, request.end, exclude_pk=request.pk):
+        return {"start": _("Cette période chevauche une de vos demandes existantes.")}
+    return {}
+
+
+def _check_summer_campaign(request, campaign) -> dict:
+    if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
+        return {
+            "leave_type": _(
+                "Aucune campagne de congés d'été n'est ouverte : choisissez « Autre absence »."
+            )
+        }
+    if request.start < campaign.period_start or request.end > campaign.period_end:
+        return {
+            "start": _(
+                "Les congés d'été de la campagne %(label)s sont compris entre le %(a)s et le %(b)s."
+            )
+            % {
+                "label": campaign.label,
+                "a": format_date(campaign.period_start, "long"),
+                "b": format_date(campaign.period_end, "long"),
+            }
+        }
+    return {}
+
+
+def _check_on_call(request) -> dict:
+    if request.kind == OnCallDeclaration.Kind.ON_CALL and rules.on_call_overlaps(
+        request.requester, request.start, request.end, exclude_pk=request.pk
     ):
         return {"start": _("Cette astreinte chevauche une de vos astreintes déclarées.")}
     return {}
@@ -744,6 +763,14 @@ def cancel_approved(
 REACTIVATING = ("refuse", "cancel", "cancel_approved")
 
 
+UNDO_EXPECTED_STATUS = {
+    "approve": (RequestStatus.APPROVED, RequestStatus.MANAGER_APPROVED),
+    "refuse": (RequestStatus.REFUSED,),
+    "cancel": (RequestStatus.CANCELLED,),
+    "cancel_approved": (RequestStatus.CANCELLED,),
+}
+
+
 @transaction.atomic
 def undo(model, payload: dict, actor: Employee, *, http_request=None):
     """Défait la dernière transition de son auteur, seulement si l'événement qu'elle a créé
@@ -752,11 +779,20 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
     notifications sont supprimés ; le journal garde « demande envoyée puis retirée » (L1-08).
     Après une décision : l'état précédent est rétabli ; si la demande redevient active
     (refus ou annulation défaits), les contrôles métier sont refaits sous verrou (A3-02)."""
+    request = _lock_for_undo(model, payload)
+    if payload["action"] == "submit":
+        _undo_submit(request, actor, http_request=http_request)
+        return None
+    return _undo_decision(request, payload, actor, http_request=http_request)
+
+
+def _lock_for_undo(model, payload: dict):
+    """Verrouille la demande (et la fiche du demandeur si elle redevient active) et vérifie
+    que l'événement à défaire est toujours le dernier."""
     found = model.objects.filter(public_id=payload["id"]).values_list("requester_id").first()
     if found is None:
         raise WorkflowError(ALREADY_PROCESSED)
-    action = payload["action"]
-    if action in REACTIVATING:
+    if payload["action"] in REACTIVATING:
         _lock_requester(found[0])
     request = (
         model.objects.select_for_update(of=("self",))
@@ -768,44 +804,29 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
         raise WorkflowError(ALREADY_PROCESSED)
     if payload.get("event") is None or _latest_event_id(request) != payload["event"]:
         raise WorkflowError(OTHER_DECISION)
-    if action == "submit":
-        if request.requester_id != actor.pk:
-            raise WorkflowError(ALREADY_PROCESSED)
-        Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
-        CalendarEvent.objects.filter(
-            source_type=request.request_type, source_id=request.pk
-        ).delete()
-        RequestEvent.objects.filter(
-            request_type=request.request_type, request_id=request.pk
-        ).delete()
-        _audit(
-            request,
-            actor,
-            "withdrawn",
-            _("Demande envoyée puis retirée"),
-            http_request=http_request,
-        )
-        request.delete()
-        if request.file_field:
-            # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
-            transaction.on_commit(lambda: _forget_file(request))
-        return None
-    previous = payload["previous"]
-    expected = {
-        "approve": (RequestStatus.APPROVED, RequestStatus.MANAGER_APPROVED),
-        "refuse": (RequestStatus.REFUSED,),
-        "cancel": (RequestStatus.CANCELLED,),
-        "cancel_approved": (RequestStatus.CANCELLED,),
-    }[action]
-    if request.status not in expected or previous not in ACTIVE_STATUSES:
+    return request
+
+
+def _undo_submit(request, actor, *, http_request) -> None:
+    if request.requester_id != actor.pk:
         raise WorkflowError(ALREADY_PROCESSED)
-    request.status = previous
-    if action == "cancel_approved":
-        request.decision_comment = payload.get("comment", "")
-    elif action in ("approve", "refuse"):
-        request.decided_by, request.decided_at, request.decision_comment = None, None, ""
-        if previous == RequestStatus.PENDING and isinstance(request, LeaveRequest):
-            request.manager_decided_by, request.manager_decided_at = None, None
+    Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
+    CalendarEvent.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
+    RequestEvent.objects.filter(request_type=request.request_type, request_id=request.pk).delete()
+    _audit(
+        request, actor, "withdrawn", _("Demande envoyée puis retirée"), http_request=http_request
+    )
+    request.delete()
+    if request.file_field:
+        # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
+        transaction.on_commit(lambda: _forget_file(request))
+
+
+def _undo_decision(request, payload: dict, actor, *, http_request):
+    action, previous = payload["action"], payload["previous"]
+    if request.status not in UNDO_EXPECTED_STATUS[action] or previous not in ACTIVE_STATUSES:
+        raise WorkflowError(ALREADY_PROCESSED)
+    _restore_previous_state(request, action, payload)
     if action in REACTIVATING:
         errors = check_request(request, campaign=getattr(request, "campaign", None))
         if errors:
@@ -828,6 +849,17 @@ def undo(model, payload: dict, actor: Employee, *, http_request=None):
         _notify_validators(request, _current_validators(request))
     _audit(request, actor, "reverted", _("Décision annulée"), http_request=http_request)
     return request
+
+
+def _restore_previous_state(request, action: str, payload: dict) -> None:
+    previous = payload["previous"]
+    request.status = previous
+    if action == "cancel_approved":
+        request.decision_comment = payload.get("comment", "")
+    elif action in ("approve", "refuse"):
+        request.decided_by, request.decided_at, request.decision_comment = None, None, ""
+        if previous == RequestStatus.PENDING and isinstance(request, LeaveRequest):
+            request.manager_decided_by, request.manager_decided_at = None, None
 
 
 # ---------- Campagnes de congés d'été (RH) ----------

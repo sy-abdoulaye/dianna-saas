@@ -102,6 +102,19 @@ class Row:
     full: bool = True  # détail visible (L4-16)
 
 
+@dataclass(frozen=True)
+class PeopleFilter:
+    """Filtres de la grille (recherche, service, site) : ils ne font que restreindre le
+    périmètre de la personne."""
+
+    q: str = ""
+    service: int | None = None
+    site: int | None = None
+
+
+NO_FILTER = PeopleFilter()
+
+
 @dataclass
 class Grid:
     first: date
@@ -319,9 +332,9 @@ def count_today(people, today, viewer=None) -> dict:
     return counts
 
 
-def grid(viewer, *, view, anchor, page=1, q="", service=None, site=None, can_declare=False, today):
+def grid(viewer, *, view, anchor, today, page=1, filters=NO_FILTER, can_declare=False) -> Grid:
     first, last = month_of(anchor) if view == "mois" else week_of(anchor)
-    people = people_in_scope(viewer, q=q, service=service, site=site)
+    people = people_in_scope(viewer, q=filters.q, service=filters.service, site=filters.site)
     others = ordered(people.exclude(pk=viewer.pk), viewer)
     page_obj = Paginator(others, PER_PAGE).get_page(page)
     shown = list(page_obj.object_list)

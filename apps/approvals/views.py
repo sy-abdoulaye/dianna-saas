@@ -6,14 +6,13 @@ import json
 from functools import wraps
 
 from django.core.paginator import Paginator
-from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from apps.approvals import exports, rules, workflow
+from apps.approvals import exports, rules, selectors, workflow
 from apps.approvals.forms import (
     FORMS,
     CampaignExportForm,
@@ -29,6 +28,7 @@ from apps.approvals.models import (
     SummerCampaign,
     TeleworkRequest,
 )
+from apps.approvals.selectors import TAB_MINE, is_validator
 from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
 from apps.core.files import (
@@ -46,7 +46,6 @@ from apps.core.ratelimit import (
 )
 
 CHANGED = "requestsChanged"
-TAB_MINE, TAB_TODO, TAB_TEAM = "mes-demandes", "a-valider", "equipe"
 PER_PAGE = 8
 
 
@@ -69,10 +68,6 @@ def module_view(view):
 
 def _changed(response):
     return trigger(response, **{CHANGED: True})
-
-
-def is_validator(employee) -> bool:
-    return employee.has_reports or workflow.is_hr_or_admin(employee)
 
 
 def get_request(request, kind, public_id):
@@ -104,46 +99,14 @@ def request_list(request, kind):
     me = request.employee
     meta = KINDS[kind]
     model = meta.model
-    tabs = [(TAB_MINE, _("Mes demandes"), 0)]
-    # Types validés par les RH (transport) : ni « À valider » ni « Mon équipe » pour un
-    # manager, qui ne voit pas les justificatifs de son équipe (docs/04-permissions.md).
-    validator = workflow.is_hr_or_admin(me) if model.hr_validated else is_validator(me)
-    todo = workflow.to_validate(me, model) if validator else model.objects.none()
-    if validator:
-        tabs.append((TAB_TODO, _("À valider"), todo.count()))
-    if workflow.is_hr_or_admin(me):
-        tabs.append((TAB_TEAM, _("Toutes les demandes"), 0))
-    elif me.has_reports and permissions.scope(me, model.view_action) != permissions.SELF:
-        tabs.append((TAB_TEAM, _("Mon équipe"), 0))
+    tabs, todo = selectors.request_tabs(me, model)
     tab = request.GET.get("onglet", TAB_MINE)
     if tab not in {key for key, _label, _n in tabs}:
         tab = TAB_MINE
-
-    if tab == TAB_MINE:
-        rows = model.objects.filter(requester=me)
-    elif tab == TAB_TODO:
-        rows = todo
-    else:
-        rows = permissions.scope_queryset(me, model.objects.all(), model.view_action).exclude(
-            requester=me
-        )
-    rows = rows.select_related("requester", "requester__service", "requester__manager")
     q = request.GET.get("q", "").strip()
     status = request.GET.get("statut", "")
-    if q and tab == TAB_MINE:
-        # « Rechercher dans mes demandes » : dans le résumé affiché (dates, type, montant),
-        # comme le prototype. Les demandes d'une personne sont peu nombreuses.
-        needle = q.casefold()
-        rows = rows.filter(pk__in=[row.pk for row in rows if needle in summary(row).casefold()])
-    elif q:
-        rows = rows.filter(
-            Q(requester__first_name__icontains=q) | Q(requester__last_name__icontains=q)
-        )
-    if status in RequestStatus.values:
-        rows = rows.filter(status=status)
-    page_obj = Paginator(rows.order_by("-submitted_at", "-pk"), PER_PAGE).get_page(
-        request.GET.get("page")
-    )
+    rows = selectors.request_rows(me, model, tab, todo, q=q, status=status)
+    page_obj = Paginator(rows, PER_PAGE).get_page(request.GET.get("page"))
     for row in page_obj.object_list:
         _decorate(row, me, tab)
 
@@ -594,10 +557,8 @@ def export_requests(request, kind):
     require(request, "requests.export")
     me = request.employee
     action_url = reverse("approvals:export", args=[kind])
-    if kind == "leave":
-        form = CampaignExportForm(request.GET if "format" in request.GET else None)
-    else:
-        form = MonthExportForm(request.GET if "format" in request.GET else None)
+    form_class = CampaignExportForm if kind == "leave" else MonthExportForm
+    form = form_class(request.GET if "format" in request.GET else None)
     context = {"form": form, "action_url": action_url, "kind": KINDS[kind]}
     template = "approvals/partials/export_modal.html"
     if "format" not in request.GET:
@@ -613,16 +574,7 @@ def export_requests(request, kind):
         return response
     if not record_export(me):
         return export_limited_response(request, reverse(KINDS[kind].url_name))
-    fmt = form.cleaned_data["format"]
-    if kind == "telework":
-        result = exports.telework_month(me, form.cleaned_data["mois"], fmt, request=request)
-    elif kind == "on_call":
-        result = exports.on_call_month(me, form.cleaned_data["mois"], fmt, request=request)
-    elif kind == "transport":
-        result = exports.transport_month(me, form.cleaned_data["mois"], fmt, request=request)
-    else:
-        result = exports.campaign_file(me, form.cleaned_data["campagne"], fmt, request=request)
-    return _download(*result)
+    return _download(*exports.export_file(kind, me, form.cleaned_data, request=request))
 
 
 @require_GET

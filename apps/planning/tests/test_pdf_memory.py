@@ -76,7 +76,7 @@ def test_largest_allowed_pdf_resident_memory():
     }
     # Deux commandes : le shell ne remplace pas son processus par Python (pas d'« exec »).
     command = '"$PYTHON" -c "import os; exec(os.environ[\'PDF_SCRIPT\'])"; exit $?'
-    result = subprocess.run(  # noqa: S603 - commande fixe, aucun paramètre extérieur
+    result = subprocess.run(  # noqa: S603 (commande fixe, aucun paramètre extérieur)
         ["/bin/sh", "-c", command],
         cwd=Path(settings.BASE_DIR),
         env=env,

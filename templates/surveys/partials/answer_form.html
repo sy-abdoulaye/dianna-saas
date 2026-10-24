@@ -1,0 +1,19 @@
+{% load i18n ui %}
+{% url "surveys:answer" survey.public_id as answer_url %}
+<form class="card card-body stack" method="post" action="{{ answer_url }}" hx-post="{{ answer_url }}" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+  {% csrf_token %}
+  {% translate "Vos réponses sont anonymes : les résultats ne montrent jamais qui a répondu quoi." as anonymous %}
+  {% include "components/banner.html" with kind="info" text=anonymous %}
+  {% include "components/form_errors.html" %}
+  {% for question, field, comment in form.rows %}
+    {% if comment %}
+      {% include "components/rating.html" with field=field %}
+      {% include "components/field.html" with field=comment %}
+    {% else %}
+      {% include "components/field.html" with field=field %}
+    {% endif %}
+  {% endfor %}
+  <div class="flex justify-end">
+    {% button _("Envoyer mes réponses") variant="primary" icon="send" type="submit" %}
+  </div>
+</form>

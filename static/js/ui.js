@@ -327,6 +327,14 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
     if (dialog) openModal(dialog, event.detail.requestConfig && event.detail.requestConfig.elt);
     return;
   }
+  // Contenu chargé à la place du bouton qui l'a demandé (« Afficher plus ») : le focus va
+  // sur le premier élément chargé, sinon il serait perdu avec le bouton (WCAG 2.4.3).
+  const loaded = $("[data-focus-on-load]");
+  if (loaded) {
+    loaded.removeAttribute("data-focus-on-load");
+    loaded.focus();
+    return;
+  }
   // Formulaire renvoyé avec des erreurs (422) : focus sur le premier champ à corriger.
   if (event.detail.xhr && event.detail.xhr.status === 422) focusFirstField(event.detail.elt.isConnected ? event.detail.elt : target);
 });

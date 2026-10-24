@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     "apps.approvals",
     "apps.planning",
     "apps.equipment",
+    "apps.announcements",
+    "apps.surveys",
     "apps.dashboard",
     "apps.administration",
 ]

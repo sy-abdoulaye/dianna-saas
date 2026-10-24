@@ -36,7 +36,8 @@ def _company(company_id):
 @task
 def send_notification_email(company_id: int, notification_id: int) -> str:
     """E-mail d'une notification. Si la notification n'existe plus (action annulée, demande
-    traitée entre-temps), rien ne part (L0-03, A3-05)."""
+    traitée entre-temps) ou si son objet source a disparu, rien ne part (L0-03, A3-05)."""
+    from apps.core import notifications
     from apps.core.hosts import company_url
     from apps.core.models import Notification
     from apps.core.tenancy import tenant_context
@@ -52,6 +53,8 @@ def send_notification_email(company_id: int, notification_id: int) -> str:
         )
         if notification is None or notification.email_sent_at is not None:
             return "skipped"
+        if not notifications.source_is_current(notification):
+            return "skipped"  # objet supprimé ou retiré entre-temps (L6-18)
         user = notification.recipient.user
         if user is None or not user.is_active or not notification.email_subject:
             return "skipped"

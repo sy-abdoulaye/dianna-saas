@@ -9,7 +9,9 @@
 ## Règles
 
 - Publier notifie tous les salariés en poste (e-mail pour les annonces épinglées, M-16).
-- Supprimer : confirmation destructive, annulable depuis la notification visuelle.
+- Supprimer : confirmation destructive, annulable depuis la notification visuelle (suppression logique ; le lien d'une ancienne notification affiche « Cette annonce a été supprimée. », L6-09).
+- Modifier ou épingler une annonce publiée ne notifie pas de nouveau et n'envoie pas d'e-mail (L6-08).
+- Suivi de lecture : auteur, RH et administrateur seulement ; seules les personnes présentes sont comptées.
 - Texte simple avec retours à la ligne et liens détectés automatiquement ; pas de HTML libre (sécurité).
 - Lot 8 : ciblage par service ou site, pièces jointes, relance des non-lecteurs.
 

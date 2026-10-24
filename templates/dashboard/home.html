@@ -78,6 +78,27 @@
       {% endif %}
     </div>
     <aside class="stack">
+      {% if announcements is not None %}
+        <section class="card card-body stack" aria-labelledby="h-announcements">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="h2" id="h-announcements">{% translate "Annonces" %}</h2>
+            <a class="link" href="{% url 'announcements:list' %}">{% translate "Tout voir" %}</a>
+          </div>
+          {% if announcements %}
+            <ul class="rows">
+              {% for item in announcements %}
+                <li class="block">
+                  {% if not item.is_read %}{% status_badge "announcement" "new" %}<br>{% endif %}
+                  <a class="link" href="{% url 'announcements:detail' item.public_id %}">{{ item.title }}</a>
+                  <div class="meta">{{ item.published_at|fr_date:"long" }}</div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="meta">{% translate "Aucune annonce pour le moment." %}</p>
+          {% endif %}
+        </section>
+      {% endif %}
       <section class="card card-body stack">
         <h2 class="h2">{% translate "Raccourcis" %}</h2>
         {% url "people:list" as people_url %}
