@@ -155,7 +155,9 @@ def test_data_error_at_insert_leaves_no_file_and_gives_a_message(company_a):
         pytest.raises(workflow.RequestValidationError) as error,
     ):
         workflow.submit(
-            TransportProof, company_a.employee, proof_data(original_name="x" * 300 + ".pdf")
+            TransportProof,
+            proof_data(original_name="x" * 300 + ".pdf"),
+            context=ActionContext(company_a.employee),
         )
     assert error.value.errors == {None: workflow.INVALID_VALUE}
     assert stored_files(company_a.company) == before
@@ -193,9 +195,17 @@ def test_service_checks_the_month_window_and_the_amount(company_a):
 
     with tenant_context(company_a.company):
         with pytest.raises(workflow.RequestValidationError) as month:
-            workflow.submit(TransportProof, company_a.employee, proof_data(month=date(2010, 1, 1)))
+            workflow.submit(
+                TransportProof,
+                proof_data(month=date(2010, 1, 1)),
+                context=ActionContext(company_a.employee),
+            )
         with pytest.raises(workflow.RequestValidationError) as amount:
-            workflow.submit(TransportProof, company_a.employee, proof_data(amount=Decimal("5000")))
+            workflow.submit(
+                TransportProof,
+                proof_data(amount=Decimal("5000")),
+                context=ActionContext(company_a.employee),
+            )
     assert "Choisissez un mois entre" in str(month.value.errors["month"])
     assert amount.value.errors == {"amount": workflow.AMOUNT_RANGE}
 
@@ -207,7 +217,11 @@ def test_integrity_errors_are_translated_by_constraint_name(company_a, monkeypat
         tenant_context(company_a.company),
         pytest.raises(workflow.RequestValidationError) as error,
     ):
-        workflow.submit(TransportProof, company_a.employee, proof_data(amount=Decimal("5000")))
+        workflow.submit(
+            TransportProof,
+            proof_data(amount=Decimal("5000")),
+            context=ActionContext(company_a.employee),
+        )
     assert error.value.errors == {"amount": workflow.AMOUNT_RANGE}  # transport_amount_range
     assert stored_files(company_a.company) == before
 

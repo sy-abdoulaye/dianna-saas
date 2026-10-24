@@ -18,6 +18,7 @@ from apps.approvals.models import (
     TeleworkRequest,
 )
 from apps.approvals.tests.conftest import next_weekday
+from apps.core.context import ActionContext
 from apps.core.models import Company, Notification
 from apps.core.tenancy import tenant_context
 from apps.people.models import Employee
@@ -88,9 +89,11 @@ def test_manager_cannot_undo_after_the_final_hr_decision(client_for, company_a, 
 def test_undo_of_the_final_hr_validation_goes_back_to_manager_approved(company_a, submit):
     request = submit(company_a, company_a.employee, LeaveRequest).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.manager)
-        final = workflow.approve(request, company_a.hr)
-        workflow.undo(LeaveRequest, final.undo_payload("approve"), company_a.hr)
+        workflow.approve(request, context=ActionContext(company_a.manager))
+        final = workflow.approve(request, context=ActionContext(company_a.hr))
+        workflow.undo(
+            LeaveRequest, final.undo_payload("approve"), context=ActionContext(company_a.hr)
+        )
         request.refresh_from_db()
     assert request.status == RequestStatus.MANAGER_APPROVED
     assert request.decided_by is None and request.manager_decided_by == company_a.manager
@@ -99,11 +102,17 @@ def test_undo_of_the_final_hr_validation_goes_back_to_manager_approved(company_a
 def test_undo_of_the_latest_transition_still_works(company_a, submit):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
-        result = workflow.approve(request, company_a.manager)
-        assert workflow.undo(TeleworkRequest, result.undo_payload("approve"), company_a.manager)
+        result = workflow.approve(request, context=ActionContext(company_a.manager))
+        assert workflow.undo(
+            TeleworkRequest,
+            result.undo_payload("approve"),
+            context=ActionContext(company_a.manager),
+        )
         stale = result.undo_payload("approve")
         with pytest.raises(workflow.WorkflowError) as error:
-            workflow.undo(TeleworkRequest, stale, company_a.manager)  # déjà défaite
+            workflow.undo(
+                TeleworkRequest, stale, context=ActionContext(company_a.manager)
+            )  # déjà défaite
     assert str(error.value.message) == OTHER_DECISION
 
 
@@ -180,12 +189,12 @@ def test_undo_of_an_hr_cancellation_respects_on_call_overlaps(client_for, compan
 def test_hr_cannot_cancel_their_own_approved_request(company_a, submit):
     request = submit(company_a, company_a.hr).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.admin)
+        workflow.approve(request, context=ActionContext(company_a.admin))
         request.refresh_from_db()
         assert request.status == RequestStatus.APPROVED
         assert not workflow.can_cancel_approved(company_a.hr, request)
         with pytest.raises(workflow.WorkflowError):
-            workflow.cancel_approved(request, company_a.hr, reason="Erreur")
+            workflow.cancel_approved(request, reason="Erreur", context=ActionContext(company_a.hr))
 
 
 def test_submit_checks_live_in_the_service(company_a, submit):
@@ -211,7 +220,9 @@ def test_simultaneous_telework_submissions(company_a, first, second, expected):
         def action():
             with tenant_context(company):
                 return workflow.submit(
-                    TeleworkRequest, employee, {"date": next_weekday(weekday=day)}
+                    TeleworkRequest,
+                    {"date": next_weekday(weekday=day)},
+                    context=ActionContext(employee),
                 )
 
         return action
@@ -233,12 +244,12 @@ def test_simultaneous_overlapping_leaves(company_a):
             with tenant_context(company):
                 return workflow.submit(
                     LeaveRequest,
-                    employee,
                     {
                         "start": start + timedelta(days=offset),
                         "end": start + timedelta(days=offset + 4),
                         "leave_type": "other",
                     },
+                    context=ActionContext(employee),
                 )
 
         return action
@@ -252,16 +263,20 @@ def test_undo_of_a_cancellation_races_a_new_request_for_the_same_day(company_a):
     employee = Employee.all_companies.get(pk=company_a.employee.pk)
     telework = company_a.requests["telework"]
     with tenant_context(company):
-        result = workflow.cancel(TeleworkRequest.objects.get(pk=telework.pk), employee)
+        result = workflow.cancel(
+            TeleworkRequest.objects.get(pk=telework.pk), context=ActionContext(employee)
+        )
     payload = result.undo_payload("cancel")
 
     def undo():
         with tenant_context(company):
-            return workflow.undo(TeleworkRequest, payload, employee)
+            return workflow.undo(TeleworkRequest, payload, context=ActionContext(employee))
 
     def resend():
         with tenant_context(company):
-            return workflow.submit(TeleworkRequest, employee, {"date": telework.date})
+            return workflow.submit(
+                TeleworkRequest, {"date": telework.date}, context=ActionContext(employee)
+            )
 
     assert messages(run_together(undo, resend)) == [SAME_DAY, "ok"]
     assert (
@@ -308,7 +323,7 @@ def test_cancellation_within_45_seconds_sends_nothing_to_the_validator(
 ):
     result = submit(company_a, company_a.employee)
     with tenant_context(company_a.company):
-        workflow.cancel(result.request, company_a.employee)
+        workflow.cancel(result.request, context=ActionContext(company_a.employee))
     assert not Notification.all_companies.filter(pk__in=result.notification_ids).exists()
     run_tasks(after_seconds=46)
     assert [m for m in mail.outbox if m.to == [company_a.manager.user.email]] == []
@@ -319,7 +334,7 @@ def test_refusal_retracts_the_other_validators_notification(company_a, submit, r
     requester = Employee.all_companies.get(pk=company_a.employee.pk)
     result = submit(company_a, requester)  # RH et administrateur sont prévenus
     with tenant_context(company_a.company):
-        workflow.refuse(result.request, company_a.hr, reason="Non")
+        workflow.refuse(result.request, reason="Non", context=ActionContext(company_a.hr))
     run_tasks(after_seconds=46)
     assert [m.to for m in mail.outbox] == [[requester.user.email]]
 
@@ -327,8 +342,12 @@ def test_refusal_retracts_the_other_validators_notification(company_a, submit, r
 def test_undo_of_a_cancellation_warns_the_validator_again(company_a, submit, run_tasks):
     result = submit(company_a, company_a.employee)
     with tenant_context(company_a.company):
-        cancelled = workflow.cancel(result.request, company_a.employee)
-        workflow.undo(TeleworkRequest, cancelled.undo_payload("cancel"), company_a.employee)
+        cancelled = workflow.cancel(result.request, context=ActionContext(company_a.employee))
+        workflow.undo(
+            TeleworkRequest,
+            cancelled.undo_payload("cancel"),
+            context=ActionContext(company_a.employee),
+        )
     run_tasks(after_seconds=46)
     assert [m.to for m in mail.outbox] == [[company_a.manager.user.email]]
 
@@ -336,8 +355,10 @@ def test_undo_of_a_cancellation_warns_the_validator_again(company_a, submit, run
 def test_hr_cancellation_retracts_the_unsent_validation(company_a, submit, run_tasks):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.manager)
-        workflow.cancel_approved(request, company_a.hr, reason="Erreur de saisie")
+        workflow.approve(request, context=ActionContext(company_a.manager))
+        workflow.cancel_approved(
+            request, reason="Erreur de saisie", context=ActionContext(company_a.hr)
+        )
     run_tasks(after_seconds=46)
     subjects = [m.subject for m in mail.outbox if m.to == [company_a.employee.user.email]]
     assert subjects == ["Votre demande de télétravail a été annulée"]
@@ -347,7 +368,7 @@ def test_manager_step_notifies_the_requester_in_dianna_only(company_a, submit, r
     """L3-13 : « Validée par le manager » : pas d'e-mail au demandeur, e-mail aux RH."""
     request = submit(company_a, company_a.employee, LeaveRequest).request
     with tenant_context(company_a.company):
-        result = workflow.approve(request, company_a.manager)
+        result = workflow.approve(request, context=ActionContext(company_a.manager))
         notes = Notification.objects.filter(pk__in=result.notification_ids)
         mine = notes.get(recipient=company_a.employee)
         assert "validée par votre manager" in mine.text and mine.email_subject == ""

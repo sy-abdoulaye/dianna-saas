@@ -16,6 +16,7 @@ from apps.approvals import workflow
 from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus, TransportProof
 from apps.approvals.tests.conftest import next_weekday  # noqa: F401 (fixture pytest)
+from apps.core.context import ActionContext
 from apps.core.dates import format_date
 from apps.core.models import AuditLog, Notification
 from apps.core.tenancy import tenant_context
@@ -144,11 +145,15 @@ def test_withdrawn_proof_deletes_its_file(company_a, django_capture_on_commit_ca
             "file_type": "application/pdf",
             "original_name": "abo.pdf",
         }
-        result = workflow.submit(TransportProof, company_a.employee, data)
+        result = workflow.submit(TransportProof, data, context=ActionContext(company_a.employee))
         storage, name = result.request.file.storage, result.request.file.name
         assert storage.exists(name)
         with django_capture_on_commit_callbacks(execute=True):
-            workflow.undo(TransportProof, result.undo_payload("submit"), company_a.employee)
+            workflow.undo(
+                TransportProof,
+                result.undo_payload("submit"),
+                context=ActionContext(company_a.employee),
+            )
     assert not storage.exists(name)
 
 
@@ -164,10 +169,10 @@ def test_hr_proof_is_validated_by_someone_else(company_a, submit):
             "file_type": "application/pdf",
             "original_name": "j.pdf",
         }
-        proof = workflow.submit(TransportProof, company_a.hr, data).request
+        proof = workflow.submit(TransportProof, data, context=ActionContext(company_a.hr)).request
         assert not workflow.can_decide(company_a.hr, proof)
         assert workflow.can_decide(company_a.admin, proof)
-        workflow.approve(proof, company_a.admin)
+        workflow.approve(proof, context=ActionContext(company_a.admin))
     assert TransportProof.all_companies.get(pk=proof.pk).status == RequestStatus.APPROVED
 
 
@@ -376,8 +381,8 @@ def test_hr_validated_kinds_say_sent_to_hr_and_never_write_instead_of(client_for
     send(client, ticket="single", month=this_month())
     refused = proof_of(company_a.employee, ticket_type="single")
     with tenant_context(company_a.company):
-        workflow.approve(approved, company_a.hr)
-        workflow.refuse(refused, company_a.hr, reason="Illisible")
+        workflow.approve(approved, context=ActionContext(company_a.hr))
+        workflow.refuse(refused, reason="Illisible", context=ActionContext(company_a.hr))
         logs = AuditLog.objects.filter(target_type="approvals.transportproof")
         summaries = list(logs.values_list("summary", flat=True))
     assert len(summaries) >= 2

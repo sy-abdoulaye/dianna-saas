@@ -15,6 +15,7 @@ from apps.approvals.models import (
     RequestStatus,
     TeleworkRequest,
 )
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Company, Notification
 from apps.core.tenancy import tenant_context
 from apps.people.models import Employee, Role
@@ -65,9 +66,9 @@ def test_submit_creates_pending_request_event_calendar_and_notifies_the_manager(
 def test_manager_approves_once_even_with_two_clicks(company_a, submit):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.manager)
+        workflow.approve(request, context=ActionContext(company_a.manager))
         with pytest.raises(workflow.WorkflowError) as error:
-            workflow.approve(request, company_a.manager)
+            workflow.approve(request, context=ActionContext(company_a.manager))
     assert str(error.value.message) == "Cette demande a déjà été traitée."
     request.refresh_from_db()
     assert request.status == RequestStatus.APPROVED and request.decided_by == company_a.manager
@@ -87,7 +88,9 @@ def test_two_simultaneous_validations_make_a_single_transition(company_a, submit
         try:
             with tenant_context(company):
                 barrier.wait()
-                workflow.approve(TeleworkRequest.objects.get(pk=request.pk), manager)
+                workflow.approve(
+                    TeleworkRequest.objects.get(pk=request.pk), context=ActionContext(manager)
+                )
                 outcomes.append("ok")
         except workflow.WorkflowError:
             outcomes.append("déjà traitée")
@@ -107,8 +110,10 @@ def test_refusal_needs_a_reason_removes_the_event_and_tells_the_requester(compan
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
         with pytest.raises(workflow.WorkflowError):
-            workflow.refuse(request, company_a.manager, reason="  ")
-        result = workflow.refuse(request, company_a.manager, reason="Réunion d'équipe")
+            workflow.refuse(request, reason="  ", context=ActionContext(company_a.manager))
+        result = workflow.refuse(
+            request, reason="Réunion d'équipe", context=ActionContext(company_a.manager)
+        )
     assert calendar(request) is None
     assert RequestEvent.all_companies.filter(
         request_id=request.pk, action="refused", comment="Réunion d'équipe"
@@ -130,7 +135,7 @@ def test_hr_can_act_for_the_manager_and_it_is_traced(company_a, submit):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
         assert workflow.acting_for(company_a.hr, request) == company_a.manager
-        workflow.approve(request, company_a.hr)
+        workflow.approve(request, context=ActionContext(company_a.hr))
         entry = AuditLog.objects.filter(action="requests.approved").first()
     assert f"à la place de {company_a.manager.full_name}" in entry.summary
 
@@ -183,7 +188,7 @@ def test_telework_auto_approval_option(company_a, submit):
 def test_summer_leave_goes_through_manager_then_hr(company_a, submit):
     request = submit(company_a, company_a.employee, LeaveRequest).request
     with tenant_context(company_a.company):
-        result = workflow.approve(request, company_a.manager)
+        result = workflow.approve(request, context=ActionContext(company_a.manager))
         request.refresh_from_db()
         assert request.status == RequestStatus.MANAGER_APPROVED
         assert calendar(request).status == CalendarEvent.Status.PENDING  # hachuré
@@ -193,7 +198,7 @@ def test_summer_leave_goes_through_manager_then_hr(company_a, submit):
         assert hr_notes.exists()
         assert request in workflow.to_validate(company_a.hr, LeaveRequest)
         assert not workflow.can_decide(company_a.manager, request)
-        workflow.approve(request, company_a.hr)
+        workflow.approve(request, context=ActionContext(company_a.hr))
     request.refresh_from_db()
     assert request.status == RequestStatus.APPROVED
     assert request.manager_decided_by == company_a.manager and request.decided_by == company_a.hr
@@ -205,7 +210,9 @@ def test_without_hr_step_the_manager_decision_is_final(company_a, submit):
     request = submit(company_a, company_a.employee, LeaveRequest).request
     request.company.refresh_from_db()
     with tenant_context(company_a.company):
-        workflow.approve(LeaveRequest.objects.get(pk=request.pk), company_a.manager)
+        workflow.approve(
+            LeaveRequest.objects.get(pk=request.pk), context=ActionContext(company_a.manager)
+        )
     assert LeaveRequest.all_companies.get(pk=request.pk).status == RequestStatus.APPROVED
 
 
@@ -214,14 +221,14 @@ def test_other_absence_is_validated_by_the_manager_alone(company_a, submit):
         company_a, company_a.employee, LeaveRequest, leave_type="other", campaign=None
     ).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.manager)
+        workflow.approve(request, context=ActionContext(company_a.manager))
     assert LeaveRequest.all_companies.get(pk=request.pk).status == RequestStatus.APPROVED
 
 
 def test_no_manager_with_hr_step_means_a_single_hr_validation(company_a, submit):
     request = submit(company_a, company_a.manager, LeaveRequest).request  # L3-02
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.hr)
+        workflow.approve(request, context=ActionContext(company_a.hr))
     assert LeaveRequest.all_companies.get(pk=request.pk).status == RequestStatus.APPROVED
 
 
@@ -231,7 +238,7 @@ def test_hr_manager_decision_is_final(company_a, submit):
         company_a, Employee.all_companies.get(pk=company_a.employee.pk), LeaveRequest
     ).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.hr)  # L3-03
+        workflow.approve(request, context=ActionContext(company_a.hr))  # L3-03
     assert LeaveRequest.all_companies.get(pk=request.pk).status == RequestStatus.APPROVED
 
 
@@ -250,25 +257,29 @@ def test_requester_cancels_a_pending_request_only(company_a, submit):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
         with pytest.raises(workflow.WorkflowError):
-            workflow.cancel(request, company_a.manager)
-        workflow.cancel(request, company_a.employee)
+            workflow.cancel(request, context=ActionContext(company_a.manager))
+        workflow.cancel(request, context=ActionContext(company_a.employee))
         request.refresh_from_db()
         assert request.status == RequestStatus.CANCELLED and calendar(request) is None
         approved = submit(company_a, company_a.employee).request
-        workflow.approve(approved, company_a.manager)
+        workflow.approve(approved, context=ActionContext(company_a.manager))
         with pytest.raises(workflow.WorkflowError):
-            workflow.cancel(approved, company_a.employee)
+            workflow.cancel(approved, context=ActionContext(company_a.employee))
 
 
 def test_hr_cancels_an_approved_request_with_a_reason(company_a, submit, run_tasks):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
-        workflow.approve(request, company_a.manager)
+        workflow.approve(request, context=ActionContext(company_a.manager))
         with pytest.raises(workflow.WorkflowError):
-            workflow.cancel_approved(request, company_a.hr, reason="")
+            workflow.cancel_approved(request, reason="", context=ActionContext(company_a.hr))
         with pytest.raises(workflow.WorkflowError):
-            workflow.cancel_approved(request, company_a.manager, reason="Fermeture")
-        result = workflow.cancel_approved(request, company_a.hr, reason="Fermeture du site")
+            workflow.cancel_approved(
+                request, reason="Fermeture", context=ActionContext(company_a.manager)
+            )
+        result = workflow.cancel_approved(
+            request, reason="Fermeture du site", context=ActionContext(company_a.hr)
+        )
     request.refresh_from_db()
     assert request.status == RequestStatus.CANCELLED and calendar(request) is None
     note = Notification.all_companies.get(pk=result.notification_ids[0])
@@ -285,7 +296,11 @@ def test_undo_submit_removes_everything_and_keeps_an_audit_line(company_a, submi
     result = submit(company_a, company_a.employee)
     request = result.request
     with tenant_context(company_a.company):
-        workflow.undo(TeleworkRequest, result.undo_payload("submit"), company_a.employee)
+        workflow.undo(
+            TeleworkRequest,
+            result.undo_payload("submit"),
+            context=ActionContext(company_a.employee),
+        )
     assert not TeleworkRequest.all_companies.filter(pk=request.pk).exists()
     assert calendar(request) is None
     assert not Notification.all_companies.filter(pk__in=result.notification_ids).exists()
@@ -297,8 +312,12 @@ def test_undo_submit_removes_everything_and_keeps_an_audit_line(company_a, submi
 def test_undo_approval_restores_pending_and_cancels_the_email(company_a, submit, run_tasks):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
-        result = workflow.approve(request, company_a.manager)
-        workflow.undo(TeleworkRequest, result.undo_payload("approve"), company_a.manager)
+        result = workflow.approve(request, context=ActionContext(company_a.manager))
+        workflow.undo(
+            TeleworkRequest,
+            result.undo_payload("approve"),
+            context=ActionContext(company_a.manager),
+        )
     request.refresh_from_db()
     assert request.status == RequestStatus.PENDING and request.decided_by is None
     assert calendar(request).status == CalendarEvent.Status.PENDING
@@ -312,6 +331,8 @@ def test_undo_approval_restores_pending_and_cancels_the_email(company_a, submit,
 def test_undo_refusal_recreates_the_calendar_event(company_a, submit):
     request = submit(company_a, company_a.employee).request
     with tenant_context(company_a.company):
-        result = workflow.refuse(request, company_a.manager, reason="Non")
-        workflow.undo(TeleworkRequest, result.undo_payload("refuse"), company_a.manager)
+        result = workflow.refuse(request, reason="Non", context=ActionContext(company_a.manager))
+        workflow.undo(
+            TeleworkRequest, result.undo_payload("refuse"), context=ActionContext(company_a.manager)
+        )
     assert calendar(request).status == CalendarEvent.Status.PENDING

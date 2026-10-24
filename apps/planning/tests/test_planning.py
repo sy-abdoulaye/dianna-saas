@@ -10,6 +10,7 @@ from apps.agenda.days import holidays_between
 from apps.approvals import workflow
 from apps.approvals.models import OnCallDeclaration
 from apps.approvals.tests.conftest import next_weekday
+from apps.core.context import ActionContext
 from apps.core.models import CompanyModule, Module, Service
 from apps.core.tenancy import tenant_context
 from apps.people.models import Employee
@@ -95,8 +96,8 @@ def test_telework_validated_is_full_pending_is_hatched_refused_is_absent(
     validated = submit(company_a, company_a.employee, date=monday + timedelta(days=1)).request
     refused = submit(company_a, company_a.manager, date=monday + timedelta(days=2)).request
     with tenant_context(company_a.company):
-        workflow.approve(validated, company_a.manager)
-        workflow.refuse(refused, company_a.hr, reason="Non")
+        workflow.approve(validated, context=ActionContext(company_a.manager))
+        workflow.refuse(refused, reason="Non", context=ActionContext(company_a.hr))
         rows = services.build_rows(
             [company_a.employee, company_a.manager], monday, monday + timedelta(days=6)
         )

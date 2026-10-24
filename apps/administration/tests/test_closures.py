@@ -160,10 +160,14 @@ def test_undo_of_a_cancellation_is_refused_on_a_new_closure(company_a, submit):
     day = next_weekday(offset_days=14, weekday=3)
     result = submit(company_a, company_a.employee, date=day)
     with tenant_context(company_a.company):
-        cancelled = workflow.cancel(result.request, company_a.employee)
+        cancelled = workflow.cancel(result.request, context=ActionContext(company_a.employee))
         Closure.objects.create(date=day, label="Inventaire")
         with pytest.raises(workflow.WorkflowError) as error:
-            workflow.undo(TeleworkRequest, cancelled.undo_payload("cancel"), company_a.employee)
+            workflow.undo(
+                TeleworkRequest,
+                cancelled.undo_payload("cancel"),
+                context=ActionContext(company_a.employee),
+            )
     assert "fermée" in str(error.value.message)
 
 
