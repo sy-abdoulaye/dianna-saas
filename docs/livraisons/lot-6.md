@@ -96,7 +96,7 @@ Date : 24 octobre 2026. Branche : `lot-6`.
 - **Questionnaires.**
   - « Répondre » disparaît après l'échéance.
   - Une confirmation ne s'ouvre que si l'action est possible, avec un message d'état exact (L6-20).
-  - « Prolonger l'échéance » est journalisé (L6-21).
+  - « Prolonger l'échéance » est journalisé, seulement tant que l'échéance n'est pas passée ; un questionnaire échu est clos partout (L6-21, corrigé le 26 oct.).
   - Commentaires : 5 par question, puis « Afficher plus » par paquets de 20 (L6-22).
 - **Tests.**
   - Test renommé `test_response_keys_do_not_follow_the_order_of_receipts`.

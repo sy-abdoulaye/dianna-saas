@@ -411,14 +411,35 @@ def test_hr_extends_the_due_date_to_a_future_date_only(client_for, company_a, op
     assert client_for(company_a.manager).get(url(survey, "prolonger/")).status_code == 403
 
 
-def test_expired_open_survey_can_be_extended_and_answered_again(company_a, open_survey):
+def test_after_the_due_date_results_are_shown_and_the_survey_can_no_longer_be_extended(
+    client_for, company_a, open_survey
+):
+    """Dès que les résultats ont pu être visibles, plus aucune réponse n'entre (L6-01,
+    L6-21) : le questionnaire échu est clos partout, même si la tâche n'a pas tourné."""
     survey = open_survey(due_date=today() + timedelta(days=1))
+    for person in invited_people(survey)[:5]:
+        answer(survey, person)
     Survey.all_companies.filter(pk=survey.pk).update(due_date=today() - timedelta(days=1))
-    with tenant_context(company_a.company):
-        services.extend_due_date(
-            Survey.objects.get(pk=survey.pk), today() + timedelta(days=7), actor=company_a.hr
-        )
-    answer(survey, company_a.employee)  # de nouveau accepté
+    hr = client_for(company_a.hr)
+    page = results_page(hr, survey)
+    assert "/ 5" in page  # résultats consultés après l'échéance
+    assert "Prolonger l'échéance" not in page
+    message = "L'échéance est passée : le questionnaire ne peut plus être prolongé."
+    opened = hr.get(url(survey, "prolonger/"))
+    assert opened.status_code == 409 and toast(opened)["title"] == message
+    later = (today() + timedelta(days=10)).isoformat()
+    refused = hr.post(url(survey, "prolonger/"), {"due_date": later})
+    assert toast(refused)["title"] == message
+    survey.refresh_from_db()
+    assert survey.due_date == today() - timedelta(days=1)
+    # Clos partout : statut affiché, filtre, bouton « Répondre », réponse refusée.
+    assert '<span class="badge badge-off">Clos</span>' in page
+    listing = client_for(company_a.employee).get("/questionnaires/?statut=closed").content
+    assert survey.title in listing.decode() and ">Répondre<" not in listing.decode()
+    opened_list = client_for(company_a.employee).get("/questionnaires/?statut=open").content
+    assert survey.title not in opened_list.decode().split('id="results"', 1)[1]
+    with pytest.raises(services.SurveyError, match="n'accepte plus"):
+        answer(survey, invited_people(survey)[6])
 
 
 # ---------- Commentaires repliés (L6-22) ----------

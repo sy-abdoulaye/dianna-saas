@@ -48,7 +48,7 @@
                       <a class="link font-medium" href="{{ detail_url }}">{{ survey.title }}</a>
                       <div class="meta">{{ survey.get_audience_display }} · {% blocktranslate count n=survey.question_count %}{{ n }} question{% plural %}{{ n }} questions{% endblocktranslate %}</div>
                     </td>
-                    <td>{% status_badge "survey" survey.status %}</td>
+                    <td>{% status_badge "survey" survey.effective_status %}</td>
                     <td class="min-w-40">
                       {% if survey.status == "draft" %}
                         <span class="text-ink-3">—</span>

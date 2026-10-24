@@ -249,8 +249,17 @@ def close(survey: Survey, *, actor: Employee | None = None, request=None) -> Sur
     return survey
 
 
-def check_new_due_date(survey: Survey, new_date: date | None, today: date) -> None:
+def check_extendable(survey: Survey, today: date) -> None:
+    """Prolonger n'est possible que tant que l'échéance n'est pas passée : dès que les
+    résultats ont pu être visibles, plus aucune réponse ne doit entrer, sinon la différence
+    entre deux consultations révélerait les réponses d'une personne (L6-01, L6-21)."""
     check_status(survey, Survey.Status.OPEN)
+    if is_due_passed(survey, today):
+        raise SurveyError(_("L'échéance est passée : le questionnaire ne peut plus être prolongé."))
+
+
+def check_new_due_date(survey: Survey, new_date: date | None, today: date) -> None:
+    check_extendable(survey, today)
     if new_date is None or new_date <= today:
         raise SurveyError(_("Choisissez une date à venir."), "due_date")
     if survey.due_date is not None and new_date <= survey.due_date:
@@ -259,7 +268,8 @@ def check_new_due_date(survey: Survey, new_date: date | None, today: date) -> No
 
 @transaction.atomic
 def extend_due_date(survey: Survey, new_date: date, *, actor: Employee, request=None) -> Survey:
-    """« Prolonger l'échéance » d'un questionnaire ouvert, vers une date future (L6-21)."""
+    """« Prolonger l'échéance » d'un questionnaire ouvert dont l'échéance n'est pas passée,
+    vers une date future (L6-21)."""
     survey = _lock(survey, status=Survey.Status.OPEN)
     check_new_due_date(survey, new_date, timezone.localdate())
     previous = survey.due_date

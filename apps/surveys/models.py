@@ -71,6 +71,20 @@ class Survey(TenantModel):
     def __str__(self):
         return self.title
 
+    @property
+    def effective_status(self) -> str:
+        """Statut affiché et appliqué : un questionnaire ouvert dont l'échéance est passée est
+        clos partout (L6-21), même avant que la tâche quotidienne change son statut."""
+        from django.utils import timezone
+
+        if (
+            self.status == self.Status.OPEN
+            and self.due_date is not None
+            and self.due_date < timezone.localdate()
+        ):
+            return self.Status.CLOSED
+        return self.status
+
 
 class Question(TenantModel):
     class Kind(models.TextChoices):

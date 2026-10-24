@@ -61,7 +61,14 @@ def survey_list(viewer: Employee, today: date, *, q: str = "", status: str = "")
             rows = rows.filter(is_invited=True)
     if q:
         rows = rows.filter(title__icontains=q)
-    if status in Survey.Status.values:
+    # Filtre par statut effectif : un questionnaire échu est « Clos » (L6-21).
+    if status == Survey.Status.OPEN:
+        rows = rows.filter(accepting)
+    elif status == Survey.Status.CLOSED:
+        rows = rows.filter(
+            Q(status=Survey.Status.CLOSED) | Q(status=Survey.Status.OPEN, due_date__lt=today)
+        )
+    elif status == Survey.Status.DRAFT:
         rows = rows.filter(status=status)
     return rows
 

@@ -292,7 +292,7 @@ def survey_extend(request, public_id):
     """« Prolonger l'échéance » d'un questionnaire ouvert (L6-21)."""
     survey = _get(request, public_id)
     try:
-        services.check_status(survey, Survey.Status.OPEN)
+        services.check_extendable(survey, timezone.localdate())
     except services.SurveyError as error:
         return error_response(error, close_modal=request.method == "POST")
     form = DueDateForm(request.POST or None, initial={"due_date": survey.due_date})

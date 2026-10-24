@@ -26,7 +26,7 @@
 
 ## Cycle de vie
 
-Brouillon → (Publier, confirmation, notification au public) → Ouvert → (Clore, confirmation, ou automatiquement le lendemain de l'échéance) → Clos. Un brouillon peut être modifié (« Modifier le brouillon », L6-07) ou supprimé ; un questionnaire publié n'est plus modifiable. Le public est figé à la publication ; un public de moins de 5 personnes ne peut pas être publié (L6-05, L6-17). Un questionnaire ouvert peut voir son échéance prolongée vers une date à venir (« Prolonger l'échéance », L6-21). Une confirmation ne s'ouvre que si l'action est possible ; sinon le message dit l'état réel (L6-20).
+Brouillon → (Publier, confirmation, notification au public) → Ouvert → (Clore, confirmation, ou automatiquement le lendemain de l'échéance) → Clos. Un brouillon peut être modifié (« Modifier le brouillon », L6-07) ou supprimé ; un questionnaire publié n'est plus modifiable. Le public est figé à la publication ; un public de moins de 5 personnes ne peut pas être publié (L6-05, L6-17). Un questionnaire ouvert peut voir son échéance prolongée vers une date à venir, tant que l'échéance n'est pas passée (« Prolonger l'échéance », L6-21). Après l'échéance, il est clos partout (statut affiché, réponses refusées, résultats selon le seuil), même avant sa clôture automatique, et ne peut plus être prolongé : « L'échéance est passée : le questionnaire ne peut plus être prolongé. ». Une confirmation ne s'ouvre que si l'action est possible ; sinon le message dit l'état réel (L6-20).
 
 ## Limite connue (L1-09)
 
