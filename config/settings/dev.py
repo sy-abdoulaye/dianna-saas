@@ -1,6 +1,6 @@
 """Développement local."""
 
-from .base import *  # noqa: F403
+from .base import *  # noqa: F403 (réglages communs, complétés ici)
 from .base import env
 
 DEBUG = True

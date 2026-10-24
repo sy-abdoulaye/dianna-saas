@@ -71,7 +71,7 @@ def test_proofs_are_private_encrypted_and_served_after_permission_check(s3, clie
     assert head["ServerSideEncryption"] == "AES256"
     # Aucun accès anonyme à l'objet.
     with pytest.raises(urllib.error.HTTPError) as anonymous:
-        urllib.request.urlopen(f"{os.environ['S3_TEST_ENDPOINT']}/{bucket}/{key}")  # noqa: S310
+        urllib.request.urlopen(f"{os.environ['S3_TEST_ENDPOINT']}/{bucket}/{key}")  # noqa: S310 (adresse du MinIO de test)
     assert anonymous.value.code == 403
     served = client_for(company_a.hr).get(f"/transport/{proof.public_id}/justificatif/")
     assert served.content == PDF_BYTES

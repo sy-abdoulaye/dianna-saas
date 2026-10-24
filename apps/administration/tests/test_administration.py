@@ -10,7 +10,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.core.models import AuditLog, Company, CompanyModule, Module, Service
 from apps.core.tenancy import tenant_context
 from apps.people.models import Employee, Role
-from apps.people.tests.conftest import image_bytes, private_media  # noqa: F401
+from apps.people.tests.conftest import (  # noqa: F401 (fixtures pytest utilisées par ce module)
+    image_bytes,
+    private_media,
+)
 from tests.factories import EmployeeFactory, ServiceFactory
 
 pytestmark = pytest.mark.django_db

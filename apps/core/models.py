@@ -238,7 +238,7 @@ class TenantBase(models.Model):
             self.company = get_current_company()
         self.check_same_company()
 
-    def save(self, *args, **kwargs):  # noqa: DJ012
+    def save(self, *args, **kwargs):  # noqa: DJ012 (après clean, ordre de lecture du contrôle)
         current = get_current_company(required=False)
         if self.company_id is None:
             if current is None:

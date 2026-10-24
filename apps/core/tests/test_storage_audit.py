@@ -165,7 +165,7 @@ def test_photo_is_removed_when_the_creation_fails(company_a):
 
     before = stored_files(company_a.company)
     photo = ContentFile(b"jpeg", name="photo.jpg")
-    with tenant_context(company_a.company), pytest.raises(Exception):  # noqa: B017
+    with tenant_context(company_a.company), pytest.raises(people.PeopleError):
         people.create_employee(
             {"first_name": "x" * 300, "last_name": "Long", "email": "long@exemple.fr"},
             actor=company_a.admin,
