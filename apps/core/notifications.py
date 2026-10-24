@@ -1,12 +1,35 @@
 """Notifications internes (cloche). Créées par les services ; avec `email_subject`, un
 e-mail part 45 s plus tard (M-16, L0-03), construit au moment de l'envoi (A3-04)."""
 
+from collections.abc import Callable
+
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from apps.core.models import Notification
 
 BELL_SIZE = 8
+
+# Type d'objet source → « l'objet est-il toujours d'actualité ? » (identifiant → booléen).
+# La tâche d'envoi d'un e-mail le vérifie juste avant l'envoi (L6-18).
+SOURCE_CHECKS: dict[str, Callable[[int], bool]] = {}
+
+
+def register_source(source_type: str, is_current: Callable[[int], bool]) -> None:
+    SOURCE_CHECKS[source_type] = is_current
+
+
+def source_type_of(source) -> str:
+    """Demande : son type (telework…) ; autre objet (annonce) : le nom de son modèle."""
+    return getattr(source, "request_type", "") or source._meta.model_name
+
+
+def source_is_current(notification) -> bool:
+    """Faux si l'objet source a disparu (supprimé, annonce retirée) : l'e-mail ne part pas."""
+    check = SOURCE_CHECKS.get(notification.source_type)
+    if not notification.source_type or check is None or notification.source_id is None:
+        return True
+    return check(notification.source_id)
 
 
 def notify(
@@ -28,7 +51,7 @@ def notify(
         url=url,
         kind=kind,
         email_subject=email_subject[:150],
-        source_type=getattr(source, "request_type", "") if source is not None else "",
+        source_type=source_type_of(source) if source is not None else "",
         source_id=source.pk if source is not None else None,
     )
     if email_subject and recipient.user_id and recipient.user.is_active:
@@ -39,7 +62,13 @@ def notify(
 
 
 def notify_many(
-    recipients, text: str, url: str = "", kind: str = Notification.Kind.INFO, *, email_subject=""
+    recipients,
+    text: str,
+    url: str = "",
+    kind: str = Notification.Kind.INFO,
+    *,
+    email_subject: str = "",
+    source=None,
 ) -> int:
     """Même notification pour beaucoup de personnes (annonce, questionnaire publié) : une
     seule requête d'insertion au lieu d'une par personne. Les destinataires viennent du
@@ -62,6 +91,8 @@ def notify_many(
                 url=url,
                 kind=kind,
                 email_subject=email_subject[:150],
+                source_type=source_type_of(source) if source is not None else "",
+                source_id=source.pk if source is not None else None,
             )
             for person in recipients
         ]
@@ -82,7 +113,7 @@ def retract_unsent(source, *, exclude=()) -> int:
     sont plus vraies après une nouvelle transition (A3-05). Les autres restent (historique)."""
     return (
         Notification.objects.filter(
-            source_type=source.request_type, source_id=source.pk, email_sent_at__isnull=True
+            source_type=source_type_of(source), source_id=source.pk, email_sent_at__isnull=True
         )
         .exclude(pk__in=list(exclude))
         .delete()[0]

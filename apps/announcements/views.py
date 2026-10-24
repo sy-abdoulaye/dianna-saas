@@ -98,7 +98,9 @@ def announcement_new(request):
     if request.method == "GET" or not form.is_valid():
         return _form_response(request, form, action_url=action_url)
     try:
-        announcement = services.publish(form.cleaned_data, actor=request.employee, request=request)
+        announcement = services.publish(
+            form.announcement_data(), actor=request.employee, request=request
+        )
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url)
@@ -119,7 +121,9 @@ def announcement_edit(request, public_id):
     if request.method == "GET" or not form.is_valid():
         return _form_response(request, form, action_url=action_url, announcement=announcement)
     try:
-        services.update(announcement, form.cleaned_data, actor=request.employee, request=request)
+        services.update(
+            announcement, form.announcement_data(), actor=request.employee, request=request
+        )
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url, announcement=announcement)

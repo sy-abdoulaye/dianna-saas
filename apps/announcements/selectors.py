@@ -4,6 +4,7 @@ from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from apps.announcements.models import Announcement, AnnouncementRead
 from apps.announcements.services import audience
+from apps.people.models import Employee
 
 
 def visible() -> QuerySet:
@@ -11,7 +12,7 @@ def visible() -> QuerySet:
     return Announcement.objects.filter(deleted_at__isnull=True)
 
 
-def with_read_state(queryset: QuerySet, viewer) -> QuerySet:
+def with_read_state(queryset: QuerySet, viewer: Employee) -> QuerySet:
     return queryset.annotate(
         is_read=Exists(
             AnnouncementRead.objects.filter(announcement=OuterRef("pk"), employee=viewer)
@@ -19,7 +20,7 @@ def with_read_state(queryset: QuerySet, viewer) -> QuerySet:
     )
 
 
-def announcement_list(viewer, *, q: str = "", category: str = "") -> QuerySet:
+def announcement_list(viewer: Employee, *, q: str = "", category: str = "") -> QuerySet:
     """Épinglées en premier, puis par date ; recherche dans le titre et le message."""
     rows = visible().select_related("author")
     if q:
@@ -29,11 +30,11 @@ def announcement_list(viewer, *, q: str = "", category: str = "") -> QuerySet:
     return with_read_state(rows, viewer)
 
 
-def unread_count(viewer) -> int:
+def unread_count(viewer: Employee) -> int:
     return with_read_state(visible(), viewer).filter(is_read=False).count()
 
 
-def latest(viewer, size: int = 3) -> list[Announcement]:
+def latest(viewer: Employee, size: int = 3) -> list[Announcement]:
     return list(with_read_state(visible(), viewer)[:size])
 
 

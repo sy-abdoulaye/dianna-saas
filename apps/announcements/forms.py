@@ -4,6 +4,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from apps.announcements.models import BODY_MAX, BODY_MIN, TITLE_MAX, Announcement
+from apps.announcements.services import AnnouncementData
 
 
 class AnnouncementForm(forms.Form):
@@ -26,6 +27,9 @@ class AnnouncementForm(forms.Form):
         },
     )
     pinned = forms.BooleanField(label=_("Épingler en haut de la liste"), required=False)
+
+    def announcement_data(self) -> AnnouncementData:
+        return AnnouncementData(**self.cleaned_data)
 
 
 class FilterForm(forms.Form):

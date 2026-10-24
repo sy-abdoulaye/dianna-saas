@@ -34,7 +34,8 @@ def location(response) -> str:
 
 def publish(company_data, **changes):
     with tenant_context(company_data.company):
-        return services.publish({**FORM, "pinned": False, **changes}, actor=company_data.hr)
+        data = services.AnnouncementData(**{**FORM, **changes})
+        return services.publish(data, actor=company_data.hr)
 
 
 # ---------- Lecture ----------
@@ -155,7 +156,7 @@ def test_short_message_is_refused(client_for, company_a):
     assert response.status_code == 422
     assert "Le message est trop court (15 caractères minimum)." in response.content.decode()
     with tenant_context(company_a.company), pytest.raises(services.AnnouncementError):
-        services.publish({**FORM, "body": "court", "pinned": False}, actor=company_a.hr)
+        services.publish(services.AnnouncementData(**{**FORM, "body": "court"}), actor=company_a.hr)
 
 
 def test_editing_and_pinning_do_not_notify_again(client_for, company_a):
@@ -213,3 +214,62 @@ def test_disabled_module_shows_the_dedicated_page(client_for, company_a):
     )
     page = client_for(company_a.employee).get("/annonces/").content.decode()
     assert "Module désactivé" in page
+
+
+# ---------- Annonce épinglée supprimée (L6-18) ----------
+
+
+def test_pinned_announcement_deleted_within_45_seconds_sends_no_email(
+    client_for, company_a, run_tasks
+):
+    from django.core import mail
+
+    client = client_for(company_a.hr)
+    client.post("/annonces/nouvelle/", {**FORM, "pinned": "on"})
+    announcement = Announcement.all_companies.get(title=FORM["title"])
+    client.post(f"{detail_url(announcement)}supprimer/")
+    assert not Notification.all_companies.filter(url=detail_url(announcement)).exists()
+    run_tasks(after_seconds=46)
+    assert mail.outbox == []
+
+
+def test_undoing_a_deletion_recreates_notifications_without_resending_emails(
+    client_for, company_a, run_tasks
+):
+    from django.core import mail
+
+    client = client_for(company_a.hr)
+    client.post("/annonces/nouvelle/", {**FORM, "pinned": "on"})
+    announcement = Announcement.all_companies.get(title=FORM["title"])
+    run_tasks(after_seconds=46)
+    sent = len(mail.outbox)
+    assert sent == 3  # admin, manager, salarié ; l'invitée n'a pas encore de compte
+    # Une notification sans e-mail parti (arrivée après la publication) : retirée puis
+    # recréée ; les e-mails déjà partis ne sont jamais renvoyés.
+    late = EmployeeFactory(company=company_a.company, last_name="Arrivee")
+    response = client.post(f"{detail_url(announcement)}supprimer/")
+    kept = Notification.all_companies.filter(url=detail_url(announcement))
+    # Restent les 3 notifications dont l'e-mail est parti ; celle de l'invitée sans compte
+    # (aucun e-mail) est retirée, comme celle de la personne arrivée ensuite (aucune).
+    assert kept.count() == 3 and not kept.filter(email_sent_at__isnull=True).exists()
+    client.post(trigger(response)["toast"]["undo_url"])
+    recreated = Notification.all_companies.filter(url=detail_url(announcement))
+    assert recreated.count() == 5 and recreated.filter(recipient=late).exists()
+    run_tasks(after_seconds=46)
+    assert len(mail.outbox) == sent + 1
+    assert mail.outbox[-1].to == [late.user.email]
+
+
+def test_email_task_skips_a_notification_whose_announcement_is_gone(company_a, run_tasks):
+    """La tâche vérifie aussi l'objet source, même si la notification est restée."""
+    from django.core import mail
+
+    with tenant_context(company_a.company):
+        announcement = services.publish(
+            services.AnnouncementData(**FORM, pinned=True), actor=company_a.hr
+        )
+    Announcement.all_companies.filter(pk=announcement.pk).update(
+        deleted_at=announcement.published_at
+    )
+    run_tasks(after_seconds=46)
+    assert mail.outbox == []
