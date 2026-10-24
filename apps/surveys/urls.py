@@ -13,4 +13,10 @@ urlpatterns = [
     path("questionnaires/<uuid:public_id>/publier/", views.survey_publish, name="publish"),
     path("questionnaires/<uuid:public_id>/clore/", views.survey_close, name="close"),
     path("questionnaires/<uuid:public_id>/supprimer/", views.survey_delete, name="delete"),
+    path("questionnaires/<uuid:public_id>/prolonger/", views.survey_extend, name="extend"),
+    path(
+        "questionnaires/<uuid:public_id>/reponses/<int:order>/",
+        views.survey_more_answers,
+        name="more_answers",
+    ),
 ]

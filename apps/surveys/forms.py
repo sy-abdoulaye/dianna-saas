@@ -67,6 +67,17 @@ class SurveyForm(forms.Form):
         }
 
 
+class DueDateForm(forms.Form):
+    """« Prolonger l'échéance » : la date est contrôlée par le service (à venir, après
+    l'échéance actuelle)."""
+
+    due_date = forms.DateField(
+        label=_("Nouvelle échéance"),
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        error_messages={"required": _("Choisissez une date à venir.")},
+    )
+
+
 class AnswerForm(forms.Form):
     """Un champ par question : note de 1 à 5 et commentaire facultatif, ou réponse libre."""
 

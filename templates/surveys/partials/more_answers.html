@@ -1,0 +1,8 @@
+{% for row in rows %}
+  {% if question.kind == "scale" %}
+    {% include "surveys/partials/answer_item.html" with score=row.0 text=row.1 %}
+  {% else %}
+    {% include "surveys/partials/answer_item.html" with score=None text=row %}
+  {% endif %}
+{% endfor %}
+{% if next_start %}{% include "surveys/partials/more_button.html" %}{% endif %}

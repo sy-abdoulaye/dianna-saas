@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit, notifications
+from apps.core.dates import format_date
 from apps.core.errors import ServiceError
 from apps.people.models import IN_POST_STATUSES, Employee, EmployeeStatus
 from apps.surveys.models import (
@@ -52,7 +53,7 @@ class DraftData:
 # ---------- Public ----------
 
 
-def audience_people(audience: str, today: date) -> QuerySet:
+def audience_people(audience: str, today: date) -> QuerySet[Employee]:
     """Personnes visées (L6-04) : présentes (« Actif ») ; « Managers » : au moins un
     collaborateur direct ; « Arrivés depuis moins d'un an » : arrivée dans les 365 jours."""
     people = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
@@ -104,7 +105,7 @@ def _write_questions(survey: Survey, data: DraftData) -> None:
 
 
 @transaction.atomic
-def create_draft(data: DraftData, *, actor, request=None) -> Survey:
+def create_draft(data: DraftData, *, actor: Employee, request=None) -> Survey:
     _check_draft(data, timezone.localdate())
     survey = Survey.objects.create(
         title=data.title, audience=data.audience, due_date=data.due_date, created_by=actor
@@ -120,15 +121,28 @@ def create_draft(data: DraftData, *, actor, request=None) -> Survey:
     return survey
 
 
+STATE_MESSAGES = {
+    Survey.Status.DRAFT: _("Ce questionnaire n'est pas encore publié."),
+    Survey.Status.OPEN: _("Ce questionnaire est déjà publié."),
+    Survey.Status.CLOSED: _("Ce questionnaire est déjà clos."),
+}
+
+
+def check_status(survey: Survey, expected: str) -> None:
+    """L'action n'est possible que dans l'état `expected` ; sinon, le message dit l'état
+    réel (« Ce questionnaire est déjà clos. »), jamais un « a changé » vague (L6-20)."""
+    if survey.status != expected:
+        raise SurveyError(STATE_MESSAGES[survey.status])
+
+
 def _lock(survey: Survey, *, status: str) -> Survey:
     locked = Survey.objects.select_for_update().get(pk=survey.pk)
-    if locked.status != status:
-        raise SurveyError(_("Ce questionnaire a changé entre-temps. Rechargez la page."))
+    check_status(locked, status)
     return locked
 
 
 @transaction.atomic
-def update_draft(survey: Survey, data: DraftData, *, actor, request=None) -> Survey:
+def update_draft(survey: Survey, data: DraftData, *, actor: Employee, request=None) -> Survey:
     """« Modifier le brouillon » (L6-07) : titre, public, échéance et questions, tant que le
     questionnaire n'est pas publié."""
     _check_draft(data, timezone.localdate())
@@ -147,7 +161,7 @@ def update_draft(survey: Survey, data: DraftData, *, actor, request=None) -> Sur
 
 
 @transaction.atomic
-def delete_draft(survey: Survey, *, actor, request=None) -> None:
+def delete_draft(survey: Survey, *, actor: Employee, request=None) -> None:
     survey = _lock(survey, status=Survey.Status.DRAFT)
     audit.log(
         "surveys.draft_deleted",
@@ -162,14 +176,12 @@ def delete_draft(survey: Survey, *, actor, request=None) -> None:
 # ---------- Publication et clôture ----------
 
 
-@transaction.atomic
-def publish(survey: Survey, *, actor, request=None) -> int:
-    """Fige le public (invitations), ouvre le questionnaire et prévient le public. Refusé si
-    le public compte moins de personnes que le seuil d'anonymat (L6-05). Renvoie la taille du
+def check_publishable(survey: Survey, today: date) -> list[Employee]:
+    """Brouillon, échéance à venir, public d'au moins le seuil d'anonymat (L6-05, L6-17).
+    Appelé avant d'ouvrir la confirmation, puis sous verrou à la publication. Renvoie le
     public."""
-    survey = _lock(survey, status=Survey.Status.DRAFT)
-    today = timezone.localdate()
-    if survey.due_date is not None and survey.due_date < today:
+    check_status(survey, Survey.Status.DRAFT)
+    if is_due_passed(survey, today):
         raise SurveyError(_("L'échéance est passée : modifiez le brouillon avant de publier."))
     people = list(audience_people(survey.audience, today).select_related("user"))
     if len(people) < survey.anonymity_threshold:
@@ -180,6 +192,16 @@ def publish(survey: Survey, *, actor, request=None) -> int:
             )
             % {"n": survey.anonymity_threshold}
         )
+    return people
+
+
+@transaction.atomic
+def publish(survey: Survey, *, actor: Employee, request=None) -> int:
+    """Fige le public (invitations), ouvre le questionnaire et prévient le public. Refusé si
+    le public compte moins de personnes que le seuil d'anonymat (L6-05). Renvoie la taille du
+    public."""
+    survey = _lock(survey, status=Survey.Status.DRAFT)
+    people = check_publishable(survey, timezone.localdate())
     # bulk_create ne passe pas par TenantModel.save() : l'entreprise est vérifiée ici.
     if any(person.company_id != survey.company_id for person in people):
         raise SurveyError(_("Le public contient une personne d'une autre entreprise."))
@@ -207,7 +229,7 @@ def publish(survey: Survey, *, actor, request=None) -> int:
 
 
 @transaction.atomic
-def close(survey: Survey, *, actor=None, request=None) -> Survey:
+def close(survey: Survey, *, actor: Employee | None = None, request=None) -> Survey:
     """Clôture par les RH, ou automatique le lendemain de l'échéance (sans auteur, L6-06)."""
     survey = _lock(survey, status=Survey.Status.OPEN)
     survey.status, survey.closed_at = Survey.Status.CLOSED, timezone.now()
@@ -220,6 +242,37 @@ def close(survey: Survey, *, actor=None, request=None) -> Survey:
     audit.log(
         "surveys.closed",
         summary % {"title": survey.title},
+        actor=actor,
+        target=survey,
+        request=request,
+    )
+    return survey
+
+
+def check_new_due_date(survey: Survey, new_date: date | None, today: date) -> None:
+    check_status(survey, Survey.Status.OPEN)
+    if new_date is None or new_date <= today:
+        raise SurveyError(_("Choisissez une date à venir."), "due_date")
+    if survey.due_date is not None and new_date <= survey.due_date:
+        raise SurveyError(_("Choisissez une date après l'échéance actuelle."), "due_date")
+
+
+@transaction.atomic
+def extend_due_date(survey: Survey, new_date: date, *, actor: Employee, request=None) -> Survey:
+    """« Prolonger l'échéance » d'un questionnaire ouvert, vers une date future (L6-21)."""
+    survey = _lock(survey, status=Survey.Status.OPEN)
+    check_new_due_date(survey, new_date, timezone.localdate())
+    previous = survey.due_date
+    survey.due_date = new_date
+    survey.save(update_fields=["due_date", "updated_at"])
+    audit.log(
+        "surveys.due_date_extended",
+        _("Échéance prolongée : %(title)s, du %(a)s au %(b)s")
+        % {
+            "title": survey.title,
+            "a": format_date(previous, "long") if previous else "—",
+            "b": format_date(new_date, "long"),
+        },
         actor=actor,
         target=survey,
         request=request,
@@ -265,7 +318,7 @@ def _clean_answers(survey: Survey, raw: dict) -> list[tuple[Question, dict]]:
 
 
 @transaction.atomic
-def submit_answers(survey: Survey, employee, raw: dict) -> None:
+def submit_answers(survey: Survey, employee: Employee, raw: dict) -> None:
     """Enregistre une réponse anonyme. `raw` : {question_pk: {"score", "comment", "text"}}.
     Le reçu (qui a répondu) et la réponse (ce qui a été répondu) sont créés dans la même
     transaction, sans clé commune ; une seconde réponse est refusée par la contrainte

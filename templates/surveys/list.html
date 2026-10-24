@@ -60,7 +60,7 @@
                     </td>
                     <td class="text-ink-2">{% if survey.due_date %}{{ survey.due_date|fr_date:"short_year" }}{% else %}—{% endif %}</td>
                     <td class="end">
-                      {% if survey.status == "open" and survey.is_invited and not survey.has_answered %}
+                      {% if survey.can_answer_now %}
                         {% button _("Répondre") variant="primary" size="sm" href=detail_url %}
                       {% elif can_manage or can_view_results %}
                         {% button _("Voir") size="sm" href=detail_url %}

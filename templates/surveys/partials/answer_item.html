@@ -1,0 +1,7 @@
+{% load i18n %}
+{% comment %}Commentaire d'une note (score, texte) ou réponse libre (texte).{% endcomment %}
+{% if score %}
+  <li class="justify-start"><span class="pill">{% blocktranslate %}Note {{ score }}{% endblocktranslate %}</span><span>{{ text }}</span></li>
+{% else %}
+  <li>{{ text }}</li>
+{% endif %}

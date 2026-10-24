@@ -8,10 +8,21 @@ répondants ni des non-répondants."""
 from dataclasses import dataclass, field
 from datetime import date
 
-from django.db.models import Count, Exists, IntegerField, OuterRef, Q, QuerySet, Subquery
+from django.db.models import (
+    BooleanField,
+    Count,
+    Exists,
+    ExpressionWrapper,
+    IntegerField,
+    OuterRef,
+    Q,
+    QuerySet,
+    Subquery,
+)
 from django.db.models.functions import Coalesce
 
 from apps.core import permissions
+from apps.people.models import Employee
 from apps.surveys.models import Answer, Question, Survey, SurveyInvitation, SurveyReceipt
 from apps.surveys.services import accepts_answers, is_due_passed
 
@@ -27,15 +38,22 @@ def _count(model) -> Coalesce:
     return Coalesce(Subquery(rows, output_field=IntegerField()), 0)
 
 
-def survey_list(viewer, *, q: str = "", status: str = "") -> QuerySet:
+def survey_list(viewer: Employee, today: date, *, q: str = "", status: str = "") -> QuerySet:
     """RH et administrateur : tous, brouillons compris. Managers : tous les questionnaires
-    publiés (ils voient les résultats). Salariés : ceux qui leur sont destinés."""
+    publiés (ils voient les résultats). Salariés : ceux qui leur sont destinés.
+    `can_answer_now` : ouvert, échéance non passée, destiné à la personne, sans réponse."""
+    accepting = Q(status=Survey.Status.OPEN) & (Q(due_date__isnull=True) | Q(due_date__gte=today))
     rows = Survey.objects.annotate(
         invited_count=_count(SurveyInvitation),
         response_count=_count(SurveyReceipt),
         question_count=Count("questions"),
         is_invited=Exists(SurveyInvitation.objects.filter(survey=OuterRef("pk"), employee=viewer)),
         has_answered=Exists(SurveyReceipt.objects.filter(survey=OuterRef("pk"), employee=viewer)),
+    )
+    rows = rows.annotate(
+        can_answer_now=ExpressionWrapper(
+            accepting & Q(is_invited=True) & Q(has_answered=False), output_field=BooleanField()
+        )
     )
     if not permissions.can(viewer, "surveys.manage"):
         rows = rows.exclude(status=Survey.Status.DRAFT)
@@ -48,7 +66,7 @@ def survey_list(viewer, *, q: str = "", status: str = "") -> QuerySet:
     return rows
 
 
-def to_answer(viewer, today: date) -> list[Survey]:
+def to_answer(viewer: Employee, today: date) -> list[Survey]:
     """Questionnaires ouverts, destinés à la personne, sans réponse de sa part."""
     return list(
         Survey.objects.filter(status=Survey.Status.OPEN, invitations__employee=viewer)
@@ -58,7 +76,7 @@ def to_answer(viewer, today: date) -> list[Survey]:
     )
 
 
-def can_answer(survey: Survey, viewer, today: date) -> bool:
+def can_answer(survey: Survey, viewer: Employee, today: date) -> bool:
     return (
         accepts_answers(survey, today)
         and SurveyInvitation.objects.filter(survey=survey, employee=viewer).exists()
@@ -80,18 +98,35 @@ def results_visible(survey: Survey, today: date, responses: int) -> bool:
     return finished and responses >= survey.anonymity_threshold
 
 
+# Commentaires et réponses libres : les premiers sous chaque question, la suite par paquets
+# (« Afficher plus ») pour rester lisible et léger à plusieurs centaines de réponses.
+PREVIEW_SIZE = 5
+MORE_SIZE = 20
+
+
 @dataclass
 class ScaleResult:
     question: Question
     average: float
     distribution: list[tuple[int, int, int]]  # (note, nombre, pourcentage), de 5 à 1
-    comments: list[tuple[int, str]] = field(default_factory=list)  # (note, commentaire)
+    comments: list[tuple[int, str]] = field(default_factory=list)  # aperçu (note, texte)
+    comment_count: int = 0
+
+    @property
+    def hidden_count(self) -> int:
+        """Commentaires au-delà de l'aperçu, chargés par « Afficher plus »."""
+        return self.comment_count - len(self.comments)
 
 
 @dataclass
 class TextResult:
     question: Question
-    answers: list[str] = field(default_factory=list)
+    answers: list[str] = field(default_factory=list)  # aperçu
+    answer_count: int = 0
+
+    @property
+    def hidden_count(self) -> int:
+        return self.answer_count - len(self.answers)
 
 
 @dataclass
@@ -105,16 +140,22 @@ class Results:
         return round(self.responses * 100 / self.invited) if self.invited else 0
 
 
+def written_answers(question: Question) -> QuerySet:
+    """Commentaires d'une question notée (note, texte) ou réponses libres (texte). Par note
+    décroissante ; à note égale, dans l'ordre de la clé UUID aléatoire, donc jamais dans
+    l'ordre d'arrivée des réponses."""
+    answers = Answer.objects.filter(question=question)
+    if question.kind == Question.Kind.SCALE:
+        return answers.exclude(comment="").order_by("-score", "id").values_list("score", "comment")
+    return answers.exclude(text="").order_by("id").values_list("text", flat=True)
+
+
 def _scale_result(question: Question) -> ScaleResult:
     answers = Answer.objects.filter(question=question, score__isnull=False)
     counts = dict(answers.values_list("score").annotate(n=Count("pk")).order_by())
     total = sum(counts.values())
     average = sum(score * n for score, n in counts.items()) / total if total else 0
-    # Commentaires : par note décroissante ; à note égale, dans l'ordre de la clé UUID
-    # aléatoire, donc jamais dans l'ordre d'arrivée des réponses.
-    comments = list(
-        answers.exclude(comment="").order_by("-score", "id").values_list("score", "comment")
-    )
+    comments = written_answers(question)
     return ScaleResult(
         question,
         average,
@@ -122,13 +163,14 @@ def _scale_result(question: Question) -> ScaleResult:
             (score, counts.get(score, 0), round(counts.get(score, 0) * 100 / total) if total else 0)
             for score in (5, 4, 3, 2, 1)
         ],
-        comments,
+        list(comments[:PREVIEW_SIZE]),
+        comments.count(),
     )
 
 
 def _text_result(question: Question) -> TextResult:
-    texts = Answer.objects.filter(question=question).exclude(text="").order_by("id")
-    return TextResult(question, list(texts.values_list("text", flat=True)))
+    texts = written_answers(question)
+    return TextResult(question, list(texts[:PREVIEW_SIZE]), texts.count())
 
 
 def survey_results(survey: Survey, today: date) -> Results | None:
@@ -141,3 +183,17 @@ def survey_results(survey: Survey, today: date) -> Results | None:
         for question in survey.questions.all()
     ]
     return Results(responses, invited, items)
+
+
+def more_written_answers(
+    survey: Survey, order: int, start: int, today: date
+) -> tuple[Question, list, int] | None:
+    """Suite des commentaires (ou réponses libres) d'une question à partir de `start` :
+    (question, paquet, nombre total). None si les résultats ne sont pas visibles : même
+    règle que la page de résultats (results_visible)."""
+    responses, _invited = participation(survey)
+    question = survey.questions.filter(order=order).first()
+    if question is None or not results_visible(survey, today, responses):
+        return None
+    rows = written_answers(question)
+    return question, list(rows[start : start + MORE_SIZE]), rows.count()

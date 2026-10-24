@@ -1,0 +1,9 @@
+{% load i18n ui %}
+{% comment %}« Afficher plus » : charge le paquet suivant à la place de ce bouton.{% endcomment %}
+<li class="justify-start">
+  {% url "surveys:more_answers" survey.public_id question.order as more_url %}
+  {% blocktranslate asvar more_label count n=remaining %}Afficher plus ({{ n }} restant){% plural %}Afficher plus ({{ n }} restants){% endblocktranslate %}
+  {% with start=next_start|stringformat:"d" %}
+    {% button more_label variant="ghost" size="sm" hx_get=more_url|add:"?debut="|add:start hx_target="closest li" hx_swap="outerHTML" %}
+  {% endwith %}
+</li>

@@ -1,0 +1,25 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% icon "cal" %}{% endblock %}
+{% block modal_title %}{% translate "Prolonger l'échéance" %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        {% include "components/form_errors.html" %}
+        <p class="modal-text">
+          {% if survey.due_date %}
+            {% blocktranslate with title=survey.title day=survey.due_date|fr_date:"long" %}« {{ title }} » accepte des réponses jusqu'au {{ day }}.{% endblocktranslate %}
+          {% else %}
+            {% blocktranslate with title=survey.title %}« {{ title }} » n'a pas d'échéance.{% endblocktranslate %}
+          {% endif %}
+        </p>
+        {% include "components/field.html" with field=form.due_date %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Prolonger") variant="primary" icon="check" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

@@ -24,7 +24,7 @@ from apps.core.htmx import (
 )
 from apps.core.models import Module
 from apps.surveys import selectors, services
-from apps.surveys.forms import AnswerForm, FilterForm, SurveyForm
+from apps.surveys.forms import AnswerForm, DueDateForm, FilterForm, SurveyForm
 from apps.surveys.models import Survey, SurveyInvitation
 
 PER_PAGE = 20
@@ -60,7 +60,9 @@ def survey_list(request):
     filters = FilterForm(request.GET or None, can_manage=can_manage)
     cleaned = filters.cleaned_data if filters.is_valid() else {}
     q, status = cleaned.get("q", "").strip(), cleaned.get("statut", "")
-    rows = selectors.survey_list(me, q=q, status=status).order_by("-created_at", "-pk")
+    rows = selectors.survey_list(me, timezone.localdate(), q=q, status=status).order_by(
+        "-created_at", "-pk"
+    )
     context = {
         "filter_form": filters,
         "page_obj": Paginator(rows, PER_PAGE).get_page(request.GET.get("page")),
@@ -183,8 +185,8 @@ def survey_new(request):
 @permission_required("surveys.manage")
 def survey_edit(request, public_id):
     survey = _get(request, public_id)
-    if survey.status != Survey.Status.DRAFT:
-        raise Http404
+    if request.method == "GET" and survey.status != Survey.Status.DRAFT:
+        return error_response(services.SurveyError(services.STATE_MESSAGES[survey.status]))
     form = SurveyForm(request.POST or None, initial=SurveyForm.initial_for(survey))
     action_url = reverse("surveys:edit", args=[survey.public_id])
     return _save_draft(request, form, action_url=action_url, survey=survey)
@@ -201,6 +203,10 @@ def _confirm(request, survey, *, action, **texts):
 def survey_publish(request, public_id):
     survey = _get(request, public_id)
     if request.method == "GET":
+        try:
+            services.check_publishable(survey, timezone.localdate())
+        except services.SurveyError as error:
+            return error_response(error)
         return _confirm(
             request,
             survey,
@@ -230,6 +236,10 @@ def survey_publish(request, public_id):
 def survey_close(request, public_id):
     survey = _get(request, public_id)
     if request.method == "GET":
+        try:
+            services.check_status(survey, Survey.Status.OPEN)
+        except services.SurveyError as error:
+            return error_response(error)
         responses, _invited = selectors.participation(survey)
         return _confirm(
             request,
@@ -254,6 +264,10 @@ def survey_close(request, public_id):
 def survey_delete(request, public_id):
     survey = _get(request, public_id)
     if request.method == "GET":
+        try:
+            services.check_status(survey, Survey.Status.DRAFT)
+        except services.SurveyError as error:
+            return error_response(error)
         return _confirm(
             request,
             survey,
@@ -269,3 +283,65 @@ def survey_delete(request, public_id):
         return error_response(error, close_modal=True)
     toast = toast_response(Toast(title=_("Brouillon supprimé")), close_modal=True)
     return location(toast, reverse("surveys:list"))
+
+
+@require_http_methods(["GET", "POST"])
+@module_required(Module.SURVEYS)
+@permission_required("surveys.manage")
+def survey_extend(request, public_id):
+    """« Prolonger l'échéance » d'un questionnaire ouvert (L6-21)."""
+    survey = _get(request, public_id)
+    try:
+        services.check_status(survey, Survey.Status.OPEN)
+    except services.SurveyError as error:
+        return error_response(error, close_modal=request.method == "POST")
+    form = DueDateForm(request.POST or None, initial={"due_date": survey.due_date})
+    context = {
+        "form": form,
+        "survey": survey,
+        "action_url": reverse("surveys:extend", args=[survey.public_id]),
+    }
+    if request.method == "GET" or not form.is_valid():
+        return modal_form_response(request, "surveys/partials/extend_modal.html", context)
+    try:
+        services.extend_due_date(
+            survey, form.cleaned_data["due_date"], actor=request.employee, request=request
+        )
+    except services.SurveyError as error:
+        form.add_error(error.field, error.message)
+        return modal_form_response(request, "surveys/partials/extend_modal.html", context)
+    toast = Toast(title=_("Échéance prolongée"), message=survey.title)
+    return location(toast_response(toast, close_modal=True), _url(survey))
+
+
+@require_GET
+@module_required(Module.SURVEYS)
+@permission_required("surveys.view_results")
+def survey_more_answers(request, public_id, order):
+    """« Afficher plus » sous une question : suite des commentaires ou réponses libres,
+    seulement si les résultats sont visibles (même règle que la page de résultats)."""
+    survey = _get(request, public_id)
+    start = max(_int(request.GET.get("debut")), 0)
+    found = selectors.more_written_answers(survey, order, start, timezone.localdate())
+    if found is None:
+        raise Http404
+    question, rows, total = found
+    following = start + len(rows)
+    return render(
+        request,
+        "surveys/partials/more_answers.html",
+        {
+            "survey": survey,
+            "question": question,
+            "rows": rows,
+            "next_start": following if following < total else None,
+            "remaining": total - following,
+        },
+    )
+
+
+def _int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0

@@ -62,7 +62,9 @@ def test_hr_creates_then_edits_a_draft_only_while_it_is_a_draft(client_for, comp
     assert Question.all_companies.filter(survey=survey).count() == 3
     client.post(url(survey, "modifier/"), {**DRAFT, "audience": "all"})
     client.post(url(survey, "publier/"))
-    assert client.get(url(survey, "modifier/")).status_code == 404  # publié : plus modifiable
+    published = client.get(url(survey, "modifier/"))  # publié : plus modifiable
+    assert published.status_code == 409
+    assert toast(published)["title"] == "Ce questionnaire est déjà publié."
 
 
 @pytest.mark.parametrize(
@@ -132,7 +134,7 @@ def test_audience_smaller_than_the_threshold_cannot_be_published(client_for, com
     EmployeeFactory(company=company_a.company, arrival_date=today() - timedelta(days=30))
     response = client_for(company_a.hr).post(url(survey, "publier/"))
     assert response.status_code == 409
-    assert "Le public compte moins de 3 personnes" in toast(response)["title"]
+    assert "Le public compte moins de 5 personnes" in toast(response)["title"]
     survey.refresh_from_db()
     assert survey.status == "draft"
     assert not SurveyInvitation.all_companies.filter(survey=survey).exists()
@@ -193,7 +195,7 @@ def test_answers_are_refused_after_the_due_date(company_a, open_survey):
 
 def test_employee_does_not_see_a_survey_that_is_not_for_them(client_for, company_a):
     with tenant_context(company_a.company):
-        for index in range(3):
+        for index in range(4):  # + la manager de la fixture = 5 (seuil)
             report = EmployeeFactory(company=company_a.company, last_name=f"Equipe{index}")
             report.manager = EmployeeFactory(company=company_a.company, last_name=f"Chef{index}")
             report.save()
@@ -230,16 +232,17 @@ def test_employee_cannot_see_results(client_for, company_a, open_survey):
     assert client_for(company_a.employee).get(url(survey) + "?vue=resultats").status_code == 403
 
 
-def test_two_answers_keep_results_and_comments_hidden_after_closing(
+def test_four_answers_keep_results_and_comments_hidden_after_closing(
     client_for, company_a, open_survey
 ):
+    """Seuil de 5 (L6-17) : à 4 réponses, résultats et commentaires restent masqués."""
     survey = open_survey()
-    for person in invited_people(survey)[:2]:
+    for person in invited_people(survey)[:4]:
         answer(survey, person, comments=("Commentaire visible ?", ""))
     close(survey, company_a.hr)
     page = results_page(client_for(company_a.manager), survey)
     assert "Résultats masqués" in page
-    assert "Moins de 3 personnes ont répondu (2)" in page
+    assert "Moins de 5 personnes ont répondu (4)" in page
     assert "Commentaire visible ?" not in page
     with tenant_context(company_a.company):
         from apps.surveys import selectors
@@ -255,11 +258,13 @@ def test_closed_survey_shows_results_with_comments_sorted_by_score(
     answer(survey, people[0], scores=(2, 3), comments=("Charge trop lourde", ""))
     answer(survey, people[1], scores=(5, 4), comments=("Très bonne équipe", ""), text="Café")
     answer(survey, people[2], scores=(4, 4))
+    answer(survey, people[3], scores=(3, 4))
+    answer(survey, people[4], scores=(1, 2))
     client = client_for(company_a.hr)
     close_response = client.post(url(survey, "clore/"))
     assert toast(close_response)["title"] == "Questionnaire clos"
     page = results_page(client, survey)
-    assert "3,7 / 5" in page  # (2 + 5 + 4) / 3
+    assert "3,0 / 5" in page  # (2 + 5 + 4 + 3 + 1) / 5
     assert page.index("Très bonne équipe") < page.index("Charge trop lourde")
     assert "Note 5" in page and "Note 2" in page and "Commentaires (2)" in page
     assert "Café" in page
@@ -272,7 +277,7 @@ def test_due_date_passed_shows_results_and_the_daily_task_closes_it(
     client_for, company_a, open_survey, run_tasks
 ):
     survey = open_survey(due_date=today() + timedelta(days=1))
-    for person in invited_people(survey)[:3]:
+    for person in invited_people(survey)[:5]:
         answer(survey, person)
     Survey.all_companies.filter(pk=survey.pk).update(due_date=today() - timedelta(days=1))
     assert "/ 5" in results_page(client_for(company_a.manager), survey)
@@ -294,3 +299,183 @@ def test_manager_who_has_not_answered_switches_between_answer_and_results(
     assert "Envoyer mes réponses" in page
     assert 'href="/questionnaires/' in page and "?vue=resultats" in page
     assert "Les résultats seront visibles à la clôture" in results_page(client, survey)
+
+
+def test_audience_of_four_is_refused_and_of_five_is_published(company_a):
+    """Public minimal de 5 personnes (L6-17) : « Managers » avec 4 puis 5 managers."""
+
+    def add_manager(index):
+        report = EmployeeFactory(company=company_a.company, last_name=f"Collab{index}")
+        report.manager = EmployeeFactory(company=company_a.company, last_name=f"Resp{index}")
+        report.save()
+
+    with tenant_context(company_a.company):
+        for index in range(3):  # + la manager de la fixture = 4
+            add_manager(index)
+        survey = services.create_draft(
+            services.DraftData("Managers", "managers", None, ["Question"]), actor=company_a.hr
+        )
+        with pytest.raises(services.SurveyError, match="moins de 5 personnes"):
+            services.publish(survey, actor=company_a.hr)
+        add_manager(3)
+        assert services.publish(survey, actor=company_a.hr) == 5
+
+
+def test_results_appear_at_exactly_five_answers(company_a, open_survey):
+    from apps.surveys import selectors
+
+    survey = open_survey()
+    people = invited_people(survey)
+    for person in people[:4]:
+        answer(survey, person)
+    close(survey, company_a.hr)
+    with tenant_context(company_a.company):
+        closed = Survey.objects.get(pk=survey.pk)
+        assert selectors.results_visible(closed, today(), 4) is False
+        assert selectors.results_visible(closed, today(), 5) is True
+
+
+def test_survey_comment_is_stored_without_control_characters(client_for, company_a, open_survey):
+    """L6-19 : U+202E, ESC et BEL retirés du commentaire et de la réponse libre."""
+    survey = open_survey()
+    client_for(company_a.employee).post(
+        f"/questionnaires/{survey.public_id}/repondre/",
+        {"q1": "4", "c1": "Bien\u202e\x1b\x07", "q2": "3", "q3": "Idée\x07"},
+    )
+    comments = set(Answer.all_companies.values_list("comment", flat=True))
+    texts = set(Answer.all_companies.values_list("text", flat=True))
+    assert "Bien" in comments and "Idée" in texts
+
+
+# ---------- Actions possibles seulement (L6-20) ----------
+
+
+def test_answer_button_disappears_after_the_due_date(client_for, company_a, open_survey):
+    survey = open_survey(due_date=today() + timedelta(days=3))
+    client = client_for(company_a.employee)
+    assert ">Répondre<" in client.get("/questionnaires/").content.decode()
+    Survey.all_companies.filter(pk=survey.pk).update(due_date=today() - timedelta(days=1))
+    listing = client.get("/questionnaires/").content.decode()
+    assert ">Répondre<" not in listing and "à remplir" not in listing
+
+
+def test_confirmations_open_only_when_the_action_is_possible(client_for, company_a, open_survey):
+    survey = open_survey()
+    client = client_for(company_a.hr)
+    for action in ("publier/", "supprimer/"):
+        response = client.get(url(survey, action))
+        assert response.status_code == 409
+        assert toast(response)["title"] == "Ce questionnaire est déjà publié."
+    assert "Clore ce questionnaire ?" in client.get(url(survey, "clore/")).content.decode()
+    close(survey, company_a.hr)
+    for action in ("clore/", "prolonger/"):
+        response = client.get(url(survey, action))
+        assert toast(response)["title"] == "Ce questionnaire est déjà clos."
+    again = client.post(url(survey, "clore/"))
+    assert toast(again)["title"] == "Ce questionnaire est déjà clos."
+    assert "changé" not in again["HX-Trigger"]
+
+
+def test_publish_confirmation_is_refused_up_front_when_the_audience_is_too_small(
+    client_for, company_a
+):
+    with tenant_context(company_a.company):
+        survey = services.create_draft(
+            services.DraftData("Intégration", "new_hires", None, ["Question"]),
+            actor=company_a.hr,
+        )
+    response = client_for(company_a.hr).get(url(survey, "publier/"))
+    assert response.status_code == 409
+    assert "moins de 5 personnes" in toast(response)["title"]
+
+
+# ---------- Prolonger l'échéance (L6-21) ----------
+
+
+def test_hr_extends_the_due_date_to_a_future_date_only(client_for, company_a, open_survey):
+    survey = open_survey(due_date=today() + timedelta(days=5))
+    client = client_for(company_a.hr)
+    assert "Prolonger l'échéance" in client.get(url(survey)).content.decode()
+    assert "Nouvelle échéance" in client.get(url(survey, "prolonger/")).content.decode()
+    past = client.post(url(survey, "prolonger/"), {"due_date": today().isoformat()})
+    assert past.status_code == 422 and "Choisissez une date à venir." in past.content.decode()
+    earlier = (today() + timedelta(days=2)).isoformat()
+    shorter = client.post(url(survey, "prolonger/"), {"due_date": earlier})
+    assert "Choisissez une date après l&#x27;échéance actuelle." in shorter.content.decode()
+    later = today() + timedelta(days=20)
+    done = client.post(url(survey, "prolonger/"), {"due_date": later.isoformat()})
+    assert toast(done)["title"] == "Échéance prolongée"
+    survey.refresh_from_db()
+    assert survey.due_date == later
+    assert AuditLog.all_companies.filter(action="surveys.due_date_extended").exists()
+    assert client_for(company_a.manager).get(url(survey, "prolonger/")).status_code == 403
+
+
+def test_expired_open_survey_can_be_extended_and_answered_again(company_a, open_survey):
+    survey = open_survey(due_date=today() + timedelta(days=1))
+    Survey.all_companies.filter(pk=survey.pk).update(due_date=today() - timedelta(days=1))
+    with tenant_context(company_a.company):
+        services.extend_due_date(
+            Survey.objects.get(pk=survey.pk), today() + timedelta(days=7), actor=company_a.hr
+        )
+    answer(survey, company_a.employee)  # de nouveau accepté
+
+
+# ---------- Commentaires repliés (L6-22) ----------
+
+
+def test_comments_show_a_preview_then_load_the_rest_by_batches(client_for, company_a, open_survey):
+    survey = open_survey(extra_people=12)
+    for index, person in enumerate(invited_people(survey)[:12]):
+        answer(survey, person, scores=(4, 3), comments=(f"Commentaire numéro {index:02d}", ""))
+    close(survey, company_a.hr)
+    client = client_for(company_a.manager)
+    page = results_page(client, survey)
+    assert "Commentaires (12)" in page
+    assert page.count("Commentaire numéro") == 5
+    assert "Afficher plus (7 restants)" in page
+    more = client.get(url(survey, "reponses/1/") + "?debut=5").content.decode()
+    assert more.count("Commentaire numéro") == 7 and "Afficher plus" not in more
+    assert client_for(company_a.employee).get(url(survey, "reponses/1/")).status_code == 403
+
+
+def test_more_answers_follow_the_anonymity_rule(client_for, company_a, open_survey):
+    survey = open_survey()
+    for person in invited_people(survey)[:6]:
+        answer(survey, person, comments=("Pas encore visible", ""))
+    response = client_for(company_a.hr).get(url(survey, "reponses/1/"))
+    assert response.status_code == 404  # ouvert : résultats pas encore visibles
+
+
+def test_comments_with_the_same_score_follow_the_random_key_not_the_arrival(company_a, open_survey):
+    from apps.surveys import selectors
+
+    survey = open_survey(extra_people=8)
+    people = invited_people(survey)[:8]
+    for index, person in enumerate(people):
+        answer(survey, person, scores=(3, 3), comments=(f"Arrivé n° {index}", ""))
+    close(survey, company_a.hr)
+    with tenant_context(company_a.company):
+        question = Question.objects.get(survey=survey, order=1)
+        shown = [text for _score, text in selectors.written_answers(question)]
+        by_key = list(
+            Answer.objects.filter(question=question)
+            .order_by("id")
+            .values_list("comment", flat=True)
+        )
+    assert shown == by_key  # ordre de la clé aléatoire
+    assert shown != [f"Arrivé n° {index}" for index in range(8)]  # pas l'ordre d'arrivée
+
+
+def test_on_the_due_date_answers_are_accepted_and_results_stay_hidden(
+    client_for, company_a, open_survey
+):
+    """Le jour même de l'échéance, le questionnaire accepte encore des réponses ; les
+    résultats n'apparaissent que le lendemain (échéance passée) ou à la clôture."""
+    survey = open_survey(due_date=today())
+    for person in invited_people(survey)[:5]:
+        answer(survey, person)
+    page = results_page(client_for(company_a.manager), survey)
+    assert "Les résultats seront visibles à la clôture" in page
+    Survey.all_companies.filter(pk=survey.pk).update(due_date=today() - timedelta(days=1))
+    assert "/ 5" in results_page(client_for(company_a.manager), survey)

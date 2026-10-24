@@ -27,9 +27,10 @@ def test_anonymous_rows_have_no_link_to_a_person_no_date_and_a_random_key(model)
     assert "submitted_on" not in {f.name for f in fields}
 
 
-def test_receipt_and_response_share_no_key_and_no_order(company_a, open_survey):
-    """Douze personnes répondent dans un ordre connu : aucun champ des réponses ne permet de
-    retrouver cet ordre (la clé UUID aléatoire ne suit pas l'ordre d'arrivée)."""
+def test_response_keys_do_not_follow_the_order_of_receipts(company_a, open_survey):
+    """Douze personnes répondent dans un ordre connu : le seul champ triable d'une réponse
+    est sa clé UUID aléatoire, qui ne suit pas l'ordre d'arrivée ; reçu et réponse n'ont en
+    commun que l'entreprise et le questionnaire."""
     survey = open_survey(extra_people=12)
     respondents = invited_people(survey)[:12]
     for person in respondents:
@@ -73,3 +74,42 @@ def test_answering_writes_no_journal_line_no_notification_and_no_task(company_a,
         DBTaskResult.objects.count(),
     ) == counts
     assert Answer.all_companies.filter(response__survey=survey).count() == 3
+
+
+@pytest.mark.django_db(transaction=True)
+def test_residual_link_in_the_database_by_transaction_number(company_a, open_survey):
+    """Documente le risque résiduel L1-09 : le reçu est créé dans une sous-transaction de
+    celle de la réponse, donc son numéro de transaction (xmin) vaut celui de la réponse + 1.
+    Un accès SQL direct peut ainsi relier une personne à sa réponse ; l'application ne lit
+    jamais cette colonne. CE TEST DEVRA CHANGER avec la réécriture groupée des réponses du
+    lot 8 (le lien devra disparaître)."""
+    from django.db import connection
+
+    survey = open_survey()
+    respondents = invited_people(survey)[:3]
+    for person in respondents:
+        answer(survey, person)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT employee_id, xmin::text::bigint FROM surveys_surveyreceipt"
+            " WHERE survey_id = %s",
+            [survey.pk],
+        )
+        receipts = dict(cursor.fetchall())
+        cursor.execute(
+            "SELECT xmin::text::bigint FROM surveys_surveyresponse WHERE survey_id = %s",
+            [survey.pk],
+        )
+        responses = {row[0] for row in cursor.fetchall()}
+    assert {xmin - 1 for xmin in receipts.values()} == responses
+
+
+def test_answering_writes_no_log_line(company_a, open_survey, caplog):
+    """Aucune ligne de log, à aucun niveau, quand une personne répond (M-10, L6-03)."""
+    import logging
+
+    survey = open_survey()
+    person = invited_people(survey)[0]
+    with caplog.at_level(logging.DEBUG):
+        answer(survey, person, comments=("Commentaire", ""), text="Réponse libre")
+    assert caplog.records == []

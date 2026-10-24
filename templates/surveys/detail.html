@@ -18,7 +18,9 @@
           {% button _("Modifier le brouillon") icon="edit" hx_get=edit_url hx_target="#modal-root" %}
           {% button _("Publier") variant="primary" hx_get=publish_url hx_target="#modal-root" %}
         {% elif survey.status == "open" %}
+          {% url "surveys:extend" survey.public_id as extend_url %}
           {% url "surveys:close" survey.public_id as close_url %}
+          {% button _("Prolonger l'échéance") icon="cal" hx_get=extend_url hx_target="#modal-root" %}
           {% button _("Clore le questionnaire") hx_get=close_url hx_target="#modal-root" %}
         {% endif %}
       </div>

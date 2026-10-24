@@ -25,11 +25,14 @@
         </ul>
         {% if item.comments %}
           <div class="stack comments">
-            <b class="meta">{% blocktranslate with n=item.comments|length %}Commentaires ({{ n }}){% endblocktranslate %}</b>
+            <b class="meta">{% blocktranslate with n=item.comment_count %}Commentaires ({{ n }}){% endblocktranslate %}</b>
             <ul class="rows">
               {% for score, comment in item.comments %}
-                <li class="justify-start"><span class="pill">{% blocktranslate %}Note {{ score }}{% endblocktranslate %}</span><span>{{ comment }}</span></li>
+                {% include "surveys/partials/answer_item.html" with text=comment %}
               {% endfor %}
+              {% if item.comment_count > item.comments|length %}
+                {% include "surveys/partials/more_button.html" with question=item.question next_start=item.comments|length remaining=item.hidden_count %}
+              {% endif %}
             </ul>
           </div>
         {% else %}
@@ -38,7 +41,12 @@
       {% else %}
         <h2 class="h3" id="h-q{{ item.question.order }}">{{ item.question.label }}</h2>
         {% if item.answers %}
-          <ul class="rows">{% for text in item.answers %}<li>{{ text }}</li>{% endfor %}</ul>
+          <ul class="rows">
+            {% for text in item.answers %}{% include "surveys/partials/answer_item.html" with score=None %}{% endfor %}
+            {% if item.answer_count > item.answers|length %}
+              {% include "surveys/partials/more_button.html" with question=item.question next_start=item.answers|length remaining=item.hidden_count %}
+            {% endif %}
+          </ul>
         {% else %}
           <p class="meta">{% translate "Aucune réponse libre." %}</p>
         {% endif %}

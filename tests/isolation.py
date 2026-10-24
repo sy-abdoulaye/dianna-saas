@@ -132,6 +132,14 @@ ISOLATION_CASES = {
         "post",
         lambda b: reverse("surveys:close", args=[b.requests["survey"].public_id]),
     ),
+    "surveys:extend": (
+        "post",
+        lambda b: reverse("surveys:extend", args=[b.requests["survey"].public_id]),
+    ),
+    "surveys:more_answers": (
+        "get",
+        lambda b: reverse("surveys:more_answers", args=[b.requests["survey"].public_id, 1]),
+    ),
     "surveys:delete": (
         "post",
         lambda b: reverse("surveys:delete", args=[b.requests["draft_survey"].public_id]),
