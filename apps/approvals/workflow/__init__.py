@@ -49,8 +49,6 @@ from apps.approvals.workflow.common import (
     AUTO_APPROVAL_NO_VALIDATOR,
     AUTO_APPROVAL_TELEWORK,
     CAMPAIGN_ALREADY_OPEN,
-    CONSTRAINT_MESSAGES,
-    INVALID_VALUE,
     OTHER_DECISION,
     SAME_DAY,
     UNKNOWN_CONSTRAINT,
@@ -65,7 +63,6 @@ from apps.approvals.workflow.common import (
     _lock_requester,
     _save_checked,
     _write_file,
-    constraint_name,
     history,
     sync_calendar,
 )
@@ -106,6 +103,7 @@ from apps.approvals.workflow.validators import (
     is_hr_or_admin,
     to_validate,
 )
+from apps.core.constraints import CONSTRAINT_MESSAGES, INVALID_VALUE, constraint_name
 
 __all__ = [
     "ALREADY_PROCESSED",

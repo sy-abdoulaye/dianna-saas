@@ -17,7 +17,7 @@ from apps.approvals.models import (
     RequestEvent,
     RequestStatus,
 )
-from apps.core import audit
+from apps.core import audit, constraints
 from apps.core.errors import ServiceError
 from apps.core.files import delete_private, write_private
 from apps.people.models import Employee
@@ -113,27 +113,19 @@ def _lock_requester(employee_id) -> Employee:
     return Employee.objects.select_for_update().select_related("company").get(pk=employee_id)
 
 
-# Contrainte de base → (champ, message) : chaque IntegrityError est traduite selon la
-# contrainte en cause (L5-19), jamais par un message générique faux.
-CONSTRAINT_MESSAGES = {
-    "telework_one_active_per_day": ("date", SAME_DAY),
-    "transport_amount_range": ("amount", AMOUNT_RANGE),
-    "transport_valid_after_month": ("month", _("La validité doit commencer au mois choisi.")),
-    "leave_end_after_start": ("end", _("Le dernier jour doit être après le premier.")),
-    "on_call_end_after_start": ("end", _("La fin doit être après le début.")),
-}
+# Contraintes des demandes, inscrites dans la table commune (apps/core/constraints.py).
+constraints.register(
+    {
+        "telework_one_active_per_day": ("date", SAME_DAY),
+        "transport_amount_range": ("amount", AMOUNT_RANGE),
+        "transport_valid_after_month": ("month", _("La validité doit commencer au mois choisi.")),
+        "leave_end_after_start": ("end", _("Le dernier jour doit être après le premier.")),
+        "on_call_end_after_start": ("end", _("La fin doit être après le début.")),
+    }
+)
 
 
 UNKNOWN_CONSTRAINT = _("La demande n'a pas pu être enregistrée : une valeur n'est pas acceptée.")
-
-
-INVALID_VALUE = _("Une valeur saisie est trop longue ou invalide. Vérifiez la saisie.")
-
-
-def constraint_name(exc) -> str:
-    cause = exc.__cause__ or exc.__context__
-    diag = getattr(cause, "diag", None)
-    return getattr(diag, "constraint_name", "") or ""
 
 
 def _save_checked(request, **kwargs):
@@ -144,9 +136,7 @@ def _save_checked(request, **kwargs):
         with transaction.atomic():
             request.save(**kwargs)
     except IntegrityError as exc:
-        field, message = workflow.CONSTRAINT_MESSAGES.get(
-            workflow.constraint_name(exc), (None, workflow.UNKNOWN_CONSTRAINT)
-        )
+        field, message = constraints.translate(exc, workflow.UNKNOWN_CONSTRAINT)
         raise workflow.RequestValidationError({field: message}) from exc
     except DataError as exc:
         raise workflow.RequestValidationError({None: workflow.INVALID_VALUE}) from exc

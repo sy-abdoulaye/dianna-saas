@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
-from apps.core import audit, notifications
+from apps.core import audit, constraints, notifications
 from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.models import Notification
@@ -36,25 +36,23 @@ class EquipmentError(ServiceError):
     """Refus d'une action sur le matériel (message affiché, champ éventuel)."""
 
 
-# Contrainte de base → (message, champ) : chaque IntegrityError est traduite selon la
-# contrainte en cause (L5-19).
-CONSTRAINT_MESSAGES = {
-    "equipment_serial_unique": (SERIAL_TAKEN, "serial_number"),
-    "equipment_one_open_assignment": (ALREADY_ASSIGNED, None),
-    "equipment_one_assignment_per_request": (
-        gettext_lazy("Un équipement a déjà été attribué pour cette demande."),
-        None,
-    ),
-    "equipment_holder_matches_status": (CHANGED, None),
-}
+# Contraintes du matériel, inscrites dans la table commune (L5-19).
+constraints.register(
+    {
+        "equipment_serial_unique": ("serial_number", SERIAL_TAKEN),
+        "equipment_one_open_assignment": (None, ALREADY_ASSIGNED),
+        "equipment_one_assignment_per_request": (
+            None,
+            gettext_lazy("Un équipement a déjà été attribué pour cette demande."),
+        ),
+        "equipment_holder_matches_status": (None, CHANGED),
+    }
+)
 
 
 def _integrity_error(exc) -> EquipmentError:
-    from apps.approvals.workflow import constraint_name
-
-    message, field = CONSTRAINT_MESSAGES.get(
-        constraint_name(exc),
-        (gettext_lazy("L'opération n'a pas pu être enregistrée. Réessayez."), None),
+    field, message = constraints.translate(
+        exc, gettext_lazy("L'opération n'a pas pu être enregistrée. Réessayez.")
     )
     return EquipmentError(message, field)
 

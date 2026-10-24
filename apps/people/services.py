@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from apps.core import audit, permissions
+from apps.core import audit, constraints, permissions
 from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.files import delete_after_commit, file_writes
@@ -39,35 +39,33 @@ class PeopleError(ServiceError):
     """Refus d'une action sur une fiche (message affiché, champ éventuel)."""
 
 
-# Contrainte de base → (champ, message) : deux créations simultanées avec la même adresse
-# donnent un message, jamais une erreur 500 (L5-19).
-CONSTRAINT_MESSAGES = {
-    "people_employee_email_ci_unique": (
-        "email",
-        _("Cette adresse est déjà utilisée par une autre fiche de l'annuaire."),
-    ),
-    "people_employee_registration_unique": (
-        "registration_number",
-        _("Ce matricule est déjà utilisé."),
-    ),
-}
+# Deux créations simultanées avec la même adresse donnent un message, jamais une erreur 500
+# (L5-19) : contraintes de l'annuaire, inscrites dans la table commune.
+constraints.register(
+    {
+        "people_employee_email_ci_unique": (
+            "email",
+            _("Cette adresse est déjà utilisée par une autre fiche de l'annuaire."),
+        ),
+        "people_employee_registration_unique": (
+            "registration_number",
+            _("Ce matricule est déjà utilisé."),
+        ),
+    }
+)
 
 
 def _save_employee(employee, **kwargs):
     from django.db import DataError, IntegrityError
 
-    from apps.approvals.workflow import INVALID_VALUE, constraint_name
-
     try:
         with transaction.atomic():
             employee.save(**kwargs)
     except IntegrityError as exc:
-        field, message = CONSTRAINT_MESSAGES.get(
-            constraint_name(exc), (None, _("La fiche n'a pas pu être enregistrée."))
-        )
+        field, message = constraints.translate(exc, _("La fiche n'a pas pu être enregistrée."))
         raise PeopleError(message, field) from exc
     except DataError as exc:
-        raise PeopleError(INVALID_VALUE) from exc
+        raise PeopleError(constraints.INVALID_VALUE) from exc
 
 
 def _record(employee, context: ActionContext, kind, fields=(), *, action=None, summary=None):
