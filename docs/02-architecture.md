@@ -171,6 +171,14 @@ Services sous verrou de l'équipement (`select_for_update`), historique `Equipme
 | Notifications visuelles | Événement `toast` déclenché par l'en-tête `HX-Trigger` (JSON en ASCII, L5-16), ou messages Django rendus dans `#toasts` pour les pages complètes |
 | Confirmation | Modale de confirmation commune (`components/confirm.html`), action en `hx-post` |
 | Annuler (undo) | Lien dans la notification visuelle, `hx-post` vers l'URL d'annulation signée et limitée dans le temps |
+
+**Après une action (R1-02).** Toute action réussie se termine par `apps.core.htmx.after_action` :
+- résultat sur la même page : notification visuelle et rechargement de la zone (événement ; `PAGE_CHANGED` pour `#content`, rechargé depuis l'adresse affichée) ;
+- autre page : HX-Location ;
+- export : HX-Redirect ;
+- activation d'un module : rechargement complet (`RELOAD_PAGE`).
+
+L'annulation passe par une seule vue (`apps.core.views.undo_action`) et le registre de `apps/core/undo.py`.
 | Lignes répétables (compte rendu d'intervention) | `hx-post` « ajouter une ligne » renvoyant un fragment de formulaire indexé ; suppression côté client et index recalculés à l'envoi |
 
 Erreurs 5xx et réseau : événements `htmx:responseError` et `htmx:sendError` → bandeau « Le serveur n'a pas répondu. Vos saisies sont conservées, vous pouvez réessayer. » dans la modale ou le formulaire, sans perdre la saisie.

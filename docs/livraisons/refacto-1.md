@@ -2,7 +2,13 @@
 
 Date : 26 octobre 2026. Branche : `refacto-1`, créée depuis `main` après la fusion du lot 6.
 
-Reprise technique avant le lot 7. Il n'y a aucun changement de comportement visible : tous les tests existants passent sans modification (unitaires, intégration, performance, parcours). La navigation unifiée n'est pas appliquée, car elle changerait le comportement ; elle est proposée plus bas et attend ton accord.
+Reprise technique avant le lot 7, en deux temps.
+
+- **Premier envoi** : aucun changement de comportement visible ; tous les tests passaient sans modification.
+- **Second envoi** (décisions du 26 oct.) :
+  - navigation unifiée (R1-02), le seul changement visible ;
+  - `ActionContext` dans les services publics, avec un commit séparé qui adapte mécaniquement les appels des tests ;
+  - filtres, contraintes et annulation par des briques uniques.
 
 ## Ce qui est fait
 
@@ -42,6 +48,33 @@ Reprise technique avant le lot 7. Il n'y a aucun changement de comportement visi
   - Le reste du code sera vérifié au lot 8.
 - **CLAUDE.md et architecture** : nouvelles briques, seuil de 6 arguments, règle de la façade `workflow`, commande `make typecheck`.
 
+### Second envoi
+
+- **Navigation unifiée (R1-02).** Une seule brique, `htmx.after_action`, termine toute action réussie (40 appels) :
+  - même page : notification visuelle et rechargement de la zone ; `PAGE_CHANGED` recharge toute la zone `#content` ;
+  - autre page : `HX-Location` ;
+  - export : `HX-Redirect`, inchangé ;
+  - seule exception : l'activation d'un module recharge le document entier (`refresh=RELOAD_PAGE`), car le menu change aussi.
+  - La fiche de l'annuaire et les paramètres de l'entreprise passent par HTMX : erreurs en 422 sur place, plus de rechargement complet. Sans JavaScript (`page_form`), ces formulaires, l'import CSV et « Tout marquer comme lu » reçoivent un message, puis une redirection.
+  - Une page rendue par un formulaire refusé se recharge depuis l'adresse affichée par le navigateur (`HX-Current-URL`), jamais depuis celle du POST. Un parcours l'avait révélé.
+  - Les trois parcours annoncés passaient tels quels : aucun parcours existant n'a été modifié. Deux nouveaux parcours vérifient que le document n'est pas rechargé (paramètres, création d'une fiche). Des tests unitaires couvrent `after_action` et l'adresse rechargée.
+- **ActionContext dans les services publics.**
+  - 36 fonctions de service prennent `context: ActionContext` au lieu de `actor` et `request` (`SYSTEM` pour une action sans personne : clôture automatique, plateforme). Les vues passent `ActionContext.of(request)`.
+  - Trois actions exigent une personne (`context.person()`) : publier un questionnaire, publier une annonce, signaler un problème de matériel.
+  - Commit séparé, mécanique : 30 appels de tests dans 9 fichiers passent de `actor=…` à `context=ActionContext(…)`, sans autre changement. Les 4 autres « actor= » comptés au départ créent des événements dans les fixtures, ce ne sont pas des appels de service.
+- **Filtres.** Les six listes (annuaire, demandes, planning, parc du matériel, utilisateurs, journal) passent par `components/filters.html`, qui évolue :
+  - sélecteur segmenté pour les boutons radio, champs cachés, `form_id`, zone de résultats ;
+  - `classic=True` pour un envoi classique (le parc garde son bouton « Filtrer ») ;
+  - `no_reset=True` ;
+  - `extra_template` (choix liste ou cartes de l'annuaire, bouton « Inviter un utilisateur »).
+
+  Trois nouveaux formulaires (`RequestFilterForm`, `PlanningFilterForm`, `ParkFilterForm`) reprennent exactement les noms, identifiants, libellés et choix. La disposition est vérifiée par captures.
+- **Contraintes.** Une seule table, `apps/core/constraints.CONSTRAINT_MESSAGES` (champ, message), où chaque application inscrit ses contraintes (`register`, doublon refusé), avec `translate`. La façade `workflow` garde ses noms publics.
+- **Annulation.** Une seule vue, `apps.core.views.undo_action`, et un registre `undo.register(action, traitement, refresh=…)`.
+  - Les quatre URL existantes (demandes, matériel, annuaire, annonces) gardent leurs adresses et leurs noms ; elles passent à la vue le préfixe de leurs actions, et pour le matériel et les annonces le module et la permission, vérifiés avant le jeton comme avant.
+  - Un jeton présenté à l'URL d'une autre application donne une page absente.
+  - Une erreur de l'annulation d'un archivage, qui donnait une erreur 500, donne maintenant un refus (409).
+
 ## Chiffres avant et après
 
 | Mesure | Avant | Après |
@@ -57,48 +90,23 @@ Reprise technique avant le lot 7. Il n'y a aucun changement de comportement visi
 | Fonctions à plus de 6 arguments | 9 | 0 (seuil abaissé à 6) |
 | Plus gros fichier du moteur des demandes | 931 lignes (`workflow.py`) | 253 lignes (`workflow/transitions.py`) |
 | Erreurs mypy sur les services, sélecteurs et le moteur | 13 | 0 |
-| Exceptions `noqa` | 19 | 19 |
+| Façons de naviguer après une action | 4 | 1 brique (`after_action`, 40 appels) |
+| Paires `actor=request.employee, request=request` dans les vues | 27 | 0 (`ActionContext.of(request)`) |
+| Barres de filtres écrites à la main | 6 | 0 |
+| Tables `CONSTRAINT_MESSAGES` | 3 | 1 |
+| Vues d'annulation | 4 | 1 |
+| Exceptions `noqa` | 19 | 20 (une dans un test : classe imitant l'objet `diag` de psycopg) |
 
-Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 071 lignes, `approvals/views.py` 644, `equipment/views.py` 517, `administration/views.py` 483, `people/views.py` 447, `core/models.py` 426.
+Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lignes, `approvals/views.py` 627, `equipment/views.py` 510, `administration/views.py` 478, `people/views.py` 435, `core/models.py` 426.
 
-## Ce qui reste
+## Ce qui reste pour le lot 8
 
-- **Navigation après une action** : proposition ci-dessous, à valider.
-- **Appels des vues** : les 27 appels `actor=request.employee, request=request` restent. Les services publics gardent leurs arguments nommés, car 34 appels dans 10 fichiers de tests les utilisent ainsi. Passer l'`ActionContext` aux services publics demanderait de modifier ces tests : à faire avec ton accord, par exemple au début du lot 7.
-- **Filtres de liste** : six listes des lots 1 à 5 écrivent encore leur formulaire de filtres au lieu de `components/filters.html` (hors du périmètre demandé ; écart de mise en page à vérifier écran par écran).
-- **Traduction des contraintes** : `CONSTRAINT_MESSAGES` existe encore trois fois (demandes, matériel, annuaire).
-- **Annulation immédiate** : quatre vues lisent encore le jeton de la même façon.
-- **Lot 8** :
-  - mypy sur tout le code (environ 100 erreurs, surtout des chaînes traduites paresseuses) ;
-  - catalogue `locale/fr` ;
-  - découpage de `seed_demo` ;
-  - fonctions entre 8 et 10 de complexité (`ui.control`, `_update_employee`, `count_today`…).
-
-## Proposition : une seule façon de naviguer après une action
-
-**Aujourd'hui, quatre façons coexistent :**
-
-| Situation | Façon | Où |
-|---|---|---|
-| Formulaire en page complète | message, puis redirection classique (rechargement complet) | fiche de l'annuaire (création, modification), paramètres de l'entreprise, import CSV, « Tout marquer comme lu » |
-| Action dans une modale, le résultat est sur la page | notification visuelle, puis événement HTMX qui recharge la zone concernée | matériel, demandes, archivage, structure, fermetures, profils |
-| Action dans une modale, le résultat est une autre page | notification visuelle, puis `HX-Location` (seule la zone `#content` change) | annonces, questionnaires |
-| Export | `HX-Redirect` vers le fichier | exports des demandes |
-
-**Proposition.** Une seule brique, `after_action(request, toast, *, refresh=None, go_to=None)`, et une seule règle :
-
-1. Le résultat reste sur la page : notification visuelle et rechargement de la zone (`refresh`). C'est le cas actuel des modales.
-2. Le résultat est une autre page : notification visuelle et `HX-Location` vers cette page (`go_to`).
-   - Les formulaires en page complète passent par HTMX, avec erreurs en 422 sur place, et ne rechargent plus tout le document.
-   - Les annonces épinglées ou modifiées restent sur leur page et rechargent seulement la zone (règle 1).
-3. L'export n'est pas une navigation : il garde `HX-Redirect` vers le fichier.
-
-**Ce qui change à l'écran.**
-- Après la création ou la modification d'une fiche et l'enregistrement des paramètres, la page ne se recharge plus entièrement. Le message devient une notification visuelle, identique à celle des modales, et l'adresse change comme aujourd'hui.
-- Après « Épingler » ou « Modifier » une annonce, la page n'est plus rechargée par `HX-Location` mais dans sa zone.
-- Sans JavaScript, les formulaires gardent leur envoi classique.
-
-**Parcours touchés** : `test_people_admin` (création et modification d'une fiche), `test_socle` (paramètres) et `test_communication` (épinglage). Leurs attentes de navigation seront adaptées, rien d'autre.
+- mypy sur tout le code (environ 100 erreurs, surtout des chaînes traduites paresseuses).
+- Catalogue `locale/fr` (pluriels avec 0).
+- Découpage de `seed_demo` (1 072 lignes) en un module par domaine.
+- Les 11 fonctions entre 8 et 10 de complexité (`ui.control`, `_update_employee`, `count_today`…).
+- Le moteur des demandes (`workflow.approve`, `refuse`…) garde sa convention propre : la personne en argument positionnel et `http_request`, que 61 appels de tests utilisent. Il peut passer à `ActionContext` de la même façon, avec ton accord pour ces tests.
+- Test du lien résiduel `xmin` (L1-09) : il a échoué une fois sur cinq suites complètes. Le reçu suit la réponse de 1 seulement si aucune autre transaction ne s'intercale. Il sera réécrit avec la réécriture groupée des réponses.
 
 ## Tests
 
@@ -106,6 +114,6 @@ Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 071 lig
 |---|---|
 | `make lint` | sans erreur |
 | `make typecheck` | 19 fichiers, aucune erreur |
-| `make test` | 774 tests : 772 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; puis 6 tests de performance |
-| `make e2e` | 48 parcours, sans modification |
+| `make test` | 784 tests : 782 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; puis 6 tests de performance |
+| `make e2e` | 50 parcours (2 nouveaux pour la navigation) ; aucun parcours existant modifié |
 | `make check` | aucune alerte |
