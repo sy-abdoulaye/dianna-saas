@@ -13,6 +13,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from apps.core import audit, notifications
+from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.models import Notification
 from apps.equipment.models import (
@@ -92,9 +93,10 @@ def normalize_serial(value: str) -> str:
 
 
 @transaction.atomic
-def add_item(*, kind, model, serial_number, actor, request=None) -> EquipmentItem:
+def add_item(*, kind, model, serial_number, context: ActionContext) -> EquipmentItem:
     """Numéro de série normalisé, puis unique dans l'entreprise (contrainte de base sur la
     valeur normalisée)."""
+    actor, request = context.actor, context.request
     serial_number = normalize_serial(serial_number)
     if not serial_number:
         raise EquipmentError(_("Indiquez le numéro de série."), "serial_number")
@@ -117,8 +119,9 @@ def add_item(*, kind, model, serial_number, actor, request=None) -> EquipmentIte
 
 
 @transaction.atomic
-def assign(item, employee, *, actor, equipment_request=None, request=None) -> dict:
+def assign(item, employee, *, context: ActionContext, equipment_request=None) -> dict:
     """Attribue un équipement en stock. Renvoie ce qu'il faut pour l'annulation immédiate."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status == Status.ASSIGNED or item.holder_id:
         raise EquipmentError(ALREADY_ASSIGNED)
@@ -171,10 +174,11 @@ def assign(item, employee, *, actor, equipment_request=None, request=None) -> di
 
 
 @transaction.atomic
-def undo_assign(payload: dict, *, actor, request=None) -> EquipmentItem:
+def undo_assign(payload: dict, *, context: ActionContext) -> EquipmentItem:
     """« Annuler » après une attribution (30 s, auteur seulement) : l'équipement revient en
     stock, l'attribution et la notification disparaissent. Refusé si l'équipement a changé
     depuis (dernier événement différent)."""
+    actor, request = context.actor, context.request
     item = EquipmentItem.objects.filter(public_id=payload["item"]).first()
     if item is None:
         raise EquipmentError(CHANGED)
@@ -208,8 +212,9 @@ def _close_assignment(item, now):
 
 
 @transaction.atomic
-def return_item(item, *, actor, request=None) -> EquipmentItem:
+def return_item(item, *, context: ActionContext) -> EquipmentItem:
     """Restitution : l'équipement repasse en stock, l'attribution est fermée."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status != Status.ASSIGNED:
         raise EquipmentError(CHANGED)
@@ -229,9 +234,10 @@ def return_item(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def send_to_repair(item, *, actor, comment="", request=None) -> dict:
+def send_to_repair(item, *, context: ActionContext, comment="") -> dict:
     """En stock ou attribué → en réparation ; le détenteur éventuel est conservé (L5-10).
     Renvoie ce qu'il faut pour l'annulation immédiate (30 s)."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status not in (Status.IN_STOCK, Status.ASSIGNED):
         raise EquipmentError(CHANGED)
@@ -250,11 +256,12 @@ def send_to_repair(item, *, actor, comment="", request=None) -> dict:
 
 
 @transaction.atomic
-def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
+def undo_repair(payload: dict, *, context: ActionContext) -> EquipmentItem:
     """« Annuler » après un envoi en réparation (30 s, auteur seulement) : l'équipement
     reprend son état précédent ; l'historique garde « Envoyé en réparation » et ajoute « Envoi
     en réparation annulé », comme une attribution annulée. Refusé si l'équipement a changé
     depuis, donc aussi pour un jeton déjà utilisé (le dernier événement n'est plus le même)."""
+    actor, request = context.actor, context.request
     item = EquipmentItem.objects.filter(public_id=payload["item"]).first()
     if item is None:
         raise EquipmentError(CHANGED)
@@ -282,8 +289,9 @@ def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def back_from_repair(item, *, actor, request=None) -> EquipmentItem:
+def back_from_repair(item, *, context: ActionContext) -> EquipmentItem:
     """Fin de réparation : rendu à son détenteur s'il en a un, sinon remis en stock (L5-10)."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status != Status.REPAIR:
         raise EquipmentError(CHANGED)
@@ -301,8 +309,9 @@ def back_from_repair(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def retire(item, *, actor, request=None) -> EquipmentItem:
+def retire(item, *, context: ActionContext) -> EquipmentItem:
     """Retirer du parc : seulement un équipement sans détenteur, en stock ou en réparation."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status not in (Status.IN_STOCK, Status.REPAIR) or item.holder_id:
         raise EquipmentError(
@@ -325,8 +334,9 @@ def retire(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def report_issue(item, *, reporter, description, request=None) -> EquipmentIssue:
+def report_issue(item, *, context: ActionContext, description) -> EquipmentIssue:
     """« Signaler un problème » : par le détenteur ; les RH sont prévenus."""
+    reporter, request = context.person(), context.request
     item = _lock(item)
     if item.holder_id != reporter.pk:
         raise EquipmentError(_("Vous ne détenez pas cet équipement."))
@@ -355,7 +365,8 @@ def _lock_issue(issue) -> EquipmentIssue:
 
 
 @transaction.atomic
-def close_issue(issue, *, actor, resolution, request=None) -> EquipmentIssue:
+def close_issue(issue, *, context: ActionContext, resolution) -> EquipmentIssue:
+    actor, request = context.actor, context.request
     issue = _lock_issue(issue)
     issue.status = EquipmentIssue.Status.CLOSED
     issue.closed_by, issue.closed_at, issue.resolution = actor, timezone.now(), resolution
@@ -378,10 +389,13 @@ def close_issue(issue, *, actor, resolution, request=None) -> EquipmentIssue:
 
 
 @transaction.atomic
-def issue_to_repair(issue, *, actor, request=None) -> dict:
+def issue_to_repair(issue, *, context: ActionContext) -> dict:
     """« Envoyer en réparation » depuis un signalement : le détenteur est conservé."""
+    actor, request = context.actor, context.request
     issue = _lock_issue(issue)
-    return send_to_repair(issue.item, actor=actor, comment=issue.description, request=request)
+    return send_to_repair(
+        issue.item, context=ActionContext(actor, request), comment=issue.description
+    )
 
 
 # ---------- Archivage d'un salarié ----------

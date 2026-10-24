@@ -114,10 +114,11 @@ def ensure_an_admin_remains(employee, *, new_role=None, leaving=False):
         )
 
 
-def create_employee(data: dict, *, actor, photo=None, request=None) -> Employee:
+def create_employee(data: dict, *, context: ActionContext, photo=None) -> Employee:
     """Crée la fiche au profil Salarié ; un autre profil est ensuite attribué par change_role
     (journalisé people.role_changed, comme tout changement de profil). La photo est écrite
     avant l'INSERT et supprimée si la création échoue (L5-18)."""
+    actor, request = context.actor, context.request
     with file_writes() as files, transaction.atomic():
         return _create_employee(data, actor=actor, photo=photo, request=request, files=files)
 
@@ -133,18 +134,19 @@ def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
     _save_employee(employee)
     _record(employee, ActionContext(actor, request), EmployeeChange.Kind.CREATED)
     if role != Role.EMPLOYEE:
-        change_role(employee, role, actor=actor, request=request)
+        change_role(employee, role, context=ActionContext(actor, request))
         employee.refresh_from_db()
     return employee
 
 
 def update_employee(
-    employee: Employee, data: dict, *, actor, photo=None, remove_photo=False, request=None
+    employee: Employee, data: dict, *, context: ActionContext, photo=None, remove_photo=False
 ) -> list[str]:
     """Applique les changements et renvoie la liste des champs modifiés. Le profil d'accès
     passe par change_role (refus sur sa propre fiche, dernier administrateur protégé,
     journal people.role_changed). Nouvelle photo écrite avant l'UPDATE et supprimée en cas
     d'échec ; l'ancienne n'est supprimée qu'après la validation (L5-18)."""
+    actor, request = context.actor, context.request
     with file_writes() as files, transaction.atomic():
         return _update_employee(
             employee,
@@ -162,7 +164,7 @@ def _update_employee(employee, data, context: ActionContext, *, photo, remove_ph
     role = data.pop("role", None)
     role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
     if role_changed:
-        change_role(employee, role, actor=actor, request=request)
+        change_role(employee, role, context=ActionContext(actor, request))
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     changed = []
     for name, value in data.items():
@@ -217,9 +219,10 @@ def archive_refusal(employee: Employee, actor) -> str:
 
 
 @transaction.atomic
-def archive(employee: Employee, *, actor, departure_date=None, request=None) -> dict:
+def archive(employee: Employee, *, context: ActionContext, departure_date=None) -> dict:
     """Statut « Parti », date de départ (aujourd'hui par défaut), compte désactivé, données
     conservées. Renvoie l'état précédent, pour l'annulation immédiate."""
+    actor, request = context.actor, context.request
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if employee.status == EmployeeStatus.LEFT:
         raise PeopleError(_("Cette fiche est déjà archivée."))
@@ -252,7 +255,8 @@ def archive(employee: Employee, *, actor, departure_date=None, request=None) -> 
 
 
 @transaction.atomic
-def undo_archive(employee: Employee, previous: dict, *, actor, request=None) -> None:
+def undo_archive(employee: Employee, previous: dict, *, context: ActionContext) -> None:
+    actor, request = context.actor, context.request
     from datetime import date
 
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
@@ -276,7 +280,8 @@ def undo_archive(employee: Employee, previous: dict, *, actor, request=None) -> 
 
 
 @transaction.atomic
-def reactivate(employee: Employee, *, actor, request=None) -> None:
+def reactivate(employee: Employee, *, context: ActionContext) -> None:
+    actor, request = context.actor, context.request
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if employee.status != EmployeeStatus.LEFT:
         raise PeopleError(_("Cette fiche n'est pas archivée."))
@@ -295,9 +300,10 @@ def reactivate(employee: Employee, *, actor, request=None) -> None:
 
 
 @transaction.atomic
-def change_role(employee: Employee, role: str, *, actor, request=None) -> None:
+def change_role(employee: Employee, role: str, *, context: ActionContext) -> None:
     """Profil d'accès (Administrateur seulement). Effet à la requête suivante de la personne ;
     un passage à RH ou Admin impose la double authentification (T-10)."""
+    actor, request = context.actor, context.request
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if role not in Role.values:
         raise PeopleError(_("Profil inconnu."))

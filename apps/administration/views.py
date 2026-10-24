@@ -23,6 +23,7 @@ from apps.administration.forms import (
 )
 from apps.core import permissions
 from apps.core.access import enabled_modules, permission_required
+from apps.core.context import ActionContext
 from apps.core.dates import compact_day_stamp
 from apps.core.files import signed_url
 from apps.core.htmx import (
@@ -94,10 +95,9 @@ def company(request):
         services.update_company(
             instance,
             data,
-            actor=request.employee,
+            context=ActionContext.of(request),
             logo=form.cleaned_data.get("logo_upload"),
             remove_logo=bool(request.POST.get("remove_logo")),
-            request=request,
         )
         toast = Toast(title=_("Paramètres enregistrés"))
         return after_action(request, toast, refresh=PAGE_CHANGED, page_form=True)
@@ -162,7 +162,7 @@ def change_role(request, public_id):
         }
         return render(request, "administration/partials/role_modal.html", context)
     try:
-        people.change_role(person, role, actor=request.employee, request=request)
+        people.change_role(person, role, context=ActionContext.of(request))
     except people.PeopleError as error:
         return trigger(error_response(error, close_modal=True), **{USERS_CHANGED: True})
     return after_action(
@@ -259,12 +259,12 @@ def structure_form(request, kind, pk=None):
         alsace = form.cleaned_data.get("alsace_moselle") if kind == "sites" else None
         if instance:
             services.rename_structure(
-                kind, instance, name, actor=request.employee, request=request, alsace_moselle=alsace
+                kind, instance, name, context=ActionContext.of(request), alsace_moselle=alsace
             )
             toast = Toast(title=_("Modifié") if kind == "sites" else _("Renommé"), message=name)
         else:
             services.add_structure(
-                kind, name, actor=request.employee, request=request, alsace_moselle=bool(alsace)
+                kind, name, context=ActionContext.of(request), alsace_moselle=bool(alsace)
             )
             toast = Toast(title=_("Ajouté"), message=name)
         return after_action(request, toast, refresh=STRUCTURE_CHANGED, close_modal=True)
@@ -292,7 +292,7 @@ def structure_delete(request, kind, pk):
         )
         return render(request, template, context)
     try:
-        services.delete_structure(kind, instance, actor=request.employee, request=request)
+        services.delete_structure(kind, instance, context=ActionContext.of(request))
     except services.AdministrationError as error:
         return error_response(error, close_modal=True)
     return after_action(
@@ -344,8 +344,7 @@ def closure_add(request):
                 day=form.cleaned_data["date"],
                 label=form.cleaned_data["label"],
                 site=form.cleaned_data["site"],
-                actor=request.employee,
-                request=request,
+                context=ActionContext.of(request),
             )
         except services.ClosureError as error:
             form.add_error(error.field, error.message)
@@ -379,7 +378,7 @@ def closure_delete(request, pk):
                 "action_url": reverse("administration:closure_delete", args=[pk]),
             },
         )
-    services.delete_closure(closure, actor=request.employee, request=request)
+    services.delete_closure(closure, context=ActionContext.of(request))
     return after_action(
         request,
         Toast(title=_("Fermeture supprimée"), message=closure.label),
@@ -429,7 +428,7 @@ def toggle_module(request, module):
                 "action_url": reverse("administration:toggle_module", args=[module]),
             },
         )
-    set_module(request.company, module, enable, actor=request.employee, request=request)
+    set_module(request.company, module, enable, context=ActionContext.of(request))
     title = _("Module activé") if enable else _("Module désactivé")
     # Le menu change aussi : toute la page se recharge.
     toast = Toast(title=title, message=label)
@@ -471,7 +470,7 @@ def journal_export(request):
     start, end = form.period()
     q = (getattr(form, "cleaned_data", {}) or {}).get("q", "")
     content = services.export_journal_csv(
-        q=q, start=start, end=end, actor=request.employee, request=request
+        q=q, start=start, end=end, context=ActionContext.of(request)
     )
     response = HttpResponse(content, content_type="text/csv; charset=utf-8")
     filename = f"journal-{compact_day_stamp(start)}-{compact_day_stamp(end)}.csv"

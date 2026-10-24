@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils.translation import gettext as _
 
 from apps.core import audit
+from apps.core.context import SYSTEM, ActionContext
 from apps.core.models import Company, CompanyModule, Module
 from apps.core.tenancy import tenant_context
 
@@ -53,7 +54,8 @@ def create_company(data: NewCompany, *, invite: bool = True, request=None):
     return company, admin
 
 
-def set_module(company: Company, module: str, enabled: bool, *, actor=None, request=None):
+def set_module(company: Company, module: str, enabled: bool, *, context: ActionContext = SYSTEM):
+    actor, request = context.actor, context.request
     with tenant_context(company):
         row, _created = CompanyModule.objects.get_or_create(module=module)
         if row.enabled == enabled:

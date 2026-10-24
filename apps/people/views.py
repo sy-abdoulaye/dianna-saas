@@ -17,6 +17,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts import services as accounts
 from apps.core import permissions, undo
 from apps.core.access import PermissionRequiredMixin, permission_required, require
+from apps.core.context import ActionContext
 from apps.core.files import signed_url
 from apps.core.htmx import (
     Toast,
@@ -247,7 +248,7 @@ class EmployeeFormView(PermissionRequiredMixin, View):
         try:
             if public_id is None:
                 employee = services.create_employee(
-                    form.model_data(), actor=request.employee, photo=photo, request=request
+                    form.model_data(), context=ActionContext.of(request), photo=photo
                 )
                 message = _("Fiche créée")
                 if form.cleaned_data.get("invite"):
@@ -257,10 +258,9 @@ class EmployeeFormView(PermissionRequiredMixin, View):
                 services.update_employee(
                     employee,
                     form.model_data(),
-                    actor=request.employee,
+                    context=ActionContext.of(request),
                     photo=photo,
                     remove_photo=form.cleaned_data.get("remove_photo", False),
-                    request=request,
                 )
                 message = _("Fiche enregistrée")
         except (services.PeopleError, accounts.InvitationError) as error:
@@ -294,9 +294,8 @@ def archive(request, public_id):
         try:
             previous = services.archive(
                 employee,
-                actor=request.employee,
+                context=ActionContext.of(request),
                 departure_date=form.cleaned_data["departure_date"],
-                request=request,
             )
         except services.PeopleError as error:
             form.add_error(None, error.message)
@@ -336,7 +335,7 @@ def undo_archive(request, token):
     previous = json.loads(payload.target)
     employee = get_object_or_404(Employee, public_id=previous["id"])
     require(request, "people.manage", employee)
-    services.undo_archive(employee, previous, actor=request.employee, request=request)
+    services.undo_archive(employee, previous, context=ActionContext.of(request))
     return after_action(
         request,
         Toast(
@@ -353,7 +352,7 @@ def reactivate(request, public_id):
     employee = get_employee(request, public_id)
     require(request, "people.manage", employee)
     try:
-        services.reactivate(employee, actor=request.employee, request=request)
+        services.reactivate(employee, context=ActionContext.of(request))
     except services.PeopleError as error:
         return error_response(error)
     return after_action(
@@ -414,8 +413,7 @@ def import_people(request):
         try:
             count = importer.run(
                 importer.rows_from_session(stored["rows"]),
-                actor=request.employee,
-                request=request,
+                context=ActionContext.of(request),
             )
         except importer.ImportFileError as error:
             messages.error(request, str(error.message))

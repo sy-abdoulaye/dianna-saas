@@ -13,6 +13,7 @@ from apps.announcements.forms import AnnouncementForm, FilterForm
 from apps.announcements.models import Announcement
 from apps.core import permissions, undo
 from apps.core.access import module_required, permission_required, require
+from apps.core.context import ActionContext
 from apps.core.htmx import (
     PAGE_CHANGED,
     Toast,
@@ -97,9 +98,7 @@ def announcement_new(request):
     if request.method == "GET" or not form.is_valid():
         return _form_response(request, form, action_url=action_url)
     try:
-        announcement = services.publish(
-            form.announcement_data(), actor=request.employee, request=request
-        )
+        announcement = services.publish(form.announcement_data(), context=ActionContext.of(request))
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url)
@@ -120,9 +119,7 @@ def announcement_edit(request, public_id):
     if request.method == "GET" or not form.is_valid():
         return _form_response(request, form, action_url=action_url, announcement=announcement)
     try:
-        services.update(
-            announcement, form.announcement_data(), actor=request.employee, request=request
-        )
+        services.update(announcement, form.announcement_data(), context=ActionContext.of(request))
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url, announcement=announcement)
@@ -135,7 +132,7 @@ def announcement_edit(request, public_id):
 @permission_required("announcements.manage")
 def announcement_pin(request, public_id):
     try:
-        announcement = services.toggle_pin(_get(public_id), actor=request.employee, request=request)
+        announcement = services.toggle_pin(_get(public_id), context=ActionContext.of(request))
     except services.AnnouncementError as error:
         return error_response(error)
     title = _("Annonce épinglée") if announcement.pinned else _("Annonce désépinglée")
@@ -158,7 +155,7 @@ def announcement_delete(request, public_id):
             danger=True,
         )
     try:
-        services.delete(announcement, actor=request.employee, request=request)
+        services.delete(announcement, context=ActionContext.of(request))
     except services.AnnouncementError as error:
         return error_response(error)
     token = undo.make_token(request, "announcements.delete", str(announcement.public_id))
@@ -182,7 +179,7 @@ def undo_delete(request, token):
     if data.action != "announcements.delete":
         raise Http404
     try:
-        announcement = services.restore(data.target, actor=request.employee, request=request)
+        announcement = services.restore(data.target, context=ActionContext.of(request))
     except services.AnnouncementError as error:
         return error_response(error)
     toast = Toast(title=_("Suppression annulée"), message=announcement.title, kind="info")

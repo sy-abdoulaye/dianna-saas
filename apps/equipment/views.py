@@ -21,6 +21,7 @@ from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus
 from apps.core import permissions, undo
 from apps.core.access import module_required, permission_required, require
+from apps.core.context import ActionContext
 from apps.core.htmx import (
     Toast,
     after_action,
@@ -202,7 +203,7 @@ def item_add(request):
         return render(request, template, context)
     if form.is_valid():
         try:
-            item = services.add_item(**form.cleaned_data, actor=request.employee, request=request)
+            item = services.add_item(**form.cleaned_data, context=ActionContext.of(request))
         except services.EquipmentError as error:
             form.add_error(error.field, error.message)
     if not form.is_valid():
@@ -233,7 +234,7 @@ def item_assign(request, public_id):
         return form_error_response(request, template, context)
     employee = form.cleaned_data["employee"]
     try:
-        payload = services.assign(item, employee, actor=request.employee, request=request)
+        payload = services.assign(item, employee, context=ActionContext.of(request))
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
     return _assigned(request, item, employee, payload)
@@ -278,7 +279,7 @@ def undo_action(request, token):
         raise Http404
     undo_service, title, message = UNDO_ACTIONS[data.action]
     try:
-        undo_service(json.loads(data.target), actor=request.employee, request=request)
+        undo_service(json.loads(data.target), context=ActionContext.of(request))
     except services.EquipmentError as error:
         return error_response(error)
     return after_action(
@@ -290,7 +291,7 @@ def _confirm_or_act(request, item, *, template_context, action, done_title):
     if request.method == "GET":
         return confirm_response(request, **template_context)
     try:
-        action(item, actor=request.employee, request=request)
+        action(item, context=ActionContext.of(request))
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
     return after_action(
@@ -380,7 +381,7 @@ def item_repair(request, public_id):
         request,
         item,
         action_url=reverse("equipment:item_repair", args=[item.public_id]),
-        send=lambda: services.send_to_repair(item, actor=request.employee, request=request),
+        send=lambda: services.send_to_repair(item, context=ActionContext.of(request)),
     )
 
 
@@ -390,7 +391,7 @@ def item_repair(request, public_id):
 def item_back(request, public_id):
     item = _item(public_id)
     try:
-        item = services.back_from_repair(item, actor=request.employee, request=request)
+        item = services.back_from_repair(item, context=ActionContext.of(request))
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
     title = _("Rendu à son détenteur") if item.holder_id else _("Remis en stock")
@@ -419,9 +420,8 @@ def issue_new(request, public_id):
     try:
         services.report_issue(
             item,
-            reporter=request.employee,
+            context=ActionContext.of(request),
             description=form.cleaned_data["description"],
-            request=request,
         )
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
@@ -456,9 +456,8 @@ def issue_close(request, pk):
     try:
         services.close_issue(
             issue,
-            actor=request.employee,
+            context=ActionContext.of(request),
             resolution=form.cleaned_data["resolution"],
-            request=request,
         )
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
@@ -476,7 +475,7 @@ def issue_repair(request, pk):
         request,
         issue.item,
         action_url=reverse("equipment:issue_repair", args=[issue.pk]),
-        send=lambda: services.issue_to_repair(issue, actor=request.employee, request=request),
+        send=lambda: services.issue_to_repair(issue, context=ActionContext.of(request)),
     )
 
 
@@ -509,9 +508,8 @@ def request_assign(request, public_id):
         payload = services.assign(
             item,
             equipment_request.requester,
-            actor=request.employee,
+            context=ActionContext.of(request),
             equipment_request=equipment_request,
-            request=request,
         )
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)

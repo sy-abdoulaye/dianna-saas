@@ -26,10 +26,11 @@ class AdministrationError(ServiceError):
 
 
 def update_company(
-    company: Company, data: dict, *, actor, logo=None, remove_logo=False, request=None
+    company: Company, data: dict, *, context: ActionContext, logo=None, remove_logo=False
 ) -> list[str]:
     """Paramètres de l'entreprise ; logo écrit avant l'UPDATE, supprimé en cas d'échec,
     ancien logo supprimé après la validation (L5-18)."""
+    actor, request = context.actor, context.request
     with file_writes() as files, transaction.atomic():
         return _update_company(
             company,
@@ -73,7 +74,8 @@ def usage(kind: str, obj) -> int:
     return Employee.objects.filter(**{field: obj}).exclude(status=EmployeeStatus.LEFT).count()
 
 
-def add_structure(kind: str, name: str, *, actor, request=None, alsace_moselle=False):
+def add_structure(kind: str, name: str, *, context: ActionContext, alsace_moselle=False):
+    actor, request = context.actor, context.request
     model, _field, label, _lower = STRUCTURES[kind]
     extra = {"alsace_moselle": alsace_moselle} if hasattr(model, "alsace_moselle") else {}
     obj = model.objects.create(name=name, **extra)
@@ -87,7 +89,8 @@ def add_structure(kind: str, name: str, *, actor, request=None, alsace_moselle=F
     return obj
 
 
-def rename_structure(kind: str, obj, name: str, *, actor, request=None, alsace_moselle=None):
+def rename_structure(kind: str, obj, name: str, *, context: ActionContext, alsace_moselle=None):
+    actor, request = context.actor, context.request
     old = obj.name
     obj.name = name
     fields = ["name", "updated_at"]
@@ -124,9 +127,10 @@ def rename_structure(kind: str, obj, name: str, *, actor, request=None, alsace_m
 
 
 @transaction.atomic
-def delete_structure(kind: str, obj, *, actor, request=None):
+def delete_structure(kind: str, obj, *, context: ActionContext):
     """Impossible tant que des fiches y sont rattachées (y compris des fiches parties, que
     la base protège : RESTRICT)."""
+    actor, request = context.actor, context.request
     _model, field, _label, _lower = STRUCTURES[kind]
     if Employee.objects.filter(**{field: obj}).exists():
         raise AdministrationError(_("Suppression impossible : des fiches y sont rattachées."))
@@ -158,9 +162,10 @@ def journal(queryset, *, q="", start=None, end=None):
     return entries
 
 
-def export_journal_csv(*, q, start, end, actor, request=None) -> str:
+def export_journal_csv(*, q, start, end, context: ActionContext) -> str:
     """CSV de la période (apps.core.csv_export : point-virgule, BOM, cellules neutralisées).
     L'export lui-même est journalisé."""
+    actor, request = context.actor, context.request
     entries = journal(AuditLog.objects.all(), q=q, start=start, end=end).order_by("created_at")
 
     def rows():
@@ -216,11 +221,12 @@ def closure_scope(closure) -> str:
 
 
 @transaction.atomic
-def add_closure(*, day, label, site, actor, request=None):
+def add_closure(*, day, label, site, context: ActionContext):
     """Ajoute une fermeture. Contrôles (date passée, doublon) faits ici, sous verrou de
     l'entreprise : deux ajouts simultanés passent l'un après l'autre (A3-02). Les demandes de
     télétravail déjà faites ce jour-là restent telles quelles (L4-03) ; leur liste, calculée
     sous le même verrou, est envoyée aux RH."""
+    actor, request = context.actor, context.request
     from django.db import IntegrityError
     from django.urls import reverse
 
@@ -272,7 +278,8 @@ def add_closure(*, day, label, site, actor, request=None):
 
 
 @transaction.atomic
-def delete_closure(closure, *, actor, request=None):
+def delete_closure(closure, *, context: ActionContext):
+    actor, request = context.actor, context.request
     from apps.core.dates import format_date
 
     summary = _("Fermeture supprimée : %(label)s, le %(day)s (%(scope)s)") % {
