@@ -32,6 +32,7 @@ from apps.approvals.models import (
 from apps.approvals.selectors import TAB_MINE, is_validator
 from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
+from apps.core.context import ActionContext
 from apps.core.files import (
     STORAGE_UNAVAILABLE,
     StorageUnavailableError,
@@ -189,7 +190,9 @@ def new_request(request, kind):
     form = form_class(request.POST, request.FILES, requester=me)
     if form.is_valid():
         try:
-            result = workflow.submit(meta.model, me, form.model_data(), http_request=request)
+            result = workflow.submit(
+                meta.model, form.model_data(), context=ActionContext(me, request)
+            )
         except StorageUnavailableError:
             # Stockage indisponible : rien n'est enregistré, la modale reste ouverte (L5-17).
             return toast_response(Toast(title=str(STORAGE_UNAVAILABLE), kind="err"), status=503)
@@ -275,7 +278,7 @@ def _decision_error(error):
 def approve(request, kind, public_id):
     obj = get_request(request, kind, public_id)
     try:
-        result = workflow.approve(obj, request.employee, http_request=request)
+        result = workflow.approve(obj, context=ActionContext.of(request))
     except workflow.WorkflowError as error:
         return _decision_error(error)
     title = (
@@ -318,7 +321,7 @@ def refuse(request, kind, public_id):
         return form_error_response(request, template, context)
     try:
         result = workflow.refuse(
-            obj, request.employee, reason=form.cleaned_data["reason"], http_request=request
+            obj, reason=form.cleaned_data["reason"], context=ActionContext.of(request)
         )
     except workflow.WorkflowError as error:
         return _decision_error(error)
@@ -348,7 +351,7 @@ def cancel(request, kind, public_id):
             },
         )
     try:
-        result = workflow.cancel(obj, request.employee, http_request=request)
+        result = workflow.cancel(obj, context=ActionContext.of(request))
     except workflow.WorkflowError as error:
         return _decision_error(error)
     return _with_undo(request, result, "cancel", Toast(title=_("Demande annulée")))
@@ -380,7 +383,7 @@ def cancel_approved(request, kind, public_id):
         return form_error_response(request, template, context)
     try:
         result = workflow.cancel_approved(
-            obj, request.employee, reason=form.cleaned_data["reason"], http_request=request
+            obj, reason=form.cleaned_data["reason"], context=ActionContext.of(request)
         )
     except workflow.WorkflowError as error:
         return _decision_error(error)
@@ -401,7 +404,7 @@ def _undo_request(request, payload) -> Toast:
         raise Http404
     if not module_is_enabled(request, model.module):
         raise Http404
-    restored = workflow.undo(model, data, request.employee, http_request=request)
+    restored = workflow.undo(model, data, context=ActionContext.of(request))
     if restored is None:
         return Toast(title=_("Envoi annulé"), message=_("La demande a été retirée."), kind="info")
     return Toast(
@@ -461,7 +464,7 @@ def new_campaign(request):
         if not form.is_valid():
             return form_error_response(request, template, {"form": form})
         campaign = workflow.create_summer_campaign(
-            form.cleaned_data, request.employee, http_request=request
+            form.cleaned_data, context=ActionContext.of(request)
         )
         toast = Toast(title=_("Campagne créée"), message=campaign.label)
         return after_action(request, toast, refresh=CAMPAIGNS_CHANGED, close_modal=True)
@@ -478,7 +481,7 @@ def campaign_status(request, pk, action):
     if action not in services:
         raise Http404
     try:
-        campaign = services[action](campaign, request.employee, http_request=request)
+        campaign = services[action](campaign, context=ActionContext.of(request))
     except workflow.WorkflowError as error:
         return error_response(error)
     title = _("Campagne ouverte") if action == "ouvrir" else _("Campagne close")

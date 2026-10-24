@@ -15,8 +15,8 @@ from apps.approvals.models import (
     RequestStatus,
 )
 from apps.core import notifications
+from apps.core.context import ActionContext
 from apps.core.models import Notification
-from apps.people.models import Employee
 
 REACTIVATING = ("refuse", "cancel", "cancel_approved")
 
@@ -30,13 +30,14 @@ UNDO_EXPECTED_STATUS = {
 
 
 @transaction.atomic
-def undo(model, payload: dict, actor: Employee, *, http_request=None):
+def undo(model, payload: dict, *, context: ActionContext):
     """Défait la dernière transition de son auteur, seulement si l'événement qu'elle a créé
     est toujours le dernier de la demande : sinon « Une autre décision a été prise depuis »
     et rien n'est modifié (A3-01). Après un envoi : la demande, son événement et ses
     notifications sont supprimés ; le journal garde « demande envoyée puis retirée » (L1-08).
     Après une décision : l'état précédent est rétabli ; si la demande redevient active
     (refus ou annulation défaits), les contrôles métier sont refaits sous verrou (A3-02)."""
+    actor, http_request = context.person(), context.request
     request = workflow._lock_for_undo(model, payload)
     if payload["action"] == "submit":
         workflow._undo_submit(request, actor, http_request=http_request)

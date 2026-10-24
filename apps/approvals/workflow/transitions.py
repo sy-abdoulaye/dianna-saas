@@ -17,15 +17,16 @@ from apps.approvals.models import (
 )
 from apps.approvals.workflow.common import TransitionResult
 from apps.core import notifications
+from apps.core.context import ActionContext
 from apps.core.files import delete_private
-from apps.people.models import Employee
 
 
-def submit(model, requester: Employee, data: dict, *, http_request=None) -> TransitionResult:
+def submit(model, data: dict, *, context: ActionContext) -> TransitionResult:
     """Envoi (voir `_submit`). Fichier joint (L5-05, L5-18) : son nom est inscrit dans la
     liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit avant
     l'INSERT, et il est supprimé si quoi que ce soit échoue ensuite (transaction annulée).
     Lève StorageUnavailableError si le stockage ne répond pas : rien n'est enregistré."""
+    requester, http_request = context.person(), context.request
     cleanup: list[str] = []
     try:
         return workflow._submit(model, requester, data, http_request=http_request, cleanup=cleanup)
@@ -102,7 +103,8 @@ def _approve_automatically(request, reason, http_request):
 
 
 @transaction.atomic
-def approve(request, actor: Employee, *, comment: str = "", http_request=None) -> TransitionResult:
+def approve(request, *, context: ActionContext, comment: str = "") -> TransitionResult:
+    actor, http_request = context.person(), context.request
     request = workflow._lock(request)
     if request.status not in (RequestStatus.PENDING, RequestStatus.MANAGER_APPROVED):
         raise workflow.WorkflowError(workflow.ALREADY_PROCESSED)
@@ -171,7 +173,8 @@ def _substitution(request, actor, first_step) -> str:
 
 
 @transaction.atomic
-def refuse(request, actor: Employee, *, reason: str, http_request=None) -> TransitionResult:
+def refuse(request, *, context: ActionContext, reason: str) -> TransitionResult:
+    actor, http_request = context.person(), context.request
     reason = (reason or "").strip()
     if not reason:
         raise workflow.WorkflowError(_("Indiquez le motif du refus."))
@@ -203,8 +206,9 @@ def refuse(request, actor: Employee, *, reason: str, http_request=None) -> Trans
 
 
 @transaction.atomic
-def cancel(request, actor: Employee, *, http_request=None) -> TransitionResult:
+def cancel(request, *, context: ActionContext) -> TransitionResult:
     """Le demandeur annule une demande encore en attente (y compris en attente de l'étape RH)."""
+    actor, http_request = context.person(), context.request
     request = workflow._lock(request)
     if request.requester_id != actor.pk:
         raise workflow.WorkflowError(_("Seul le demandeur peut annuler cette demande."))
@@ -221,10 +225,9 @@ def cancel(request, actor: Employee, *, http_request=None) -> TransitionResult:
 
 
 @transaction.atomic
-def cancel_approved(
-    request, actor: Employee, *, reason: str, http_request=None
-) -> TransitionResult:
+def cancel_approved(request, *, context: ActionContext, reason: str) -> TransitionResult:
     """RH ou administrateur : annulation d'une demande validée, motif obligatoire (L3-10)."""
+    actor, http_request = context.person(), context.request
     reason = (reason or "").strip()
     if not reason:
         raise workflow.WorkflowError(_("Indiquez le motif de l'annulation."))

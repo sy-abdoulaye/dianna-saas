@@ -11,13 +11,15 @@ from apps.approvals.models import (
     SummerCampaign,
 )
 from apps.core import audit
+from apps.core.context import ActionContext
 
 CAMPAIGN_FIELDS = ("label", "period_start", "period_end", "deadline", "conflict_threshold")
 
 
 @transaction.atomic
-def create_summer_campaign(data: dict, actor, *, http_request=None):
+def create_summer_campaign(data: dict, *, context: ActionContext):
     """Crée une campagne en brouillon et l'inscrit au journal d'audit."""
+    actor, http_request = context.person(), context.request
     campaign = SummerCampaign.objects.create(
         **{name: data[name] for name in workflow.CAMPAIGN_FIELDS if name in data}
     )
@@ -32,9 +34,10 @@ def create_summer_campaign(data: dict, actor, *, http_request=None):
 
 
 @transaction.atomic
-def open_summer_campaign(campaign, actor, *, http_request=None):
+def open_summer_campaign(campaign, *, context: ActionContext):
     """Ouvre une campagne. Toutes les campagnes de l'entreprise sont verrouillées : deux
     ouvertures simultanées donnent une seule campagne ouverte (A3-06)."""
+    actor, http_request = context.person(), context.request
     campaigns = {c.pk: c for c in SummerCampaign.objects.select_for_update().order_by("pk")}
     campaign = campaigns.get(campaign.pk)
     if campaign is None or campaign.status != SummerCampaign.Status.DRAFT:
@@ -52,7 +55,8 @@ def open_summer_campaign(campaign, actor, *, http_request=None):
 
 
 @transaction.atomic
-def close_summer_campaign(campaign, actor, *, http_request=None):
+def close_summer_campaign(campaign, *, context: ActionContext):
+    actor, http_request = context.person(), context.request
     campaign = SummerCampaign.objects.select_for_update().filter(pk=campaign.pk).first()
     if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
         raise workflow.WorkflowError(_("Cette campagne n'est pas ouverte."))
