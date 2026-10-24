@@ -47,6 +47,8 @@ select = [
     "E", "W", "F", "I", "B", "UP", "DJ", "S", "SIM", "RUF", "N",
     # Qualité du code (CLAUDE.md) : complexité, retours, chemins, taille des fonctions.
     "C90", "RET", "PTH", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+    # noqa inutile : signalé, pour qu'aucune exception ne survive au code qu'elle couvrait.
+    "RUF100",
 ]
 # RUF001-003 : la typographie française utilise « », ’, × et les espaces insécables.
 ignore = ["RUF001", "RUF002", "RUF003", "RUF012"]

@@ -196,7 +196,6 @@ def test_manager_hr_and_admin_see_the_exact_type_and_pending(client_for, company
 
 def test_everyone_sees_everything_about_themselves(client_for, company_a, nina):
     person, monday = nina
-    from conftest import activate_totp  # noqa: F401 (Nina n'a pas de double authentification)
 
     cells = nina_cells(client_for(person), monday)
     assert cells[0] == "Autre absence" and cells[12] == "Télétravail (en attente)"

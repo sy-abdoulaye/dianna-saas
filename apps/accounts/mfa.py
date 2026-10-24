@@ -4,7 +4,6 @@ secours) avant leur enregistrement en base, avec MultiFernet pour pouvoir change
 from allauth.mfa.adapter import DefaultMFAAdapter
 
 from apps.core import crypto
-from apps.core.crypto import parse_keys  # noqa: F401 (contrôles système)
 
 SETTING = "MFA_ENCRYPTION_KEY"
 
