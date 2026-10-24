@@ -49,6 +49,7 @@ from apps.approvals.models import (
 )
 from apps.core import audit, notifications, permissions
 from apps.core.dates import format_date
+from apps.core.errors import ServiceError
 from apps.core.files import delete_private, write_private
 from apps.core.models import Notification
 from apps.people.models import IN_POST_STATUSES, Employee, Role
@@ -57,10 +58,8 @@ AUTO_APPROVAL_NO_VALIDATOR = "validation automatique : aucun valideur disponible
 AUTO_APPROVAL_TELEWORK = "validation automatique dans la limite du quota (M-02)"
 
 
-class WorkflowError(Exception):
-    def __init__(self, message):
-        super().__init__(str(message))
-        self.message = message
+class WorkflowError(ServiceError):
+    """Refus d'une transition de demande (message affiché)."""
 
 
 class RequestValidationError(WorkflowError):

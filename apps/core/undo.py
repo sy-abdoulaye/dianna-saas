@@ -11,16 +11,17 @@ from django.conf import settings
 from django.core import signing
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.errors import ServiceError
+
 SALT = "dianna.undo"
 TOO_LATE_MESSAGE = _("Il est trop tard pour annuler cette action.")
 
 
-class UndoError(Exception):
+class UndoError(ServiceError):
     """Jeton invalide, expiré ou présenté par une autre personne que l'auteur."""
 
     def __init__(self, message=TOO_LATE_MESSAGE):
-        super().__init__(str(message))
-        self.message = message
+        super().__init__(message)
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit, permissions
+from apps.core.errors import ServiceError
 from apps.core.files import delete_after_commit, file_writes
 from apps.core.tenancy import get_current_company
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
@@ -33,11 +34,8 @@ TRACKED_FIELDS = (
 )
 
 
-class PeopleError(Exception):
-    def __init__(self, message, field=None):
-        super().__init__(str(message))
-        self.message = message
-        self.field = field
+class PeopleError(ServiceError):
+    """Refus d'une action sur une fiche (message affiché, champ éventuel)."""
 
 
 # Contrainte de base → (champ, message) : deux créations simultanées avec la même adresse

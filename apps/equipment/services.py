@@ -13,6 +13,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from apps.core import audit, notifications
+from apps.core.errors import ServiceError
 from apps.core.models import Notification
 from apps.equipment.models import (
     EquipmentAssignment,
@@ -30,11 +31,8 @@ NOT_AVAILABLE = gettext_lazy("Cet équipement n'est plus disponible.")
 CHANGED = gettext_lazy("Cet équipement a changé d'état entre-temps. Rien n'a été modifié.")
 
 
-class EquipmentError(Exception):
-    def __init__(self, message, field=None):
-        super().__init__(str(message))
-        self.message = message
-        self.field = field
+class EquipmentError(ServiceError):
+    """Refus d'une action sur le matériel (message affiché, champ éventuel)."""
 
 
 # Contrainte de base → (message, champ) : chaque IntegrityError est traduite selon la

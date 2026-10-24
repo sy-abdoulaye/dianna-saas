@@ -14,6 +14,7 @@ from django.utils.translation import gettext as _
 
 from apps.accounts.models import Invitation, User, normalize_email
 from apps.core import audit, notifications
+from apps.core.errors import ServiceError
 from apps.core.hosts import company_url
 from apps.core.mail import queue_invitation_email
 from apps.people.models import Employee, EmployeeStatus, Role
@@ -24,10 +25,8 @@ EMAIL_TAKEN = _(
 )
 
 
-class InvitationError(Exception):
-    def __init__(self, message):
-        super().__init__(str(message))
-        self.message = message
+class InvitationError(ServiceError):
+    """Refus d'une invitation (message affiché)."""
 
 
 def hash_token(token: str) -> str:

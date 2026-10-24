@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.core import audit
 from apps.core.csv_export import csv_content
+from apps.core.errors import ServiceError
 from apps.core.files import delete_after_commit, file_writes
 from apps.core.models import AuditLog, Company, Service, Site
 from apps.people.models import Employee, EmployeeStatus
@@ -18,10 +19,8 @@ STRUCTURES = {
 }
 
 
-class AdministrationError(Exception):
-    def __init__(self, message):
-        super().__init__(str(message))
-        self.message = message
+class AdministrationError(ServiceError):
+    """Refus d'une action d'administration (message affiché)."""
 
 
 def update_company(

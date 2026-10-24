@@ -20,6 +20,7 @@ from django.db.models.functions import Lower
 from django.utils.translation import gettext as _
 
 from apps.core import audit
+from apps.core.errors import ServiceError
 from apps.core.models import Service, Site
 from apps.core.text import strip_unsafe_characters
 from apps.people.models import ContractType, Employee, EmployeeChange
@@ -47,10 +48,8 @@ CONTRACTS = {
 }
 
 
-class ImportFileError(Exception):
-    def __init__(self, message):
-        super().__init__(str(message))
-        self.message = message
+class ImportFileError(ServiceError):
+    """Fichier d'import illisible ou refusé (message affiché)."""
 
 
 @dataclass
