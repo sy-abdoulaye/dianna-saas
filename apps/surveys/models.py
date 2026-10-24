@@ -13,7 +13,9 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import Module, TenantBase, TenantModel
 
-DEFAULT_THRESHOLD = 3
+# Seuil d'anonymat (L6-17) : à 3, deux répondants qui comparent leurs réponses déduisent
+# celles du troisième ; 5 laisse au moins trois inconnus à toute paire de complices.
+DEFAULT_THRESHOLD = 5
 TITLE_MAX = 120
 QUESTION_MAX = 300
 MAX_SCALE_QUESTIONS = 20
@@ -58,7 +60,7 @@ class Survey(TenantModel):
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(anonymity_threshold__gte=DEFAULT_THRESHOLD),
-                name="surveys_threshold_at_least_3",
+                name="surveys_threshold_at_least_5",
             ),
             models.CheckConstraint(
                 condition=models.Q(status__in=["draft", "open", "closed"]),

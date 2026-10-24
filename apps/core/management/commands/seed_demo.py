@@ -349,12 +349,12 @@ def slug(value: str) -> str:
     return "".join(c for c in value.lower() if c.isalpha())
 
 
-# Répondants du questionnaire « Intégration » du prototype : arrivés depuis moins d'un an à
-# la date du chargement, pour que le public « Arrivés depuis moins d'un an » compte au moins
-# 3 personnes (seuil d'anonymat, L6-05). Écart au prototype, figé en 2024 et 2025.
+# Public du questionnaire « Intégration » du prototype : arrivés depuis moins d'un an à la
+# date du chargement, pour que le public « Arrivés depuis moins d'un an » atteigne le seuil
+# d'anonymat de 5 personnes (L6-05, L6-17). Écart au prototype, figé en 2023 à 2025.
 NEW_HIRES = {
     key: timezone.localdate() - timedelta(days=days)
-    for key, days in (("p14", 300), ("p22", 200), ("p24", 120))
+    for key, days in (("p13", 330), ("p14", 300), ("p22", 200), ("p23", 160), ("p24", 120))
 }
 
 
@@ -685,8 +685,8 @@ class Command(BaseCommand):
     def _seed_surveys(self, people):
         """Questionnaires du prototype (seedQuestionnaires), écrits par les services : public
         figé à la publication, réponses anonymes sans lien avec les reçus. Écarts :
-        « Intégration » n'a que 2 réponses (résultats masqués) ; le brouillon a une question
-        notée, obligatoire dans le formulaire."""
+        « Intégration » est clos avec 3 réponses, sous le seuil de 5 (résultats masqués) ; le
+        brouillon a une question notée, obligatoire dans le formulaire."""
         from apps.surveys import services
         from apps.surveys.models import Survey
 
@@ -993,13 +993,13 @@ DEMO_SURVEYS = [
     {
         "title": "Retour sur l'intégration des nouveaux arrivants",
         "audience": "new_hires",
-        "status": "open",
-        "due_in": 42,
+        "status": "closed",
+        "due_in": -10,
         "questions": (
             ["Mon accueil s'est bien passé.", "Je comprends mes objectifs."],
             "Un point à améliorer dans l'intégration ?",
         ),
-        "respondents": ["p24", "p22"],
+        "respondents": ["p24", "p22", "p14"],
     },
     {
         "title": "Enquête télétravail 2025",

@@ -117,11 +117,11 @@ def employee_answers_with_a_comment(browser, urls, company_a):
     employee.close()
 
 
-def two_colleagues_answer(company_a):
+def four_colleagues_answer(company_a):
     with tenant_context(company_a.company):
         survey = Survey.objects.get(title="Ambiance 2026")
         question = survey.questions.get(order=1)
-        others = list(survey.invitations.exclude(employee=company_a.employee))[:2]
+        others = list(survey.invitations.exclude(employee=company_a.employee))[:4]
         for invitation in others:
             services.submit_answers(survey, invitation.employee, {question.pk: {"score": 2}})
 
@@ -133,16 +133,16 @@ def test_survey_from_draft_to_results_after_closing(browser, urls, company_a, co
     page = hr.new_page()
     hr_creates_edits_and_publishes(page, urls, company_a)
     employee_answers_with_a_comment(browser, urls, company_a)
-    two_colleagues_answer(company_a)
+    four_colleagues_answer(company_a)  # 5 réponses : seuil d'anonymat
     page.reload()
     # La RH fait partie du public et n'a pas répondu : « Répondre » ou « Résultats ».
     page.get_by_role("link", name="Résultats").click()
-    expect(page.locator("main")).to_contain_text("3 réponses reçues")
+    expect(page.locator("main")).to_contain_text("5 réponses reçues")
     expect(page.locator("main")).to_contain_text("Les résultats seront visibles à la clôture")
     page.get_by_role("button", name="Clore le questionnaire").click()
     page.locator("dialog[open]").get_by_role("button", name="Clore").click()
     expect(page.locator("#toasts .toast").last).to_contain_text("Questionnaire clos")
-    expect(page.locator("main")).to_contain_text("2,7 / 5")
+    expect(page.locator("main")).to_contain_text("2,4 / 5")  # (4 + 4 × 2) / 5
     expect(page.locator("main")).to_contain_text("Une équipe soudée.")
     shot(page, "questionnaire-resultats")
     hr.close()
