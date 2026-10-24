@@ -107,6 +107,13 @@ Date : 24 octobre 2026. Branche : `lot-6`.
   - Annotations de type sur `actor`, `viewer` et `employee`.
   - Les annonces passent au service un objet `AnnouncementData`.
 
+## Derniers points de la vérification (26 oct. 2026)
+
+- **Course à minuit (L6-23).** Les lectures des résultats prennent un verrou partagé et attendent une réponse en cours. Le test utilise deux connexions réelles ; il échoue sans le verrou.
+- **Accessibilité.** Après « Afficher plus », le focus va sur le premier commentaire chargé. Un parcours au clavier le vérifie ; il échoue sans la correction.
+- **Code mort.** Les imports `parse_keys` (`accounts/mfa.py`) et `activate_totp` (`planning/tests/test_audit.py`) sont supprimés avec leur `noqa`. RUF100 est active : il reste 19 `noqa`, tous utiles et justifiés.
+- **Texte.** U+061C, U+2028 et U+2029 sont retirés aussi.
+
 ## Tests
 
 | Commande | Résultat |
