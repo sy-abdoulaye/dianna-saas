@@ -108,6 +108,37 @@ def notification_open(request, pk):
 
 
 @require_POST
+def undo_action(request, token, *, prefix: str, module: str = "", permission: str = ""):
+    """« Annuler » dans la notification visuelle (30 s, auteur seulement, L0-03) : seule vue
+    d'annulation. Chaque URL d'application la sert avec le préfixe de ses actions ; le module
+    et la permission de l'écran sont vérifiés avant le jeton, comme pour l'action annulée."""
+    from django.http import Http404
+
+    from apps.core import undo
+    from apps.core.access import module_is_enabled, require
+    from apps.core.errors import ServiceError
+    from apps.core.htmx import error_response
+    from apps.core.models import Module
+
+    if module and not module_is_enabled(request, module):
+        return module_disabled(request, Module(module).label)
+    if permission:
+        require(request, permission)
+    try:
+        data = undo.read_token(request, token)
+    except undo.UndoError as error:
+        return error_response(error)
+    handler = undo.HANDLERS.get(data.action) if data.action.startswith(prefix) else None
+    if handler is None:
+        raise Http404
+    try:
+        toast = handler.run(request, data)
+    except ServiceError as error:
+        return error_response(error)
+    return after_action(request, toast, refresh=handler.refresh)
+
+
+@require_POST
 def notification_read_all(request):
     notifications.mark_all_read(request.employee)
     if request.htmx:

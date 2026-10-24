@@ -9,7 +9,6 @@ import json
 
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -20,7 +19,7 @@ from apps.approvals import workflow
 from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus
 from apps.core import permissions, undo
-from apps.core.access import module_required, permission_required, require
+from apps.core.access import module_required, permission_required
 from apps.core.context import ActionContext
 from apps.core.htmx import (
     Toast,
@@ -268,25 +267,18 @@ UNDO_ACTIONS = {
 }
 
 
-@require_POST
-@module_required(Module.EQUIPMENT)
-def undo_action(request, token):
-    """« Annuler » dans la notification visuelle : 30 s, auteur seulement (L0-03)."""
-    require(request, "equipment.manage")
-    try:
-        data = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return error_response(error)
-    if data.action not in UNDO_ACTIONS:
-        raise Http404
-    undo_service, title, message = UNDO_ACTIONS[data.action]
-    try:
-        undo_service(json.loads(data.target), context=ActionContext.of(request))
-    except services.EquipmentError as error:
-        return error_response(error)
-    return after_action(
-        request, Toast(title=str(title), message=str(message), kind="info"), refresh=CHANGED
-    )
+def _undo_with(service, title, message):
+    """Traitement d'annulation du matériel (vue commune apps.core.views.undo_action)."""
+
+    def run(request, payload) -> Toast:
+        service(json.loads(payload.target), context=ActionContext.of(request))
+        return Toast(title=str(title), message=str(message), kind="info")
+
+    return run
+
+
+for _action, (_service, _title, _message) in UNDO_ACTIONS.items():
+    undo.register(_action, _undo_with(_service, _title, _message), refresh=CHANGED)
 
 
 def _confirm_or_act(request, item, *, template_context, action, done_title):

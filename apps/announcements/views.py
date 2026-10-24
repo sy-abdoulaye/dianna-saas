@@ -12,7 +12,7 @@ from apps.announcements import selectors, services
 from apps.announcements.forms import AnnouncementForm, FilterForm
 from apps.announcements.models import Announcement
 from apps.core import permissions, undo
-from apps.core.access import module_required, permission_required, require
+from apps.core.access import module_required, permission_required
 from apps.core.context import ActionContext
 from apps.core.htmx import (
     PAGE_CHANGED,
@@ -167,20 +167,10 @@ def announcement_delete(request, public_id):
     return after_action(request, toast, go_to=reverse("announcements:list"), close_modal=True)
 
 
-@require_POST
-@module_required(Module.ANNOUNCEMENTS)
-def undo_delete(request, token):
-    """« Annuler » dans la notification visuelle : 30 s, auteur seulement (L0-03)."""
-    require(request, "announcements.manage")
-    try:
-        data = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return error_response(error)
-    if data.action != "announcements.delete":
-        raise Http404
-    try:
-        announcement = services.restore(data.target, context=ActionContext.of(request))
-    except services.AnnouncementError as error:
-        return error_response(error)
-    toast = Toast(title=_("Suppression annulée"), message=announcement.title, kind="info")
-    return after_action(request, toast, refresh=CHANGED)
+def _undo_delete(request, payload) -> Toast:
+    """Annulation d'une suppression (vue commune apps.core.views.undo_action)."""
+    announcement = services.restore(payload.target, context=ActionContext.of(request))
+    return Toast(title=_("Suppression annulée"), message=announcement.title, kind="info")
+
+
+undo.register("announcements.delete", _undo_delete, refresh=CHANGED)

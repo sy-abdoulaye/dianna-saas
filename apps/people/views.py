@@ -324,27 +324,20 @@ def archive(request, public_id):
     )
 
 
-@require_POST
-def undo_archive(request, token):
-    try:
-        payload = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return error_response(error)
-    if payload.action != "people.archive":
-        raise Http404
+def _undo_archive(request, payload) -> Toast:
+    """Annulation d'un archivage (vue commune apps.core.views.undo_action)."""
     previous = json.loads(payload.target)
     employee = get_object_or_404(Employee, public_id=previous["id"])
     require(request, "people.manage", employee)
     services.undo_archive(employee, previous, context=ActionContext.of(request))
-    return after_action(
-        request,
-        Toast(
-            title=_("Archivage annulé"),
-            message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
-            kind="info",
-        ),
-        refresh=CHANGED_EVENT,
+    return Toast(
+        title=_("Archivage annulé"),
+        message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
+        kind="info",
     )
+
+
+undo.register("people.archive", _undo_archive, refresh=CHANGED_EVENT)
 
 
 @require_POST

@@ -393,34 +393,28 @@ def cancel_approved(request, kind, public_id):
     return _with_undo(request, result, "cancel_approved", toast)
 
 
-@require_POST
-def undo_transition(request, token):
-    """« Annuler » dans la notification visuelle : 30 s, auteur seulement (L0-03)."""
-    try:
-        payload = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return error_response(error)
+def _undo_request(request, payload) -> Toast:
+    """Annulation d'une transition de demande (vue commune apps.core.views.undo_action)."""
     data = json.loads(payload.target)
     model = REQUEST_MODELS.get(data.get("type"))
     if model is None or payload.action != f"requests.{data.get('action')}":
         raise Http404
     if not module_is_enabled(request, model.module):
         raise Http404
-    try:
-        restored = workflow.undo(model, data, request.employee, http_request=request)
-    except workflow.WorkflowError as error:
-        return error_response(error)
+    restored = workflow.undo(model, data, request.employee, http_request=request)
     if restored is None:
-        toast = Toast(title=_("Envoi annulé"), message=_("La demande a été retirée."), kind="info")
-    else:
-        toast = Toast(
-            title=_("Décision annulée"),
-            message=_("La demande est de nouveau en attente.")
-            if restored.is_open
-            else _("La demande est rétablie."),
-            kind="info",
-        )
-    return after_action(request, toast, refresh=CHANGED)
+        return Toast(title=_("Envoi annulé"), message=_("La demande a été retirée."), kind="info")
+    return Toast(
+        title=_("Décision annulée"),
+        message=_("La demande est de nouveau en attente.")
+        if restored.is_open
+        else _("La demande est rétablie."),
+        kind="info",
+    )
+
+
+for _action in ("submit", "approve", "refuse", "cancel", "cancel_approved"):
+    undo.register(f"requests.{_action}", _undo_request, refresh=CHANGED)
 
 
 # ---------- Campagnes de congés d'été (RH) ----------
