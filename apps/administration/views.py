@@ -26,7 +26,14 @@ from apps.core import permissions
 from apps.core.access import enabled_modules, permission_required
 from apps.core.dates import compact_day_stamp
 from apps.core.files import signed_url
-from apps.core.htmx import Toast, is_htmx, toast_response, trigger
+from apps.core.htmx import (
+    Toast,
+    error_response,
+    form_error_response,
+    is_htmx,
+    toast_response,
+    trigger,
+)
 from apps.core.models import AuditLog, Company, Module
 from apps.core.services import set_module
 from apps.people import services as people
@@ -161,9 +168,7 @@ def change_role(request, public_id):
         people.change_role(person, role, actor=request.employee, request=request)
     except people.PeopleError as error:
         return _event(
-            toast_response(
-                Toast(title=str(error.message), kind="err"), close_modal=True, status=409
-            ),
+            error_response(error, close_modal=True),
             USERS_CHANGED,
         )
     return _event(
@@ -186,7 +191,7 @@ def send_invitation(request, public_id):
     try:
         accounts.invite(person, sent_by=request.employee, request=request)
     except accounts.InvitationError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     return _event(
         toast_response(
             Toast(
@@ -257,7 +262,7 @@ def structure_form(request, kind, pk=None):
     context = {"form": form, "action_url": action_url, "title": title, "is_rename": bool(pk)}
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", context, status=422)
+            return form_error_response(request, template, context)
         name = form.cleaned_data["name"]
         alsace = form.cleaned_data.get("alsace_moselle") if kind == "sites" else None
         if instance:
@@ -297,9 +302,7 @@ def structure_delete(request, kind, pk):
     try:
         services.delete_structure(kind, instance, actor=request.employee, request=request)
     except services.AdministrationError as error:
-        return toast_response(
-            Toast(title=str(error.message), kind="err"), close_modal=True, status=409
-        )
+        return error_response(error, close_modal=True)
     return _event(
         toast_response(Toast(title=_("Supprimé"), message=instance.name), close_modal=True),
         STRUCTURE_CHANGED,
@@ -341,7 +344,7 @@ def closure_add(request):
     context = {"form": form, "action_url": reverse("administration:closure_add")}
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", context, status=422)
+            return form_error_response(request, template, context)
         try:
             closure, concerned = services.add_closure(
                 day=form.cleaned_data["date"],
@@ -352,7 +355,7 @@ def closure_add(request):
             )
         except services.ClosureError as error:
             form.add_error(error.field, error.message)
-            return render(request, f"{template}#form", context, status=422)
+            return form_error_response(request, template, context)
         message = closure.label
         if concerned:
             message = _(

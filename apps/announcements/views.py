@@ -179,7 +179,7 @@ def undo_delete(request, token):
     try:
         data = undo.read_token(request, token)
     except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     if data.action != "announcements.delete":
         raise Http404
     try:

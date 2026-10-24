@@ -71,7 +71,7 @@ def error_response(error, *, close_modal=False, status=409) -> HttpResponse:
     )
 
 
-def confirm_response(request, *, title, text, ok_label, action_url, danger=False):
+def confirm_response(request, *, title, text, ok_label, action_url, danger=False, ok_icon=""):
     """Modale de confirmation commune (components/confirm.html) avant une action."""
     from django.shortcuts import render
 
@@ -81,6 +81,7 @@ def confirm_response(request, *, title, text, ok_label, action_url, danger=False
         "ok_label": ok_label,
         "danger": danger,
         "action_url": action_url,
+        "ok_icon": ok_icon,
     }
     return render(request, "components/confirm.html", context)
 
@@ -92,6 +93,14 @@ def modal_form_response(request, template: str, context: dict) -> HttpResponse:
 
     if request.method == "GET":
         return render(request, template, context)
+    return form_error_response(request, template, context)
+
+
+def form_error_response(request, template: str, context: dict) -> HttpResponse:
+    """Formulaire refusé : le seul fragment `form` du gabarit, statut 422 (inséré par HTMX à
+    la place du formulaire, focus sur le premier champ à corriger)."""
+    from django.shortcuts import render
+
     return render(request, f"{template}#form", context, status=422)
 
 

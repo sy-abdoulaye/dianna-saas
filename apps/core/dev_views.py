@@ -17,7 +17,14 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.core import undo
 from apps.core.dev_forms import DemoFieldsForm, DemoFilterForm, DemoRequestForm
-from apps.core.htmx import Toast, is_htmx, toast_response
+from apps.core.htmx import (
+    Toast,
+    confirm_response,
+    error_response,
+    form_error_response,
+    is_htmx,
+    toast_response,
+)
 from apps.core.navigation import build_demo_nav
 from apps.core.status import STATUSES
 
@@ -180,7 +187,7 @@ def demo_modal(request):
         return render(request, template, {"form": DemoRequestForm()})
     form = DemoRequestForm(request.POST)
     if not form.is_valid():
-        return render(request, f"{template}#form", {"form": form}, status=422)
+        return form_error_response(request, template, {"form": form})
     token = undo.make_token(request, "demo.request", form.cleaned_data["day"].isoformat())
     return toast_response(
         Toast(
@@ -223,7 +230,7 @@ def demo_confirm(request):
         "ok_label": _("Archiver") if danger else _("Marquer comme réalisé"),
         "ok_icon": "trash" if danger else "check",
     }
-    return render(request, "components/confirm.html", context)
+    return confirm_response(request, **context)
 
 
 @login_not_required
@@ -233,7 +240,7 @@ def demo_undo(request, token):
     try:
         undo.read_token(request, token)
     except undo.UndoError as exc:
-        return toast_response(Toast(title=str(exc.message), kind="err"), status=409)
+        return error_response(exc)
     return toast_response(
         Toast(title=_("Action annulée"), message=_("La demande a été retirée."), kind="info")
     )

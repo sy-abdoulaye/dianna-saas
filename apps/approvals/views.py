@@ -36,7 +36,14 @@ from apps.core.files import (
     StorageUnavailableError,
     storage_unavailable_response,
 )
-from apps.core.htmx import Toast, is_htmx, toast_response, trigger
+from apps.core.htmx import (
+    Toast,
+    error_response,
+    form_error_response,
+    is_htmx,
+    toast_response,
+    trigger,
+)
 from apps.core.models import Module
 from apps.core.ratelimit import (
     EXPORT_LIMIT_MESSAGE,
@@ -198,9 +205,7 @@ def new_request(request, kind):
             for name, message in error.errors.items():
                 form.add_error(name if name in form.fields else None, message)
     if not form.is_valid():
-        return render(
-            request, f"{template}#form", _form_context(meta, form, action_url), status=422
-        )
+        return form_error_response(request, template, _form_context(meta, form, action_url))
     return _with_undo(request, result, "submit", _submit_toast(result))
 
 
@@ -269,9 +274,7 @@ def _urls(kind, obj):
 
 
 def _decision_error(error):
-    return _changed(
-        toast_response(Toast(title=str(error.message), kind="err"), close_modal=True, status=409)
-    )
+    return _changed(error_response(error, close_modal=True))
 
 
 @require_POST
@@ -319,7 +322,7 @@ def refuse(request, kind, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     try:
         result = workflow.refuse(
             obj, request.employee, reason=form.cleaned_data["reason"], http_request=request
@@ -381,7 +384,7 @@ def cancel_approved(request, kind, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     try:
         result = workflow.cancel_approved(
             obj, request.employee, reason=form.cleaned_data["reason"], http_request=request
@@ -403,7 +406,7 @@ def undo_transition(request, token):
     try:
         payload = undo.read_token(request, token)
     except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     data = json.loads(payload.target)
     model = REQUEST_MODELS.get(data.get("type"))
     if model is None or payload.action != f"requests.{data.get('action')}":
@@ -413,7 +416,7 @@ def undo_transition(request, token):
     try:
         restored = workflow.undo(model, data, request.employee, http_request=request)
     except workflow.WorkflowError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     if restored is None:
         toast = Toast(title=_("Envoi annulé"), message=_("La demande a été retirée."), kind="info")
     else:
@@ -469,7 +472,7 @@ def new_campaign(request):
     template = "approvals/partials/campaign_modal.html"
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", {"form": form}, status=422)
+            return form_error_response(request, template, {"form": form})
         campaign = workflow.create_summer_campaign(
             form.cleaned_data, request.employee, http_request=request
         )
@@ -494,7 +497,7 @@ def campaign_status(request, pk, action):
     try:
         campaign = services[action](campaign, request.employee, http_request=request)
     except workflow.WorkflowError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     title = _("Campagne ouverte") if action == "ouvrir" else _("Campagne close")
     return trigger(
         toast_response(Toast(title=title, message=campaign.label)), **{CAMPAIGNS_CHANGED: True}
@@ -567,7 +570,7 @@ def export_requests(request, kind):
     if is_htmx(request) and form.is_valid() and not export_allowed(me):
         form.add_error(None, EXPORT_LIMIT_MESSAGE)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     if is_htmx(request):
         response = HttpResponse(status=204)
         response["HX-Redirect"] = f"{action_url}?{request.GET.urlencode()}"

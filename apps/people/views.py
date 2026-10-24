@@ -18,7 +18,14 @@ from apps.accounts import services as accounts
 from apps.core import permissions, undo
 from apps.core.access import PermissionRequiredMixin, permission_required, require
 from apps.core.files import signed_url
-from apps.core.htmx import Toast, is_htmx, toast_response, trigger
+from apps.core.htmx import (
+    Toast,
+    error_response,
+    form_error_response,
+    is_htmx,
+    toast_response,
+    trigger,
+)
 from apps.people import importer, services
 from apps.people.forms import (
     STATUS_IN_POST,
@@ -280,11 +287,10 @@ def archive(request, public_id):
     held = held_by(employee)
     if request.method == "POST":
         if not form.is_valid():
-            return render(
+            return form_error_response(
                 request,
-                f"{template}#form",
+                template,
                 {"form": form, "person": employee, "action_url": url, "held": held},
-                status=422,
             )
         try:
             previous = services.archive(
@@ -295,11 +301,10 @@ def archive(request, public_id):
             )
         except services.PeopleError as error:
             form.add_error(None, error.message)
-            return render(
+            return form_error_response(
                 request,
-                f"{template}#form",
+                template,
                 {"form": form, "person": employee, "action_url": url, "held": held},
-                status=422,
             )
         token = undo.make_token(
             request, "people.archive", json.dumps({"id": str(employee.public_id), **previous})
@@ -331,7 +336,7 @@ def undo_archive(request, token):
     try:
         payload = undo.read_token(request, token)
     except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     if payload.action != "people.archive":
         raise Http404
     previous = json.loads(payload.target)
@@ -356,7 +361,7 @@ def reactivate(request, public_id):
     try:
         services.reactivate(employee, actor=request.employee, request=request)
     except services.PeopleError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     return _with_event(
         toast_response(
             Toast(
@@ -379,7 +384,7 @@ def edit_contact(request):
     form = ContactForm(request.POST or None, initial=initial)
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", {"form": form}, status=422)
+            return form_error_response(request, template, {"form": form})
         services.update_contact(
             me,
             phone=form.cleaned_data["phone"],

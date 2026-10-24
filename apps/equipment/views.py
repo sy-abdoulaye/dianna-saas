@@ -21,7 +21,14 @@ from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus
 from apps.core import permissions, undo
 from apps.core.access import module_required, permission_required, require
-from apps.core.htmx import Toast, toast_response, trigger
+from apps.core.htmx import (
+    Toast,
+    confirm_response,
+    error_response,
+    form_error_response,
+    toast_response,
+    trigger,
+)
 from apps.core.models import Module
 from apps.equipment import services
 from apps.equipment.forms import (
@@ -51,12 +58,6 @@ TAB_MINE, TAB_TEAM, TAB_PARK, TAB_REQUESTS, TAB_ISSUES = (
 
 def _changed(response):
     return trigger(response, **{CHANGED: True})
-
-
-def _error(error, status=409):
-    return toast_response(
-        Toast(title=str(error.message), kind="err"), close_modal=True, status=status
-    )
 
 
 def _tabs(me):
@@ -210,7 +211,7 @@ def item_add(request):
         except services.EquipmentError as error:
             form.add_error(error.field, error.message)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     return _changed(
         toast_response(
             Toast(title=_("Équipement ajouté"), message=f"{item.model} · {item.serial_number}"),
@@ -234,12 +235,12 @@ def item_assign(request, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     employee = form.cleaned_data["employee"]
     try:
         payload = services.assign(item, employee, actor=request.employee, request=request)
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     return _assigned(request, item, employee, payload)
 
 
@@ -278,24 +279,24 @@ def undo_action(request, token):
     try:
         data = undo.read_token(request, token)
     except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     if data.action not in UNDO_ACTIONS:
         raise Http404
     undo_service, title, message = UNDO_ACTIONS[data.action]
     try:
         undo_service(json.loads(data.target), actor=request.employee, request=request)
     except services.EquipmentError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     return _changed(toast_response(Toast(title=str(title), message=str(message), kind="info")))
 
 
 def _confirm_or_act(request, item, *, template_context, action, done_title):
     if request.method == "GET":
-        return render(request, "components/confirm.html", template_context)
+        return confirm_response(request, **template_context)
     try:
         action(item, actor=request.employee, request=request)
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     return _changed(
         toast_response(Toast(title=done_title, message=item.serial_number), close_modal=True)
     )
@@ -347,24 +348,21 @@ def _repair(request, item, *, action_url, send):
     """« Envoyer en réparation » : confirmation, puis « Annuler » pendant 30 s."""
     if request.method == "GET":
         holder = item.holder
-        return render(
+        return confirm_response(
             request,
-            "components/confirm.html",
-            {
-                "title": _("Envoyer « %(item)s » en réparation ?")
-                % {"item": f"{item.get_kind_display()} {item.serial_number}"},
-                "text": _("%(name)s reste son détenteur pendant la réparation.")
-                % {"name": holder.full_name}
-                if holder
-                else _("L'équipement quitte le stock pendant la réparation."),
-                "ok_label": _("Envoyer en réparation"),
-                "action_url": action_url,
-            },
+            title=_("Envoyer « %(item)s » en réparation ?")
+            % {"item": f"{item.get_kind_display()} {item.serial_number}"},
+            text=_("%(name)s reste son détenteur pendant la réparation.")
+            % {"name": holder.full_name}
+            if holder
+            else _("L'équipement quitte le stock pendant la réparation."),
+            ok_label=_("Envoyer en réparation"),
+            action_url=action_url,
         )
     try:
         payload = send()
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     token = undo.make_token(request, "equipment.repair", json.dumps(payload))
     toast = Toast(
         title=_("Envoyé en réparation"),
@@ -395,7 +393,7 @@ def item_back(request, public_id):
     try:
         item = services.back_from_repair(item, actor=request.employee, request=request)
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     title = _("Rendu à son détenteur") if item.holder_id else _("Remis en stock")
     return _changed(toast_response(Toast(title=title, message=item.serial_number)))
 
@@ -418,7 +416,7 @@ def issue_new(request, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     try:
         services.report_issue(
             item,
@@ -427,7 +425,7 @@ def issue_new(request, public_id):
             request=request,
         )
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     return _changed(
         toast_response(
             Toast(title=_("Signalement envoyé"), message=_("Les RH sont notifiés.")),
@@ -455,7 +453,7 @@ def issue_close(request, pk):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     try:
         services.close_issue(
             issue,
@@ -464,7 +462,7 @@ def issue_close(request, pk):
             request=request,
         )
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     return _changed(toast_response(Toast(title=_("Signalement clos")), close_modal=True))
 
 
@@ -504,7 +502,7 @@ def request_assign(request, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     item = form.cleaned_data["item"]
     try:
         payload = services.assign(
@@ -515,5 +513,5 @@ def request_assign(request, public_id):
             request=request,
         )
     except services.EquipmentError as error:
-        return _error(error)
+        return error_response(error, close_modal=True)
     return _assigned(request, item, equipment_request.requester, payload)
