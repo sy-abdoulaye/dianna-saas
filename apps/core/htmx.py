@@ -71,17 +71,18 @@ def error_response(error, *, close_modal=False, status=409) -> HttpResponse:
     )
 
 
-def confirm_response(request, *, title, text, ok_label, action_url, danger=False, ok_icon=""):
-    """Modale de confirmation commune (components/confirm.html) avant une action."""
+def confirm_response(request, *, title, text, ok_label, action_url, **options):
+    """Modale de confirmation commune (components/confirm.html) avant une action. Options :
+    `danger` (action destructive), `ok_icon`."""
     from django.shortcuts import render
 
     context = {
         "title": title,
         "text": text,
         "ok_label": ok_label,
-        "danger": danger,
+        "danger": options.get("danger", False),
         "action_url": action_url,
-        "ok_icon": ok_icon,
+        "ok_icon": options.get("ok_icon", ""),
     }
     return render(request, "components/confirm.html", context)
 

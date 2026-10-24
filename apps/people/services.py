@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit, permissions
+from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.files import delete_after_commit, file_writes
 from apps.core.tenancy import get_current_company
@@ -69,16 +70,16 @@ def _save_employee(employee, **kwargs):
         raise PeopleError(INVALID_VALUE) from exc
 
 
-def _record(employee, actor, kind, fields=(), *, request=None, action=None, summary=None):
+def _record(employee, context: ActionContext, kind, fields=(), *, action=None, summary=None):
     EmployeeChange.objects.create(
-        employee=employee, actor=actor, kind=kind, fields=sorted(set(fields))
+        employee=employee, actor=context.actor, kind=kind, fields=sorted(set(fields))
     )
     audit.log(
         action or f"people.{kind}",
         summary or f"{EmployeeChange.Kind(kind).label} : {employee.full_name}",
-        actor=actor,
+        actor=context.actor,
         target=employee,
-        request=request,
+        request=context.request,
     )
 
 
@@ -130,7 +131,7 @@ def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
     if photo is not None:
         files.save(employee.photo, photo)
     _save_employee(employee)
-    _record(employee, actor, EmployeeChange.Kind.CREATED, request=request)
+    _record(employee, ActionContext(actor, request), EmployeeChange.Kind.CREATED)
     if role != Role.EMPLOYEE:
         change_role(employee, role, actor=actor, request=request)
         employee.refresh_from_db()
@@ -148,15 +149,15 @@ def update_employee(
         return _update_employee(
             employee,
             data,
-            actor=actor,
+            ActionContext(actor, request),
             photo=photo,
             remove_photo=remove_photo,
-            request=request,
             files=files,
         )
 
 
-def _update_employee(employee, data, *, actor, photo, remove_photo, request, files):
+def _update_employee(employee, data, context: ActionContext, *, photo, remove_photo, files):
+    actor, request = context.actor, context.request
     data = dict(data)
     role = data.pop("role", None)
     role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
@@ -184,7 +185,7 @@ def _update_employee(employee, data, *, actor, photo, remove_photo, request, fil
         changed.append("photo")
     if changed:
         _save_employee(employee)
-        _record(employee, actor, EmployeeChange.Kind.UPDATED, changed, request=request)
+        _record(employee, ActionContext(actor, request), EmployeeChange.Kind.UPDATED, changed)
     return ["role", *changed] if role_changed else changed
 
 
@@ -199,7 +200,7 @@ def update_contact(employee: Employee, *, phone: str, office: str, request=None)
             changed.append(name)
     if changed:
         employee.save(update_fields=[*changed, "updated_at"])
-        _record(employee, employee, EmployeeChange.Kind.CONTACT, changed, request=request)
+        _record(employee, ActionContext(employee, request), EmployeeChange.Kind.CONTACT, changed)
     return changed
 
 
@@ -238,10 +239,9 @@ def archive(employee: Employee, *, actor, departure_date=None, request=None) -> 
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
         employee,
-        actor,
+        ActionContext(actor, request),
         EmployeeChange.Kind.ARCHIVED,
         ["status", "departure_date"],
-        request=request,
     )
     # Matériel encore détenu : l'archivage n'est pas bloqué, les RH reçoivent la liste à
     # restituer (docs/modules/07-materiel.md, L5-11).
@@ -268,10 +268,9 @@ def undo_archive(employee: Employee, previous: dict, *, actor, request=None) -> 
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
         employee,
-        actor,
+        ActionContext(actor, request),
         EmployeeChange.Kind.REACTIVATED,
         ["status", "departure_date"],
-        request=request,
         summary=_("Archivage annulé : %(name)s") % {"name": employee.full_name},
     )
 
@@ -289,10 +288,9 @@ def reactivate(employee: Employee, *, actor, request=None) -> None:
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
         employee,
-        actor,
+        ActionContext(actor, request),
         EmployeeChange.Kind.REACTIVATED,
         ["status", "departure_date"],
-        request=request,
     )
 
 
@@ -313,10 +311,9 @@ def change_role(employee: Employee, role: str, *, actor, request=None) -> None:
     employee.save(update_fields=["role", "updated_at"])
     _record(
         employee,
-        actor,
+        ActionContext(actor, request),
         EmployeeChange.Kind.ROLE,
         ["role"],
-        request=request,
         action="people.role_changed",
         summary=_("Profil de %(name)s : %(old)s → %(new)s")
         % {"name": employee.full_name, "old": old, "new": employee.get_role_display()},

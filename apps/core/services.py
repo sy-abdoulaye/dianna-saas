@@ -1,5 +1,7 @@
 """Opérations de plateforme (équipe Dianna) : création d'entreprise, modules."""
 
+from dataclasses import dataclass
+
 from django.db import transaction
 from django.utils.translation import gettext as _
 
@@ -9,22 +11,24 @@ from apps.core.tenancy import tenant_context
 
 
 @transaction.atomic
-def create_company(
-    *,
-    name: str,
-    slug: str,
-    admin_first_name: str,
-    admin_last_name: str,
-    admin_email: str,
-    invite: bool = True,
-    request=None,
-):
+@dataclass(frozen=True)
+class NewCompany:
+    """Nouvel espace client et son premier administrateur (administration éditeur)."""
+
+    name: str
+    slug: str
+    admin_first_name: str
+    admin_last_name: str
+    admin_email: str
+
+
+def create_company(data: NewCompany, *, invite: bool = True, request=None):
     """Crée l'entreprise, active tous les modules, crée la fiche du premier administrateur et
     lui envoie son invitation. Renvoie (company, employee)."""
     from apps.accounts import services as accounts
     from apps.people.models import Employee, Role
 
-    company = Company(name=name, slug=slug)
+    company = Company(name=data.name, slug=data.slug)
     company.full_clean()
     company.save()
     with tenant_context(company):
@@ -32,9 +36,9 @@ def create_company(
             [CompanyModule(company=company, module=m, enabled=True) for m in Module.values]
         )
         admin = Employee.objects.create(
-            first_name=admin_first_name,
-            last_name=admin_last_name,
-            email=admin_email,
+            first_name=data.admin_first_name,
+            last_name=data.admin_last_name,
+            email=data.admin_email,
             role=Role.ADMIN,
             job_title=_("Administrateur"),
         )

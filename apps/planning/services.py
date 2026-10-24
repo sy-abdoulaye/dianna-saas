@@ -115,6 +115,17 @@ class PeopleFilter:
 NO_FILTER = PeopleFilter()
 
 
+@dataclass(frozen=True)
+class GridPage:
+    """Page affichée et déclaration depuis la grille (sa propre ligne, module Télétravail)."""
+
+    number: int | str | None = 1
+    can_declare: bool = False
+
+
+FIRST_PAGE = GridPage()
+
+
 @dataclass
 class Grid:
     first: date
@@ -242,8 +253,7 @@ def build_rows(people, first, last, *, viewer=None, can_declare=False, today=Non
                 day,
                 events.get((person.pk, day), {}),
                 offs,
-                is_me and can_declare,
-                today,
+                today if is_me and can_declare else None,
                 full,
             )
             for day in period
@@ -252,7 +262,9 @@ def build_rows(people, first, last, *, viewer=None, can_declare=False, today=Non
     return rows
 
 
-def _cell(person, day, kinds, offs, can_declare, today, full=True):
+def _cell(person, day, kinds, offs, declarable_from, full=True):
+    """`declarable_from` : premier jour où la personne peut déclarer du télétravail depuis la
+    case (aujourd'hui, sur sa propre ligne), sinon None."""
     if not full:
         # Collègue : seulement les demandes validées.
         kinds = {
@@ -287,7 +299,7 @@ def _cell(person, day, kinds, offs, can_declare, today, full=True):
             if state == LEAVE:
                 cell.leave_label = label if full else str(ABSENT)
             return cell
-    cell.clickable = can_declare and today is not None and day >= today
+    cell.clickable = declarable_from is not None and day >= declarable_from
     return cell
 
 
@@ -332,18 +344,18 @@ def count_today(people, today, viewer=None) -> dict:
     return counts
 
 
-def grid(viewer, *, view, anchor, today, page=1, filters=NO_FILTER, can_declare=False) -> Grid:
+def grid(viewer, *, view, anchor, today, filters=NO_FILTER, page=FIRST_PAGE) -> Grid:
     first, last = month_of(anchor) if view == "mois" else week_of(anchor)
     people = people_in_scope(viewer, q=filters.q, service=filters.service, site=filters.site)
     others = ordered(people.exclude(pk=viewer.pk), viewer)
-    page_obj = Paginator(others, PER_PAGE).get_page(page)
+    page_obj = Paginator(others, PER_PAGE).get_page(page.number)
     shown = list(page_obj.object_list)
     me = people.filter(pk=viewer.pk).first()
     if me is not None:
         shown.insert(0, me)  # « (vous) » en tête de chaque page
     result = Grid(first, last, list(days(first, last)), page_obj=page_obj)
     result.rows = build_rows(
-        shown, first, last, viewer=viewer, can_declare=can_declare, today=today
+        shown, first, last, viewer=viewer, can_declare=page.can_declare, today=today
     )
     result.total = page_obj.paginator.count + (1 if me is not None else 0)
     result.present_today = present_today(people, today, viewer)

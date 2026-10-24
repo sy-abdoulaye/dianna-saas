@@ -66,9 +66,8 @@ def planning(request):
         me,
         view=view,
         anchor=anchor,
-        page=request.GET.get("page"),
         filters=services.PeopleFilter(q=q, service=service, site=site),
-        can_declare=can_declare,
+        page=services.GridPage(request.GET.get("page"), can_declare),
         today=today,
     )
     base = reverse("planning:week")
@@ -182,7 +181,6 @@ def download(request):
         last=last,
         service=form.cleaned_data["perimetre"],
         fmt=fmt,
-        company=request.company,
         people=form.cleaned_data["people"],
     )
     exports.log_export(

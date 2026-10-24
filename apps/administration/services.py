@@ -7,6 +7,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from apps.core import audit
+from apps.core.context import ActionContext
 from apps.core.csv_export import csv_content
 from apps.core.dates import format_date
 from apps.core.errors import ServiceError
@@ -33,15 +34,15 @@ def update_company(
         return _update_company(
             company,
             data,
-            actor=actor,
+            ActionContext(actor, request),
             logo=logo,
             remove_logo=remove_logo,
-            request=request,
             files=files,
         )
 
 
-def _update_company(company, data, *, actor, logo, remove_logo, request, files):
+def _update_company(company, data, context: ActionContext, *, logo, remove_logo, files):
+    actor, request = context.actor, context.request
     company = Company.objects.select_for_update().get(pk=company.pk)
     changed = [name for name, value in data.items() if getattr(company, name) != value]
     for name in changed:
