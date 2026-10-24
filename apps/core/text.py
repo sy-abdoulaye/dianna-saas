@@ -10,8 +10,12 @@ import re
 
 from django import forms
 
-# C0 sans \t (09) ni \n (0A) ; DEL et C1 ; U+200E, U+200F ; U+202A à U+202E ; U+2066 à U+2069.
-UNSAFE_CHARACTERS = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f‎‏‪-‮⁦-⁩]")
+# C0 sans \t (09) ni \n (0A) ; DEL et C1 ; marques de direction U+061C, U+200E, U+200F ;
+# U+202A à U+202E ; U+2066 à U+2069 ; séparateurs de ligne et de paragraphe U+2028, U+2029.
+UNSAFE_CHARACTERS = re.compile(
+    "[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f"
+    "\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]"
+)
 
 
 def strip_unsafe_characters(value: str) -> str:

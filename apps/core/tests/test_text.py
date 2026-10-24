@@ -72,3 +72,9 @@ def test_csv_import_values_are_cleaned(client_for, company_a):
     client.post("/annuaire/import/", {"step": "confirm", "token": token})
     person = Employee.all_companies.get(email="jean.neuf@exemple.fr")
     assert (person.first_name, person.last_name) == ("Jean", "Neuf")
+
+
+def test_arabic_letter_mark_and_line_and_paragraph_separators_are_removed():
+    """U+061C (marque de lettre arabe), U+2028 et U+2029 (séparateurs de ligne et de
+    paragraphe, qui coupent une ligne de journal ou de CSV) sont retirés aussi."""
+    assert strip_unsafe_characters("a؜b c d") == "abcd"
