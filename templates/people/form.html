@@ -12,7 +12,7 @@
       <p class="sub">{% translate "Les champs marqués d'une étoile sont obligatoires." %}</p>
     </div>
   </div>
-  <form method="post" enctype="multipart/form-data" novalidate>
+  <form method="post" enctype="multipart/form-data" novalidate hx-post="{{ request.path }}" hx-encoding="multipart/form-data" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
     {% csrf_token %}
     <div class="split">
       <div class="stack">

@@ -277,6 +277,7 @@ Aucune nouvelle dépendance au lot 6.
 | N° | Sujet | Décision | Statut |
 |---|---|---|---|
 | R1-01 | Vérification des types | mypy **2.4.0** et django-stubs **6.1.2** (avec django-stubs-ext 6.1.2), dépendances de développement (accord du 26 oct. 2026). `make typecheck`, bloquant dans l'intégration continue, sur tous les `services.py`, `selectors.py` et le moteur des demandes (`apps/approvals/workflow/`). Le reste du code est vérifié au lot 8. Bornes : `mypy>=2.4,<3`, `django-stubs[compatible-mypy]>=6.1,<6.2` | Validé (26 oct. 2026) |
+| R1-02 | Navigation après une action | Une seule brique, `apps/core/htmx.after_action(request, toast, *, refresh, go_to, close_modal, page_form)`, et une seule règle. (1) Le résultat reste sur la page : notification visuelle et rechargement de la zone (`refresh` : événement de la zone ; `PAGE_CHANGED` recharge toute la zone `#content`, depuis l'adresse affichée dans le navigateur, même après un formulaire refusé). (2) Le résultat est une autre page : notification visuelle et HX-Location (`go_to`) ; le document n'est pas rechargé. (3) Un export garde HX-Redirect vers le fichier. Seule exception : l'activation d'un module recharge le document entier (`refresh=RELOAD_PAGE`), car le menu change aussi. Les formulaires en page complète (fiche de l'annuaire, paramètres de l'entreprise) passent par HTMX, erreurs en 422 sur place ; envoyés sans JavaScript (`page_form`), comme l'import CSV et « Tout marquer comme lu », ils reçoivent un message puis une redirection | Validé (26 oct. 2026) |
 
 ## Pour plus tard
 

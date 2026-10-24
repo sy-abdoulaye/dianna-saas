@@ -23,11 +23,10 @@ from apps.core import permissions, undo
 from apps.core.access import module_required, permission_required, require
 from apps.core.htmx import (
     Toast,
+    after_action,
     confirm_response,
     error_response,
     form_error_response,
-    toast_response,
-    trigger,
 )
 from apps.core.models import Module
 from apps.equipment import services
@@ -54,10 +53,6 @@ TAB_MINE, TAB_TEAM, TAB_PARK, TAB_REQUESTS, TAB_ISSUES = (
     "demandes",
     "signalements",
 )
-
-
-def _changed(response):
-    return trigger(response, **{CHANGED: True})
 
 
 def _tabs(me):
@@ -212,11 +207,11 @@ def item_add(request):
             form.add_error(error.field, error.message)
     if not form.is_valid():
         return form_error_response(request, template, context)
-    return _changed(
-        toast_response(
-            Toast(title=_("Équipement ajouté"), message=f"{item.model} · {item.serial_number}"),
-            close_modal=True,
-        )
+    return after_action(
+        request,
+        Toast(title=_("Équipement ajouté"), message=f"{item.model} · {item.serial_number}"),
+        refresh=CHANGED,
+        close_modal=True,
     )
 
 
@@ -253,8 +248,7 @@ def _assigned(request, item, employee, payload):
         emphasis=employee.full_name,
         undo_url=reverse("equipment:undo", args=[token]),
     )
-    response = _changed(toast_response(toast, close_modal=True))
-    return trigger(response, requestsChanged=True)
+    return after_action(request, toast, refresh=(CHANGED, "requestsChanged"), close_modal=True)
 
 
 UNDO_ACTIONS = {
@@ -287,7 +281,9 @@ def undo_action(request, token):
         undo_service(json.loads(data.target), actor=request.employee, request=request)
     except services.EquipmentError as error:
         return error_response(error)
-    return _changed(toast_response(Toast(title=str(title), message=str(message), kind="info")))
+    return after_action(
+        request, Toast(title=str(title), message=str(message), kind="info"), refresh=CHANGED
+    )
 
 
 def _confirm_or_act(request, item, *, template_context, action, done_title):
@@ -297,8 +293,11 @@ def _confirm_or_act(request, item, *, template_context, action, done_title):
         action(item, actor=request.employee, request=request)
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
-    return _changed(
-        toast_response(Toast(title=done_title, message=item.serial_number), close_modal=True)
+    return after_action(
+        request,
+        Toast(title=done_title, message=item.serial_number),
+        refresh=CHANGED,
+        close_modal=True,
     )
 
 
@@ -369,7 +368,7 @@ def _repair(request, item, *, action_url, send):
         message=item.serial_number,
         undo_url=reverse("equipment:undo", args=[token]),
     )
-    return _changed(toast_response(toast, close_modal=True))
+    return after_action(request, toast, refresh=CHANGED, close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -395,7 +394,7 @@ def item_back(request, public_id):
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
     title = _("Rendu à son détenteur") if item.holder_id else _("Remis en stock")
-    return _changed(toast_response(Toast(title=title, message=item.serial_number)))
+    return after_action(request, Toast(title=title, message=item.serial_number), refresh=CHANGED)
 
 
 # ---------- Signalements ----------
@@ -426,11 +425,11 @@ def issue_new(request, public_id):
         )
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
-    return _changed(
-        toast_response(
-            Toast(title=_("Signalement envoyé"), message=_("Les RH sont notifiés.")),
-            close_modal=True,
-        )
+    return after_action(
+        request,
+        Toast(title=_("Signalement envoyé"), message=_("Les RH sont notifiés.")),
+        refresh=CHANGED,
+        close_modal=True,
     )
 
 
@@ -463,7 +462,9 @@ def issue_close(request, pk):
         )
     except services.EquipmentError as error:
         return error_response(error, close_modal=True)
-    return _changed(toast_response(Toast(title=_("Signalement clos")), close_modal=True))
+    return after_action(
+        request, Toast(title=_("Signalement clos")), refresh=CHANGED, close_modal=True
+    )
 
 
 @require_http_methods(["GET", "POST"])

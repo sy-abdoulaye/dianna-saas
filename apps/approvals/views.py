@@ -38,6 +38,7 @@ from apps.core.files import (
 )
 from apps.core.htmx import (
     Toast,
+    after_action,
     error_response,
     form_error_response,
     is_htmx,
@@ -71,10 +72,6 @@ def module_view(view):
         return view(request, kind, *args, **kwargs)
 
     return wrapper
-
-
-def _changed(response):
-    return trigger(response, **{CHANGED: True})
 
 
 def get_request(request, kind, public_id):
@@ -233,7 +230,7 @@ def _submit_toast(result) -> Toast:
 def _with_undo(request, result, action, toast: Toast):
     token = undo.make_token(request, f"requests.{action}", json.dumps(result.undo_payload(action)))
     toast = Toast(**{**toast.__dict__, "undo_url": reverse("approvals:undo", args=[token])})
-    return _changed(toast_response(toast, close_modal=True))
+    return after_action(request, toast, refresh=CHANGED, close_modal=True)
 
 
 # ---------- Détail et décisions ----------
@@ -274,7 +271,8 @@ def _urls(kind, obj):
 
 
 def _decision_error(error):
-    return _changed(error_response(error, close_modal=True))
+    """Refus d'une décision : erreur, et la liste se recharge (la demande a changé)."""
+    return trigger(error_response(error, close_modal=True), **{CHANGED: True})
 
 
 @require_POST
@@ -427,7 +425,7 @@ def undo_transition(request, token):
             else _("La demande est rétablie."),
             kind="info",
         )
-    return _changed(toast_response(toast))
+    return after_action(request, toast, refresh=CHANGED)
 
 
 # ---------- Campagnes de congés d'été (RH) ----------
@@ -476,12 +474,8 @@ def new_campaign(request):
         campaign = workflow.create_summer_campaign(
             form.cleaned_data, request.employee, http_request=request
         )
-        return trigger(
-            toast_response(
-                Toast(title=_("Campagne créée"), message=campaign.label), close_modal=True
-            ),
-            **{CAMPAIGNS_CHANGED: True},
-        )
+        toast = Toast(title=_("Campagne créée"), message=campaign.label)
+        return after_action(request, toast, refresh=CAMPAIGNS_CHANGED, close_modal=True)
     return render(request, template, {"form": form})
 
 
@@ -499,8 +493,8 @@ def campaign_status(request, pk, action):
     except workflow.WorkflowError as error:
         return error_response(error)
     title = _("Campagne ouverte") if action == "ouvrir" else _("Campagne close")
-    return trigger(
-        toast_response(Toast(title=title, message=campaign.label)), **{CAMPAIGNS_CHANGED: True}
+    return after_action(
+        request, Toast(title=title, message=campaign.label), refresh=CAMPAIGNS_CHANGED
     )
 
 

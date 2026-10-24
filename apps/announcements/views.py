@@ -14,14 +14,13 @@ from apps.announcements.models import Announcement
 from apps.core import permissions, undo
 from apps.core.access import module_required, permission_required, require
 from apps.core.htmx import (
+    PAGE_CHANGED,
     Toast,
+    after_action,
     confirm_response,
     error_response,
     is_htmx,
-    location,
     modal_form_response,
-    toast_response,
-    trigger,
 )
 from apps.core.models import Module
 
@@ -107,7 +106,7 @@ def announcement_new(request):
     toast = Toast(
         title=_("Annonce publiée"), message=_("Tous les salariés présents sont notifiés.")
     )
-    return location(toast_response(toast, close_modal=True), _detail_url(announcement))
+    return after_action(request, toast, go_to=_detail_url(announcement), close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -127,8 +126,8 @@ def announcement_edit(request, public_id):
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url, announcement=announcement)
-    toast = toast_response(Toast(title=_("Annonce modifiée")), close_modal=True)
-    return location(toast, _detail_url(announcement))
+    toast = Toast(title=_("Annonce modifiée"))
+    return after_action(request, toast, refresh=PAGE_CHANGED, close_modal=True)
 
 
 @require_POST
@@ -140,7 +139,7 @@ def announcement_pin(request, public_id):
     except services.AnnouncementError as error:
         return error_response(error)
     title = _("Annonce épinglée") if announcement.pinned else _("Annonce désépinglée")
-    return location(toast_response(Toast(title=title)), _detail_url(announcement))
+    return after_action(request, Toast(title=title), refresh=PAGE_CHANGED)
 
 
 @require_http_methods(["GET", "POST"])
@@ -168,7 +167,7 @@ def announcement_delete(request, public_id):
         message=_("« %(title)s » n'est plus visible.") % {"title": announcement.title},
         undo_url=reverse("announcements:undo", args=[token]),
     )
-    return location(toast_response(toast, close_modal=True), reverse("announcements:list"))
+    return after_action(request, toast, go_to=reverse("announcements:list"), close_modal=True)
 
 
 @require_POST
@@ -187,4 +186,4 @@ def undo_delete(request, token):
     except services.AnnouncementError as error:
         return error_response(error)
     toast = Toast(title=_("Suppression annulée"), message=announcement.title, kind="info")
-    return trigger(toast_response(toast), **{CHANGED: True})
+    return after_action(request, toast, refresh=CHANGED)

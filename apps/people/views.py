@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import DatabaseError
 from django.db.models import Q
-from django.http import Http404, HttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -20,11 +20,10 @@ from apps.core.access import PermissionRequiredMixin, permission_required, requi
 from apps.core.files import signed_url
 from apps.core.htmx import (
     Toast,
+    after_action,
     error_response,
     form_error_response,
     is_htmx,
-    toast_response,
-    trigger,
 )
 from apps.people import importer, services
 from apps.people.forms import (
@@ -268,8 +267,8 @@ class EmployeeFormView(PermissionRequiredMixin, View):
             field = getattr(error, "field", None)
             form.add_error(field if field in form.fields else None, error.message)
             return self.render_form(request, form, employee, status=422)
-        messages.success(request, message)
-        return redirect("people:detail", public_id=employee.public_id)
+        detail = reverse("people:detail", args=[employee.public_id])
+        return after_action(request, Toast(title=message), go_to=detail, page_form=True)
 
 
 # ---------- Archivage ----------
@@ -309,26 +308,21 @@ def archive(request, public_id):
         token = undo.make_token(
             request, "people.archive", json.dumps({"id": str(employee.public_id), **previous})
         )
-        return _with_event(
-            toast_response(
-                Toast(
-                    title=_("Fiche archivée"),
-                    message=_("%(name)s est maintenant au statut Parti.")
-                    % {"name": employee.full_name},
-                    emphasis=employee.full_name,
-                    undo_url=reverse("people:undo", args=[token]),
-                ),
-                close_modal=True,
-            )
+        return after_action(
+            request,
+            Toast(
+                title=_("Fiche archivée"),
+                message=_("%(name)s est maintenant au statut Parti.")
+                % {"name": employee.full_name},
+                emphasis=employee.full_name,
+                undo_url=reverse("people:undo", args=[token]),
+            ),
+            refresh=CHANGED_EVENT,
+            close_modal=True,
         )
     return render(
         request, template, {"form": form, "person": employee, "action_url": url, "held": held}
     )
-
-
-def _with_event(response: HttpResponse) -> HttpResponse:
-    """Les zones qui affichent les fiches se rechargent (liste, en-tête de fiche)."""
-    return trigger(response, **{CHANGED_EVENT: True})
 
 
 @require_POST
@@ -343,14 +337,14 @@ def undo_archive(request, token):
     employee = get_object_or_404(Employee, public_id=previous["id"])
     require(request, "people.manage", employee)
     services.undo_archive(employee, previous, actor=request.employee, request=request)
-    return _with_event(
-        toast_response(
-            Toast(
-                title=_("Archivage annulé"),
-                message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
-                kind="info",
-            )
-        )
+    return after_action(
+        request,
+        Toast(
+            title=_("Archivage annulé"),
+            message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
+            kind="info",
+        ),
+        refresh=CHANGED_EVENT,
     )
 
 
@@ -362,13 +356,13 @@ def reactivate(request, public_id):
         services.reactivate(employee, actor=request.employee, request=request)
     except services.PeopleError as error:
         return error_response(error)
-    return _with_event(
-        toast_response(
-            Toast(
-                title=_("Fiche réactivée"),
-                message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
-            )
-        )
+    return after_action(
+        request,
+        Toast(
+            title=_("Fiche réactivée"),
+            message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
+        ),
+        refresh=CHANGED_EVENT,
     )
 
 
@@ -391,8 +385,11 @@ def edit_contact(request):
             office=form.cleaned_data["office"],
             request=request,
         )
-        return _with_event(
-            toast_response(Toast(title=_("Coordonnées enregistrées")), close_modal=True)
+        return after_action(
+            request,
+            Toast(title=_("Coordonnées enregistrées")),
+            refresh=CHANGED_EVENT,
+            close_modal=True,
         )
     return render(request, template, {"form": form})
 
@@ -428,8 +425,8 @@ def import_people(request):
             messages.error(request, _("L'import n'a pas pu être enregistré. Recommencez."))
             return redirect("people:import")
         request.session.pop(IMPORT_SESSION_KEY, None)
-        messages.success(request, _("%(n)s fiches importées") % {"n": count})
-        return redirect("people:list")
+        toast = Toast(title=_("%(n)s fiches importées") % {"n": count})
+        return after_action(request, toast, go_to=reverse("people:list"), page_form=True)
     form = ImportUploadForm(request.POST or None, request.FILES or None)
     preview = None
     if request.method == "POST" and form.is_valid():

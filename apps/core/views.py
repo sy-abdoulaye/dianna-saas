@@ -1,15 +1,16 @@
 """Pages d'erreur du design system, notifications et vitrine."""
 
-from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.core import notifications
 from apps.core.forms import SpaceAccessForm, email_digest, send_space_link
+from apps.core.htmx import Toast, after_action
 from apps.core.http import client_ip
 from apps.core.models import Notification
 from apps.core.ratelimit import over_limit
@@ -111,8 +112,8 @@ def notification_read_all(request):
     notifications.mark_all_read(request.employee)
     if request.htmx:
         return render(request, "core/partials/bell.html")
-    messages.success(request, _("Toutes les notifications sont lues."))
-    return redirect("core:notifications")
+    toast = Toast(title=_("Toutes les notifications sont lues."))
+    return after_action(request, toast, go_to=reverse("core:notifications"), page_form=True)
 
 
 # ---------- Vitrine (dianna.fr) ----------

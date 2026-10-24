@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from django.utils.functional import SimpleLazyObject
 
 from apps.core import notifications
@@ -14,6 +16,7 @@ def app(request):
     match = getattr(request, "resolver_match", None)
     return {
         "base_template": "layouts/app.html",
+        "page_url": page_url(request),
         "current_employee": employee,
         "current_company": request.company,
         "nav_groups": SimpleLazyObject(
@@ -26,6 +29,18 @@ def app(request):
             lambda: signed_url(employee.photo) if employee.photo else ""
         ),
     }
+
+
+def page_url(request) -> str:
+    """Adresse de la page affichée, que #content recharge après une action (R1-02). Une page
+    rendue par un POST (formulaire refusé, 422) garde l'adresse du navigateur (en-tête
+    HX-Current-URL), jamais celle du POST."""
+    if request.method == "GET":
+        return request.get_full_path()
+    current = urlsplit(request.headers.get("HX-Current-URL", ""))
+    if current.path and current.netloc == request.get_host():
+        return current.path + (f"?{current.query}" if current.query else "")
+    return request.path
 
 
 def _menu_counts(request) -> dict:
