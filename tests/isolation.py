@@ -205,6 +205,23 @@ ISOLATION_CASES = {
         "get",
         lambda b: reverse("administration:structure_delete", args=["sites", b.site.pk]),
     ),
+    # Compétences (lot 7) : une compétence de B.
+    "administration:competency_edit": (
+        "get",
+        lambda b: reverse("administration:competency_edit", args=[b.requests["competency"].pk]),
+    ),
+    "administration:competency_up": (
+        "post",
+        lambda b: reverse("administration:competency_up", args=[b.requests["competency"].pk]),
+    ),
+    "administration:competency_down": (
+        "post",
+        lambda b: reverse("administration:competency_down", args=[b.requests["competency"].pk]),
+    ),
+    "administration:competency_toggle": (
+        "get",
+        lambda b: reverse("administration:competency_toggle", args=[b.requests["competency"].pk]),
+    ),
     "core:notification_open": (
         "get",
         lambda b: reverse("core:notification_open", args=[b.notification.pk]),

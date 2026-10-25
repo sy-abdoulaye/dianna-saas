@@ -17,10 +17,13 @@ from apps.administration import services
 from apps.administration.forms import (
     ClosureForm,
     CompanyForm,
+    CompetencyForm,
     JournalFilterForm,
     StructureForm,
     UsersFilterForm,
 )
+from apps.careers import services as careers
+from apps.careers.models import Competency
 from apps.core import permissions
 from apps.core.access import enabled_modules, permission_required
 from apps.core.context import ActionContext
@@ -31,9 +34,11 @@ from apps.core.htmx import (
     RELOAD_PAGE,
     Toast,
     after_action,
+    confirm_response,
     error_response,
     form_error_response,
     is_htmx,
+    modal_form_response,
 )
 from apps.core.http import attachment
 from apps.core.models import AuditLog, Company, Module
@@ -47,6 +52,7 @@ MODULES_CHANGED = "modulesChanged"
 
 TABS = [
     ("administration:company", gettext_lazy("Entreprise")),
+    ("administration:competencies", gettext_lazy("Compétences")),
     ("administration:users", gettext_lazy("Utilisateurs et profils")),
     ("administration:structure", gettext_lazy("Services et sites")),
     ("administration:closures", gettext_lazy("Fermetures")),
@@ -54,6 +60,7 @@ TABS = [
     ("administration:journal", gettext_lazy("Journal d'activité")),
 ]
 CLOSURES_CHANGED = "closuresChanged"
+COMPETENCIES_CHANGED = "competenciesChanged"
 
 MODULE_DESCRIPTIONS = {
     Module.PLANNING: gettext_lazy("Présences, télétravail, congés, astreintes, export du planning"),
@@ -474,3 +481,91 @@ def journal_export(request):
     )
     filename = f"journal-{compact_day_stamp(start)}-{compact_day_stamp(end)}.csv"
     return attachment(content, "text/csv; charset=utf-8", filename)
+
+
+# ---------- Compétences (lot 7) ----------
+
+
+def _competency(pk) -> Competency:
+    return get_object_or_404(Competency, pk=pk)
+
+
+@require_GET
+@permission_required("admin.manage")
+def competencies(request):
+    context = {
+        **tab_context(request, "administration:competencies"),
+        "competencies": list(Competency.objects.all()),
+    }
+    if is_htmx(request) and request.htmx.target == "competencies":
+        return render(request, "administration/competencies.html#list", context)
+    return render(request, "administration/competencies.html", context)
+
+
+@require_http_methods(["GET", "POST"])
+@permission_required("admin.manage")
+def competency_form(request, pk=None):
+    instance = _competency(pk) if pk else None
+    initial = {"name": instance.name, "description": instance.description} if instance else None
+    form = CompetencyForm(request.POST or None, initial=initial)
+    action_url = (
+        reverse("administration:competency_edit", args=[pk])
+        if pk
+        else reverse("administration:competency_add")
+    )
+    template = "administration/partials/competency_modal.html"
+    context = {"form": form, "action_url": action_url, "competency": instance}
+    if request.method == "POST" and form.is_valid():
+        name, description = form.cleaned_data["name"], form.cleaned_data["description"]
+        try:
+            if instance:
+                careers.update_competency(
+                    instance, name, description, context=ActionContext.of(request)
+                )
+            else:
+                careers.add_competency(name, description, context=ActionContext.of(request))
+        except careers.CareerError as error:
+            form.add_error(error.field if error.field in form.fields else None, error.message)
+        else:
+            toast = Toast(title=_("Modifiée") if instance else _("Ajoutée"), message=name)
+            return after_action(request, toast, refresh=COMPETENCIES_CHANGED, close_modal=True)
+    return modal_form_response(request, template, context)
+
+
+@require_POST
+@permission_required("admin.manage")
+def competency_move(request, pk, step):
+    careers.move_competency(_competency(pk), step, context=ActionContext.of(request))
+    return after_action(request, Toast(title=_("Ordre enregistré")), refresh=COMPETENCIES_CHANGED)
+
+
+@require_http_methods(["GET", "POST"])
+@permission_required("admin.manage")
+def competency_toggle(request, pk):
+    competency = _competency(pk)
+    action_url = reverse("administration:competency_toggle", args=[pk])
+    if request.method == "GET" and competency.active:
+        return confirm_response(
+            request,
+            title=_("Désactiver « %(name)s » ?") % {"name": competency.name},
+            text=_(
+                "Elle ne sera plus demandée dans les nouvelles évaluations. Les notes déjà "
+                "données sont conservées."
+            ),
+            ok_label=_("Désactiver"),
+            action_url=action_url,
+            danger=True,
+        )
+    try:
+        careers.set_competency_active(
+            competency, not competency.active, context=ActionContext.of(request)
+        )
+    except careers.CareerError as error:
+        return error_response(error, close_modal=True)
+    title = _("Compétence réactivée") if competency.active else _("Compétence désactivée")
+    return after_action(
+        request,
+        Toast(title=title, message=competency.name),
+        refresh=COMPETENCIES_CHANGED,
+        close_modal=True,
+    )

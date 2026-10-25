@@ -6,6 +6,30 @@ app_name = "administration"
 
 urlpatterns = [
     path("administration/", views.company, name="company"),
+    path("administration/competences/", views.competencies, name="competencies"),
+    path("administration/competences/ajouter/", views.competency_form, name="competency_add"),
+    path(
+        "administration/competences/<int:pk>/modifier/",
+        views.competency_form,
+        name="competency_edit",
+    ),
+    path(
+        "administration/competences/<int:pk>/monter/",
+        views.competency_move,
+        {"step": -1},
+        name="competency_up",
+    ),
+    path(
+        "administration/competences/<int:pk>/descendre/",
+        views.competency_move,
+        {"step": 1},
+        name="competency_down",
+    ),
+    path(
+        "administration/competences/<int:pk>/activation/",
+        views.competency_toggle,
+        name="competency_toggle",
+    ),
     path("administration/utilisateurs/", views.users, name="users"),
     path(
         "administration/utilisateurs/<uuid:public_id>/profil/",

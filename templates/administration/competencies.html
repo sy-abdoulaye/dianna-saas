@@ -1,0 +1,51 @@
+{% extends "administration/base.html" %}
+{% load i18n ui %}
+{% block admin_content %}
+  <section class="card max-w-3xl" aria-labelledby="h-competencies">
+    <div class="card-body flex items-center justify-between gap-3">
+      <div>
+        <h2 class="h2" id="h-competencies">{% translate "Compétences" %}</h2>
+        <p class="meta">{% translate "Évaluées en entretien individuel, dans cet ordre, de 1 à 4." %}</p>
+      </div>
+      {% url "administration:competency_add" as add_url %}
+      {% button _("Ajouter") size="sm" icon="plus" hx_get=add_url hx_target="#modal-root" %}
+    </div>
+    <div id="competencies" hx-get="{% url 'administration:competencies' %}" hx-trigger="competenciesChanged from:body" hx-target="this" hx-disinherit="*">
+      {% partialdef list inline %}
+        {% if competencies %}
+          <ol class="rows px-6 pb-5">
+            {% for competency in competencies %}
+              <li>
+                <span>
+                  {{ competency.name }}
+                  {% if not competency.active %}{% status_badge "survey" "closed" _("Désactivée") %}{% endif %}
+                  {% if competency.description %}<span class="meta block">{{ competency.description }}</span>{% endif %}
+                </span>
+                <span class="flex flex-wrap gap-1">
+                  {% url "administration:competency_up" competency.pk as up_url %}
+                  {% url "administration:competency_down" competency.pk as down_url %}
+                  {% url "administration:competency_edit" competency.pk as edit_url %}
+                  {% url "administration:competency_toggle" competency.pk as toggle_url %}
+                  {% blocktranslate asvar up_label with name=competency.name %}Monter {{ name }}{% endblocktranslate %}
+                  {% blocktranslate asvar down_label with name=competency.name %}Descendre {{ name }}{% endblocktranslate %}
+                  {% blocktranslate asvar edit_label with name=competency.name %}Modifier {{ name }}{% endblocktranslate %}
+                  {% if not forloop.first %}<button class="btn btn-ghost btn-sm" type="button" hx-post="{{ up_url }}" hx-swap="none" hx-disabled-elt="this" aria-label="{{ up_label }}">{% translate "Monter" %}</button>{% endif %}
+                  {% if not forloop.last %}<button class="btn btn-ghost btn-sm" type="button" hx-post="{{ down_url }}" hx-swap="none" hx-disabled-elt="this" aria-label="{{ down_label }}">{% translate "Descendre" %}</button>{% endif %}
+                  <button class="btn btn-ghost btn-sm" type="button" hx-get="{{ edit_url }}" hx-target="#modal-root" aria-label="{{ edit_label }}">{% translate "Modifier" %}</button>
+                  {% if competency.active %}
+                    <button class="btn btn-ghost btn-sm text-err-ink" type="button" hx-get="{{ toggle_url }}" hx-target="#modal-root">{% translate "Désactiver" %}</button>
+                  {% else %}
+                    <button class="btn btn-ghost btn-sm" type="button" hx-post="{{ toggle_url }}" hx-swap="none">{% translate "Réactiver" %}</button>
+                  {% endif %}
+                </span>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          {% translate "Aucune compétence" as empty_title %}
+          {% include "components/empty_state.html" with icon="up" title=empty_title %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </section>
+{% endblock %}
