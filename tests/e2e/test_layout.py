@@ -1,8 +1,9 @@
 """Coque de l'application (docs/05-design-system.md, mise en page) : sur toutes les pages
-principales, pour les 4 profils, à 4 tailles d'écran et dans les deux thèmes, le document ne
-défile jamais, seule la zone principale défile (le menu latéral seulement si ses entrées
-dépassent, les tableaux et les barres d'onglets horizontalement), la zone principale s'arrête
-au contenu et le fond du menu latéral atteint le bas de l'écran. Puis le hamburger : rail
+principales, pour les 4 profils, à 6 largeurs d'écran, menu déplié et replié, dans les deux
+thèmes, le document ne défile jamais, seule la zone principale défile (jamais le menu ; les
+tableaux et les barres d'onglets horizontalement), la zone principale s'arrête au contenu, le
+fond du menu atteint le bas de l'écran, la recherche est alignée sur le menu sans toucher le
+logo, et le contenu ne dépasse pas 1 600 px. Puis le hamburger : rail
 mémorisé à partir de 1 024 px, tiroir accessible en dessous."""
 
 import re
@@ -15,7 +16,9 @@ from tests.e2e.test_requests import sign_in
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
-VIEWPORTS = [(1920, 1080), (1440, 900), (1280, 720), (390, 844)]
+VIEWPORTS = [(2560, 1440), (1920, 1080), (1440, 900), (1280, 720), (1024, 768), (390, 844)]
+# Menu déplié, puis replié en rail (état mémorisé, à partir de 1 024 px).
+NAV_STATES = ["expanded", "collapsed"]
 THEMES = ["light", "dark"]
 PROFILES = ["employee", "manager", "hr", "admin"]
 # Marge prévue sous le contenu (padding-bottom de .page), plus l'arrondi des mesures.
@@ -53,19 +56,22 @@ def test_only_the_main_area_scrolls_on_every_page(browser, urls, company_a, prof
     login.close()
     problems = []
     for width, height in VIEWPORTS:
-        for theme in THEMES:
+        states = NAV_STATES if width >= 1024 else NAV_STATES[:1]
+        for theme, nav in [(t, n) for t in THEMES for n in states]:
             context = browser.new_context(
                 storage_state=state,
                 viewport={"width": width, "height": height},
                 color_scheme=theme,
                 locale="fr-FR",
             )
+            if nav == "collapsed":
+                context.add_init_script("localStorage.setItem('dianna.nav', 'collapsed')")
             view = context.new_page()
             for path in paths:
                 view.goto(urls(path), wait_until="load")
                 assert view.locator("html").get_attribute("data-theme") == theme
                 found = view.evaluate(SHELL_PROBLEMS, BOTTOM_MARGIN)
-                problems += [f"{width}×{height} {theme} {path} : {p}" for p in found]
+                problems += [f"{width}×{height} {theme} {nav} {path} : {p}" for p in found]
             context.close()
     assert problems == [], "\n".join(problems)
 

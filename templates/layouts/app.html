@@ -8,17 +8,20 @@
   {% endcomment %}
   <div class="app" data-app>
     <header class="topbar">
-      <button class="btn btn-ghost btn-icon burger"
-              type="button"
-              aria-label="{% translate 'Ouvrir le menu' %}"
-              aria-controls="side"
-              aria-expanded="false"
-              data-nav-toggle
-              data-label-open="{% translate 'Ouvrir le menu' %}"
-              data-label-close="{% translate 'Fermer le menu' %}">
-        {% icon "menu" %}
-      </button>
-      <a class="brand" href="/" aria-label="{% translate 'Dianna, accueil' %}">{% brand_mark 28 %}<span>Dianna</span></a>
+      {# Hamburger et logo : menu déplié, ils ont la largeur du menu et la recherche commence à son bord droit. #}
+      <div class="topbar-start">
+        <button class="btn btn-ghost btn-icon burger"
+                type="button"
+                aria-label="{% translate 'Ouvrir le menu' %}"
+                aria-controls="side"
+                aria-expanded="false"
+                data-nav-toggle
+                data-label-open="{% translate 'Ouvrir le menu' %}"
+                data-label-close="{% translate 'Fermer le menu' %}">
+          {% icon "menu" %}
+        </button>
+        <a class="brand" href="/" aria-label="{% translate 'Dianna, accueil' %}">{% brand_mark 28 %}<span>Dianna</span></a>
+      </div>
       {% block topbar %}
         {% include "layouts/partials/topbar.html" %}
       {% endblock %}
