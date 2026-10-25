@@ -3,12 +3,11 @@
 import json
 import uuid
 
-from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import DatabaseError
 from django.db.models import Q
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views import View
@@ -18,6 +17,7 @@ from apps.accounts import services as accounts
 from apps.core import permissions, undo
 from apps.core.access import PermissionRequiredMixin, permission_required, require
 from apps.core.context import ActionContext
+from apps.core.errors import ServiceError
 from apps.core.files import signed_url
 from apps.core.htmx import (
     Toast,
@@ -398,23 +398,23 @@ def import_people(request):
     if step == "confirm":
         stored = request.session.get(IMPORT_SESSION_KEY) or {}
         token = request.POST.get("token") or ""
+        restart = reverse("people:import")
         if not token or stored.get("token") != token or not stored.get("rows"):
             # Aucun aperçu en session, jeton absent ou différent : retour à l'étape 1.
             request.session.pop(IMPORT_SESSION_KEY, None)
-            messages.error(request, _("L'import a expiré. Recommencez."))
-            return redirect("people:import")
+            error = ServiceError(_("L'import a expiré. Recommencez."))
+            return error_response(error, go_to=restart, request=request)
         try:
             count = importer.run(
                 importer.rows_from_session(stored["rows"]),
                 context=ActionContext.of(request),
             )
         except importer.ImportFileError as error:
-            messages.error(request, str(error.message))
-            return redirect("people:import")
+            return error_response(error, go_to=restart, request=request)
         except DatabaseError:
             # Conflit apparu entre l'aperçu et la confirmation : rien n'est importé.
-            messages.error(request, _("L'import n'a pas pu être enregistré. Recommencez."))
-            return redirect("people:import")
+            error = ServiceError(_("L'import n'a pas pu être enregistré. Recommencez."))
+            return error_response(error, go_to=restart, request=request)
         request.session.pop(IMPORT_SESSION_KEY, None)
         toast = Toast(title=_("%(n)s fiches importées") % {"n": count})
         return after_action(request, toast, go_to=reverse("people:list"), page_form=True)

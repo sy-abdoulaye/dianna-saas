@@ -1,7 +1,7 @@
 """Annulation immédiate d'une transition par son auteur (30 s, A3-01).
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from django.db import transaction
 from django.utils.translation import gettext as _
@@ -51,12 +51,12 @@ def undo(model, payload: dict, *, context: ActionContext):
     notifications sont supprimés ; le journal garde « demande envoyée puis retirée » (L1-08).
     Après une décision : l'état précédent est rétabli ; si la demande redevient active
     (refus ou annulation défaits), les contrôles métier sont refaits sous verrou (A3-02)."""
-    actor, http_request = context.person(), context.request
+    context.person()
     request = _lock_for_undo(model, payload)
     if payload["action"] == "submit":
-        _undo_submit(request, actor, http_request=http_request)
+        _undo_submit(request, context)
         return None
-    return _undo_decision(request, payload, actor, http_request=http_request)
+    return _undo_decision(request, payload, context)
 
 
 def _lock_for_undo(model, payload: dict):
@@ -80,22 +80,20 @@ def _lock_for_undo(model, payload: dict):
     return request
 
 
-def _undo_submit(request, actor, *, http_request) -> None:
-    if request.requester_id != actor.pk:
+def _undo_submit(request, context: ActionContext) -> None:
+    if request.requester_id != context.person().pk:
         raise WorkflowError(ALREADY_PROCESSED)
     Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
     CalendarEvent.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
     RequestEvent.objects.filter(request_type=request.request_type, request_id=request.pk).delete()
-    _audit(
-        request, actor, "withdrawn", _("Demande envoyée puis retirée"), http_request=http_request
-    )
+    _audit(request, "withdrawn", _("Demande envoyée puis retirée"), context=context)
     request.delete()
     if request.file_field:
         # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
         transaction.on_commit(lambda: _forget_file(request))
 
 
-def _undo_decision(request, payload: dict, actor, *, http_request):
+def _undo_decision(request, payload: dict, context: ActionContext):
     action, previous = payload["action"], payload["previous"]
     if request.status not in UNDO_EXPECTED_STATUS[action] or previous not in ACTIVE_STATUSES:
         raise WorkflowError(ALREADY_PROCESSED)
@@ -114,13 +112,13 @@ def _undo_decision(request, payload: dict, actor, *, http_request):
         source_id=request.pk,
     ).delete()
     notifications.retract_unsent(request)
-    _event(request, actor, RequestEvent.Action.REVERTED)
+    _event(request, context.actor, RequestEvent.Action.REVERTED)
     sync_calendar(request)
     # La transition défaite avait retiré « Demande à valider » : les valideurs actuels sont
     # de nouveau prévenus.
     if request.status != RequestStatus.APPROVED:
         _notify_validators(request, _current_validators(request))
-    _audit(request, actor, "reverted", _("Décision annulée"), http_request=http_request)
+    _audit(request, "reverted", _("Décision annulée"), context=context)
     return request
 
 

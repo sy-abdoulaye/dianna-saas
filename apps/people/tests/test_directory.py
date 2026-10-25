@@ -662,6 +662,29 @@ def test_import_confirmation_without_a_matching_preview_restarts(client_for, com
     assert "L&#x27;import a expiré. Recommencez." in page
 
 
+def test_import_confirmation_with_htmx_uses_the_common_bricks(client_for, company_a):
+    client = client_for(company_a.admin)
+    expired = client.post(
+        "/annuaire/import/", {"step": "confirm", "token": "faux"}, headers={"HX-Request": "true"}
+    )
+    assert expired.status_code == 409
+    assert json.loads(expired["HX-Location"])["path"] == "/annuaire/import/"
+    assert json.loads(expired["HX-Trigger"])["toast"] == {
+        "title": "L'import a expiré. Recommencez.",
+        "kind": "err",
+    }
+    text = HEADER + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"
+    preview = client.post("/annuaire/import/", {"step": "upload", "file": upload(text)})
+    content = preview.content.decode()
+    assert 'hx-post="/annuaire/import/"' in content
+    token = content.split('name="token" value="')[1].split('"')[0]
+    done = client.post(
+        "/annuaire/import/", {"step": "confirm", "token": token}, headers={"HX-Request": "true"}
+    )
+    assert done.status_code == 204
+    assert json.loads(done["HX-Location"])["path"] == "/annuaire/"
+
+
 def test_import_confirmation_with_an_emptied_session_restarts(client_for, company_a):
     client = client_for(company_a.admin)
     text = HEADER + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"

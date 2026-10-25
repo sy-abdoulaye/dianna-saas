@@ -220,6 +220,17 @@ def test_hr_downloads_are_logged_without_file_name(client_for, company_a):
     assert log.actor_id == company_a.hr.pk and log.summary == "Justificatif de transport consulté"
 
 
+def test_proof_access_is_logged_by_the_engine_only_for_other_people(company_a):
+    from apps.core.context import ActionContext
+
+    proof = company_a.requests["transport"]
+    with tenant_context(company_a.company):
+        workflow.record_proof_access(proof, context=ActionContext(company_a.employee))
+        workflow.record_proof_access(proof, context=ActionContext(company_a.hr))
+    logs = AuditLog.all_companies.filter(action="requests.proof_downloaded")
+    assert list(logs.values_list("actor_id", flat=True)) == [company_a.hr.pk]
+
+
 def test_proofs_are_never_served_by_signed_link(client_for, company_a):
     from django.core import signing
     from django.urls import reverse

@@ -34,7 +34,6 @@ from apps.core.htmx import (
     error_response,
     form_error_response,
     is_htmx,
-    trigger,
 )
 from apps.core.models import AuditLog, Company, Module
 from apps.core.services import set_module
@@ -164,7 +163,7 @@ def change_role(request, public_id):
     try:
         people.change_role(person, role, context=ActionContext.of(request))
     except people.PeopleError as error:
-        return trigger(error_response(error, close_modal=True), **{USERS_CHANGED: True})
+        return error_response(error, close_modal=True, refresh=USERS_CHANGED)
     return after_action(
         request,
         Toast(

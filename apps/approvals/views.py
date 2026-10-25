@@ -34,7 +34,6 @@ from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
 from apps.core.context import ActionContext
 from apps.core.files import (
-    STORAGE_UNAVAILABLE,
     StorageUnavailableError,
     storage_unavailable_response,
 )
@@ -44,8 +43,6 @@ from apps.core.htmx import (
     error_response,
     form_error_response,
     is_htmx,
-    toast_response,
-    trigger,
 )
 from apps.core.models import Module
 from apps.core.ratelimit import (
@@ -194,8 +191,7 @@ def new_request(request, kind):
                 meta.model, form.model_data(), context=ActionContext(me, request)
             )
         except StorageUnavailableError:
-            # Stockage indisponible : rien n'est enregistré, la modale reste ouverte (L5-17).
-            return toast_response(Toast(title=str(STORAGE_UNAVAILABLE), kind="err"), status=503)
+            return storage_unavailable_response(request)
         except workflow.RequestValidationError as error:
             for name, message in error.errors.items():
                 form.add_error(name if name in form.fields else None, message)
@@ -270,7 +266,7 @@ def _urls(kind, obj):
 
 def _decision_error(error):
     """Refus d'une décision : erreur, et la liste se recharge (la demande a changé)."""
-    return trigger(error_response(error, close_modal=True), **{CHANGED: True})
+    return error_response(error, close_modal=True, refresh=CHANGED)
 
 
 @require_POST
@@ -499,7 +495,6 @@ def proof_file(request, public_id):
     contrôlée à chaque téléchargement (jamais de lien signé). Fichier isolé : type exact,
     `nosniff`, `sandbox`. Toute consultation par une autre personne que le demandeur (RH,
     administrateur) est inscrite au journal d'audit, sans nom de fichier."""
-    from apps.core import audit
     from apps.core.files import serve_isolated
 
     if not module_is_enabled(request, Module.TRANSPORT):
@@ -514,14 +509,7 @@ def proof_file(request, public_id):
         )
     except StorageUnavailableError:
         return storage_unavailable_response(request)
-    if obj.requester_id != request.employee.pk:
-        audit.log(
-            "requests.proof_downloaded",
-            _("Justificatif de transport consulté"),
-            actor=request.employee,
-            target=obj,
-            request=request,
-        )
+    workflow.record_proof_access(obj, context=ActionContext.of(request))
     return response
 
 

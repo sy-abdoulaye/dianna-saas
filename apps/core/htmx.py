@@ -115,11 +115,29 @@ def toast_response(toast: Toast, *, close_modal=False, status=204) -> HttpRespon
     return trigger(HttpResponse(status=status), toast=toast, close_modal=close_modal)
 
 
-def error_response(error, *, close_modal=False, status=409) -> HttpResponse:
-    """Refus d'un service (ServiceError ou équivalent) : notification visuelle d'erreur."""
-    return toast_response(
-        Toast(title=str(error.message), kind="err"), close_modal=close_modal, status=status
-    )
+def error_response(
+    error,
+    *,
+    close_modal: bool = False,
+    status: int = 409,
+    refresh: str | tuple[str, ...] = (),
+    go_to: str = "",
+    request=None,
+) -> HttpResponse:
+    """Refus d'un service (ServiceError ou équivalent) : notification visuelle d'erreur. Si
+    l'affichage est devenu faux (autre décision prise entre-temps), `refresh` recharge la
+    zone concernée ; `go_to` ramène à une autre page (HX-Location, ou message puis
+    redirection pour un formulaire de page complète envoyé sans HTMX : passer `request`)."""
+    if refresh and go_to:
+        raise ValueError("error_response : soit refresh, soit go_to.")
+    toast = Toast(title=str(error.message), kind="err")
+    if go_to and request is not None and not is_htmx(request):
+        return _classic_redirect(request, toast, go_to)
+    response = toast_response(toast, close_modal=close_modal, status=status)
+    if go_to:
+        return location(response, go_to)
+    events = (refresh,) if isinstance(refresh, str) else refresh
+    return trigger(response, **dict.fromkeys(events, True))
 
 
 def confirm_response(request, *, title, text, ok_label, action_url, **options):

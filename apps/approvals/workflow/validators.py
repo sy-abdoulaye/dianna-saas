@@ -1,7 +1,7 @@
 """Qui valide une demande, qui peut décider ou annuler, et ce qui attend chaque valideur.
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from apps.approvals.models import (
     LeaveRequest,

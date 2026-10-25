@@ -116,12 +116,11 @@ def create_employee(data: dict, *, context: ActionContext, photo=None) -> Employ
     """Crée la fiche au profil Salarié ; un autre profil est ensuite attribué par change_role
     (journalisé people.role_changed, comme tout changement de profil). La photo est écrite
     avant l'INSERT et supprimée si la création échoue (L5-18)."""
-    actor, request = context.actor, context.request
     with file_writes() as files, transaction.atomic():
-        return _create_employee(data, actor=actor, photo=photo, request=request, files=files)
+        return _create_employee(data, context, photo=photo, files=files)
 
 
-def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
+def _create_employee(data: dict, context: ActionContext, *, photo, files) -> Employee:
     data = dict(data)
     role = data.pop("role", None) or Role.EMPLOYEE
     employee = Employee(**data)
@@ -130,9 +129,9 @@ def _create_employee(data: dict, *, actor, photo, request, files) -> Employee:
     if photo is not None:
         files.save(employee.photo, photo)
     _save_employee(employee)
-    _record(employee, ActionContext(actor, request), EmployeeChange.Kind.CREATED)
+    _record(employee, context, EmployeeChange.Kind.CREATED)
     if role != Role.EMPLOYEE:
-        change_role(employee, role, context=ActionContext(actor, request))
+        change_role(employee, role, context=context)
         employee.refresh_from_db()
     return employee
 
@@ -144,12 +143,11 @@ def update_employee(
     passe par change_role (refus sur sa propre fiche, dernier administrateur protégé,
     journal people.role_changed). Nouvelle photo écrite avant l'UPDATE et supprimée en cas
     d'échec ; l'ancienne n'est supprimée qu'après la validation (L5-18)."""
-    actor, request = context.actor, context.request
     with file_writes() as files, transaction.atomic():
         return _update_employee(
             employee,
             data,
-            ActionContext(actor, request),
+            context,
             photo=photo,
             remove_photo=remove_photo,
             files=files,
@@ -157,12 +155,11 @@ def update_employee(
 
 
 def _update_employee(employee, data, context: ActionContext, *, photo, remove_photo, files):
-    actor, request = context.actor, context.request
     data = dict(data)
     role = data.pop("role", None)
     role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
     if role_changed:
-        change_role(employee, role, context=ActionContext(actor, request))
+        change_role(employee, role, context=context)
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     changed = []
     for name, value in data.items():
@@ -185,7 +182,7 @@ def _update_employee(employee, data, context: ActionContext, *, photo, remove_ph
         changed.append("photo")
     if changed:
         _save_employee(employee)
-        _record(employee, ActionContext(actor, request), EmployeeChange.Kind.UPDATED, changed)
+        _record(employee, context, EmployeeChange.Kind.UPDATED, changed)
     return ["role", *changed] if role_changed else changed
 
 
@@ -220,7 +217,7 @@ def archive_refusal(employee: Employee, actor) -> str:
 def archive(employee: Employee, *, context: ActionContext, departure_date=None) -> dict:
     """Statut « Parti », date de départ (aujourd'hui par défaut), compte désactivé, données
     conservées. Renvoie l'état précédent, pour l'annulation immédiate."""
-    actor, request = context.actor, context.request
+    actor = context.actor
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if employee.status == EmployeeStatus.LEFT:
         raise PeopleError(_("Cette fiche est déjà archivée."))
@@ -240,7 +237,7 @@ def archive(employee: Employee, *, context: ActionContext, departure_date=None) 
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
         employee,
-        ActionContext(actor, request),
+        context,
         EmployeeChange.Kind.ARCHIVED,
         ["status", "departure_date"],
     )
@@ -254,7 +251,6 @@ def archive(employee: Employee, *, context: ActionContext, departure_date=None) 
 
 @transaction.atomic
 def undo_archive(employee: Employee, previous: dict, *, context: ActionContext) -> None:
-    actor, request = context.actor, context.request
     from datetime import date
 
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
@@ -270,7 +266,7 @@ def undo_archive(employee: Employee, previous: dict, *, context: ActionContext) 
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
         employee,
-        ActionContext(actor, request),
+        context,
         EmployeeChange.Kind.REACTIVATED,
         ["status", "departure_date"],
         summary=_("Archivage annulé : %(name)s") % {"name": employee.full_name},
@@ -279,7 +275,6 @@ def undo_archive(employee: Employee, previous: dict, *, context: ActionContext) 
 
 @transaction.atomic
 def reactivate(employee: Employee, *, context: ActionContext) -> None:
-    actor, request = context.actor, context.request
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if employee.status != EmployeeStatus.LEFT:
         raise PeopleError(_("Cette fiche n'est pas archivée."))
@@ -291,7 +286,7 @@ def reactivate(employee: Employee, *, context: ActionContext) -> None:
         employee.user.save(update_fields=["is_active", "updated_at"])
     _record(
         employee,
-        ActionContext(actor, request),
+        context,
         EmployeeChange.Kind.REACTIVATED,
         ["status", "departure_date"],
     )
@@ -301,7 +296,7 @@ def reactivate(employee: Employee, *, context: ActionContext) -> None:
 def change_role(employee: Employee, role: str, *, context: ActionContext) -> None:
     """Profil d'accès (Administrateur seulement). Effet à la requête suivante de la personne ;
     un passage à RH ou Admin impose la double authentification (T-10)."""
-    actor, request = context.actor, context.request
+    actor = context.actor
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     if role not in Role.values:
         raise PeopleError(_("Profil inconnu."))
@@ -315,7 +310,7 @@ def change_role(employee: Employee, role: str, *, context: ActionContext) -> Non
     employee.save(update_fields=["role", "updated_at"])
     _record(
         employee,
-        ActionContext(actor, request),
+        context,
         EmployeeChange.Kind.ROLE,
         ["role"],
         action="people.role_changed",

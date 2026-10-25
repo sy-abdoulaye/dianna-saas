@@ -1,7 +1,7 @@
 """Notifications des valideurs et du demandeur, avec l'e-mail différé de 45 s (M-16).
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from django.urls import reverse
 from django.utils.translation import gettext as _

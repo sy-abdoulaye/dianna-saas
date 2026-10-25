@@ -389,11 +389,8 @@ def close_issue(issue, *, context: ActionContext, resolution) -> EquipmentIssue:
 @transaction.atomic
 def issue_to_repair(issue, *, context: ActionContext) -> dict:
     """« Envoyer en réparation » depuis un signalement : le détenteur est conservé."""
-    actor, request = context.actor, context.request
     issue = _lock_issue(issue)
-    return send_to_repair(
-        issue.item, context=ActionContext(actor, request), comment=issue.description
-    )
+    return send_to_repair(issue.item, context=context, comment=issue.description)
 
 
 # ---------- Archivage d'un salarié ----------

@@ -1,8 +1,8 @@
 """Socle du moteur des demandes : erreurs, résultat d'une transition, verrous, événements,
 enregistrement contrôlé, fichier joint, agenda et journal.
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from dataclasses import dataclass, field
 
@@ -18,6 +18,7 @@ from apps.approvals.models import (
 )
 from apps.core import audit, constraints
 from apps.core.constraints import INVALID_VALUE
+from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.files import delete_private, write_private
 from apps.people.models import Employee
@@ -191,7 +192,7 @@ def sync_calendar(request):
         event.save(update_fields=["status", "start", "end", "updated_at"])
 
 
-def _audit(request, actor, action, verb, *, http_request=None, extra=""):
+def _audit(request, action, verb, *, context: ActionContext, extra=""):
     summary_text = _("%(verb)s : %(kind)s de %(name)s") % {
         "verb": verb,
         "kind": kind_of(request).lower,
@@ -199,10 +200,31 @@ def _audit(request, actor, action, verb, *, http_request=None, extra=""):
     }
     if extra:
         summary_text = f"{summary_text} ({extra})"
-    audit.log(f"requests.{action}", summary_text, actor=actor, target=request, request=http_request)
+    audit.log(
+        f"requests.{action}",
+        summary_text,
+        actor=context.actor,
+        target=request,
+        request=context.request,
+    )
 
 
 def history(request):
     return RequestEvent.objects.filter(
         request_type=request.request_type, request_id=request.pk
     ).select_related("actor")
+
+
+def record_proof_access(request, *, context: ActionContext) -> None:
+    """Toute consultation d'un justificatif par une autre personne que le demandeur (RH,
+    administrateur) est inscrite au journal d'audit, sans nom de fichier."""
+    actor = context.actor
+    if actor is not None and actor.pk == request.requester_id:
+        return
+    audit.log(
+        "requests.proof_downloaded",
+        _("Justificatif de transport consulté"),
+        actor=actor,
+        target=request,
+        request=context.request,
+    )

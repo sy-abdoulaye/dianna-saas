@@ -1,7 +1,7 @@
 """Campagnes de congés d'été gérées par les RH (L3-15).
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from django.db import IntegrityError, transaction
 from django.utils.translation import gettext as _
@@ -37,7 +37,7 @@ def create_summer_campaign(data: dict, *, context: ActionContext):
 def open_summer_campaign(campaign, *, context: ActionContext):
     """Ouvre une campagne. Toutes les campagnes de l'entreprise sont verrouillées : deux
     ouvertures simultanées donnent une seule campagne ouverte (A3-06)."""
-    actor, http_request = context.person(), context.request
+    context.person()
     campaigns = {c.pk: c for c in SummerCampaign.objects.select_for_update().order_by("pk")}
     campaign = campaigns.get(campaign.pk)
     if campaign is None or campaign.status != SummerCampaign.Status.DRAFT:
@@ -50,27 +50,27 @@ def open_summer_campaign(campaign, *, context: ActionContext):
             campaign.save(update_fields=["status", "updated_at"])
     except IntegrityError as exc:
         raise WorkflowError(CAMPAIGN_ALREADY_OPEN) from exc
-    _campaign_audit(campaign, actor, _("Campagne ouverte"), http_request)
+    _campaign_audit(campaign, _("Campagne ouverte"), context)
     return campaign
 
 
 @transaction.atomic
 def close_summer_campaign(campaign, *, context: ActionContext):
-    actor, http_request = context.person(), context.request
+    context.person()
     campaign = SummerCampaign.objects.select_for_update().filter(pk=campaign.pk).first()
     if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
         raise WorkflowError(_("Cette campagne n'est pas ouverte."))
     campaign.status = SummerCampaign.Status.CLOSED
     campaign.save(update_fields=["status", "updated_at"])
-    _campaign_audit(campaign, actor, _("Campagne close"), http_request)
+    _campaign_audit(campaign, _("Campagne close"), context)
     return campaign
 
 
-def _campaign_audit(campaign, actor, title, http_request):
+def _campaign_audit(campaign, title: str, context: ActionContext) -> None:
     audit.log(
         f"requests.campaign_{campaign.status}",
         f"{title} : {campaign.label}",
-        actor=actor,
+        actor=context.actor,
         target=campaign,
-        request=http_request,
+        request=context.request,
     )

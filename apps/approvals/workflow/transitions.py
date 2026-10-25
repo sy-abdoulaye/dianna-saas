@@ -1,7 +1,7 @@
 """Transitions d'une demande : envoi, validation, refus, annulation.
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from django.db import transaction
 from django.utils import timezone
@@ -51,10 +51,10 @@ def submit(model, data: dict, *, context: ActionContext) -> TransitionResult:
     liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit avant
     l'INSERT, et il est supprimé si quoi que ce soit échoue ensuite (transaction annulée).
     Lève StorageUnavailableError si le stockage ne répond pas : rien n'est enregistré."""
-    requester, http_request = context.person(), context.request
+    context.person()
     cleanup: list[str] = []
     try:
-        return _submit(model, requester, data, http_request=http_request, cleanup=cleanup)
+        return _submit(model, data, context=context, cleanup=cleanup)
     except Exception:
         for name in cleanup:
             delete_private(name)
@@ -62,13 +62,13 @@ def submit(model, data: dict, *, context: ActionContext) -> TransitionResult:
 
 
 @transaction.atomic
-def _submit(model, requester, data, *, http_request=None, cleanup=None) -> TransitionResult:
+def _submit(model, data, *, context: ActionContext, cleanup) -> TransitionResult:
     """Envoi. La fiche du demandeur est verrouillée, puis les contrôles métier sont faits
     (`check_request`) : deux envois simultanés ne peuvent ni dépasser le quota, ni créer deux
     demandes le même jour, ni deux absences ou astreintes qui se chevauchent. Lève
     RequestValidationError avec les messages par champ. Les congés d'été sont rattachés à
     la campagne ouverte au moment de l'envoi."""
-    requester = _lock_requester(requester.pk)
+    requester = _lock_requester(context.person().pk)
     data = dict(data)
     data.pop("campaign", None)
     content = data.pop(model.file_field, None) if model.file_field else None
@@ -91,19 +91,20 @@ def _submit(model, requester, data, *, http_request=None, cleanup=None) -> Trans
     validators = first_validators(request)
     company = requester.company
     if not validators:
-        result.event_id = _approve_automatically(request, AUTO_APPROVAL_NO_VALIDATOR, http_request)
+        result.event_id = _approve_automatically(request, AUTO_APPROVAL_NO_VALIDATOR, context)
         result.auto_approved = True
     elif isinstance(request, TeleworkRequest) and company.telework_auto_approve:
-        result.event_id = _approve_automatically(request, AUTO_APPROVAL_TELEWORK, http_request)
+        result.event_id = _approve_automatically(request, AUTO_APPROVAL_TELEWORK, context)
         result.auto_approved = True
     else:
         sync_calendar(request)
         result.notification_ids = _notify_validators(request, validators)
-        _audit(request, requester, "submitted", _("Demande envoyée"), http_request=http_request)
+        _audit(request, "submitted", _("Demande envoyée"), context=context)
     return result
 
 
-def _approve_automatically(request, reason, http_request):
+def _approve_automatically(request, reason: str, context: ActionContext) -> int:
+    """Validation sans valideur : le journal n'a pas d'auteur, mais garde l'adresse."""
     request.status = RequestStatus.APPROVED
     request.decided_at = timezone.now()
     request.decision_comment = reason
@@ -112,10 +113,9 @@ def _approve_automatically(request, reason, http_request):
     sync_calendar(request)
     _audit(
         request,
-        None,
         "auto_approved",
         _("Demande validée"),
-        http_request=http_request,
+        context=ActionContext(None, context.request),
         extra=reason,
     )
     return event_id
@@ -123,7 +123,7 @@ def _approve_automatically(request, reason, http_request):
 
 @transaction.atomic
 def approve(request, *, context: ActionContext, comment: str = "") -> TransitionResult:
-    actor, http_request = context.person(), context.request
+    actor = context.person()
     request = _lock(request)
     if request.status not in (RequestStatus.PENDING, RequestStatus.MANAGER_APPROVED):
         raise WorkflowError(ALREADY_PROCESSED)
@@ -148,13 +148,7 @@ def approve(request, *, context: ActionContext, comment: str = "") -> Transition
             _notify_requester(request, _("validée par votre manager"), email=False)
         ]
         result.notification_ids += _notify_validators(request, hr_validators(request.requester))
-        _audit(
-            request,
-            actor,
-            "manager_approved",
-            _("Validée par le manager"),
-            http_request=http_request,
-        )
+        _audit(request, "manager_approved", _("Validée par le manager"), context=context)
         return result
     if first_step and isinstance(request, LeaveRequest):
         request.manager_decided_by, request.manager_decided_at = actor, now
@@ -167,10 +161,9 @@ def approve(request, *, context: ActionContext, comment: str = "") -> Transition
     result.notification_ids = [_notify_requester(request, _("validée"))]
     _audit(
         request,
-        actor,
         "approved",
         _("Demande validée"),
-        http_request=http_request,
+        context=context,
         extra=_substitution(request, actor, first_step),
     )
     return result
@@ -189,7 +182,7 @@ def _substitution(request, actor, first_step) -> str:
 
 @transaction.atomic
 def refuse(request, *, context: ActionContext, reason: str) -> TransitionResult:
-    actor, http_request = context.person(), context.request
+    actor = context.person()
     reason = (reason or "").strip()
     if not reason:
         raise WorkflowError(_("Indiquez le motif du refus."))
@@ -209,10 +202,9 @@ def refuse(request, *, context: ActionContext, reason: str) -> TransitionResult:
     result.notification_ids = [_notify_requester(request, _("refusée"), reason)]
     _audit(
         request,
-        actor,
         "refused",
         _("Demande refusée"),
-        http_request=http_request,
+        context=context,
         extra=_substitution(request, actor, result.previous_status == RequestStatus.PENDING),
     )
     return result
@@ -221,7 +213,7 @@ def refuse(request, *, context: ActionContext, reason: str) -> TransitionResult:
 @transaction.atomic
 def cancel(request, *, context: ActionContext) -> TransitionResult:
     """Le demandeur annule une demande encore en attente (y compris en attente de l'étape RH)."""
-    actor, http_request = context.person(), context.request
+    actor = context.person()
     request = _lock(request)
     if request.requester_id != actor.pk:
         raise WorkflowError(_("Seul le demandeur peut annuler cette demande."))
@@ -233,14 +225,14 @@ def cancel(request, *, context: ActionContext) -> TransitionResult:
     result.event_id = _event(request, actor, RequestEvent.Action.CANCELLED)
     sync_calendar(request)
     notifications.retract_unsent(request)  # « Demande à valider » chez le valideur (A3-05)
-    _audit(request, actor, "cancelled", _("Demande annulée"), http_request=http_request)
+    _audit(request, "cancelled", _("Demande annulée"), context=context)
     return result
 
 
 @transaction.atomic
 def cancel_approved(request, *, context: ActionContext, reason: str) -> TransitionResult:
     """RH ou administrateur : annulation d'une demande validée, motif obligatoire (L3-10)."""
-    actor, http_request = context.person(), context.request
+    actor = context.person()
     reason = (reason or "").strip()
     if not reason:
         raise WorkflowError(_("Indiquez le motif de l'annulation."))
@@ -259,11 +251,5 @@ def cancel_approved(request, *, context: ActionContext, reason: str) -> Transiti
     sync_calendar(request)
     notifications.retract_unsent(request)
     result.notification_ids = [_notify_requester(request, _("annulée"), reason)]
-    _audit(
-        request,
-        actor,
-        "cancelled_approved",
-        _("Demande validée annulée"),
-        http_request=http_request,
-    )
+    _audit(request, "cancelled_approved", _("Demande validée annulée"), context=context)
     return result

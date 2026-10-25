@@ -30,12 +30,11 @@ def update_company(
 ) -> list[str]:
     """Paramètres de l'entreprise ; logo écrit avant l'UPDATE, supprimé en cas d'échec,
     ancien logo supprimé après la validation (L5-18)."""
-    actor, request = context.actor, context.request
     with file_writes() as files, transaction.atomic():
         return _update_company(
             company,
             data,
-            ActionContext(actor, request),
+            context,
             logo=logo,
             remove_logo=remove_logo,
             files=files,

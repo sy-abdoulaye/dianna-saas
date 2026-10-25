@@ -1,7 +1,7 @@
 """Contrôles métier qui dépendent des autres demandes du demandeur (A3-02).
 
-Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
-__init__.py) : point d'entrée unique, et point de remplacement des tests."""
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from decimal import Decimal
 

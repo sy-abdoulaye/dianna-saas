@@ -50,6 +50,7 @@ from apps.approvals.workflow.common import (
     TransitionResult,
     WorkflowError,
     history,
+    record_proof_access,
     sync_calendar,
 )
 from apps.approvals.workflow.notifications import (
@@ -120,6 +121,7 @@ __all__ = [
     "is_hr_or_admin",
     "module_url",
     "open_summer_campaign",
+    "record_proof_access",
     "refuse",
     "submit",
     "sync_calendar",

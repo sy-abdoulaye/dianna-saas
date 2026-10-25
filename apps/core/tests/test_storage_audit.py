@@ -86,10 +86,29 @@ def test_upload_with_storage_down_answers_503_and_saves_nothing(client_for, comp
             "amount": "12.40",
             "file": SimpleUploadedFile("t.pdf", PDF_BYTES, "application/pdf"),
         },
+        headers={"HX-Request": "true"},
     )
     assert response.status_code == 503
     assert UNAVAILABLE in response["HX-Trigger"].encode().decode("unicode_escape")
     assert TransportProof.all_companies.count() == before
+
+
+def test_upload_without_htmx_with_storage_down_answers_the_503_page(
+    client_for, company_a, monkeypatch
+):
+    broken_storage(monkeypatch)
+    response = client_for(company_a.employee).post(
+        "/transport/nouvelle/",
+        {
+            "month": timezone.localdate().strftime("%Y-%m"),
+            "ticket_type": "single",
+            "amount": "12.40",
+            "file": SimpleUploadedFile("t.pdf", PDF_BYTES, "application/pdf"),
+        },
+    )
+    assert response.status_code == 503
+    assert "HX-Trigger" not in response
+    assert "storage_unavailable" in {t.name.rsplit("/", 1)[-1][:-5] for t in response.templates}
 
 
 def test_download_with_storage_down_answers_a_503_page(client_for, company_a, monkeypatch):
