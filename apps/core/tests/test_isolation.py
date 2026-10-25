@@ -19,6 +19,15 @@ from apps.approvals.models import (
     TeleworkRequest,
     TransportProof,
 )
+from apps.careers.models import (
+    Competency,
+    FollowUpNote,
+    Review,
+    ReviewCampaign,
+    ReviewObjective,
+    ReviewRating,
+    ReviewTraining,
+)
 from apps.core.models import (
     AuditLog,
     Company,
@@ -43,6 +52,7 @@ from apps.equipment.models import (
     EquipmentItem,
     EquipmentRequest,
 )
+from apps.interventions.models import InterventionReport, Mission, ReportEvent, ReportItem
 from apps.people.models import Employee, EmployeeChange
 from apps.surveys.models import (
     Answer,
@@ -226,6 +236,17 @@ TENANT_ROWS = {
     SurveyReceipt: lambda d: d.requests["receipt"],
     SurveyResponse: lambda d: d.requests["response"],
     Answer: lambda d: d.requests["answer"],
+    Competency: lambda d: d.requests["competency"],
+    ReviewCampaign: lambda d: d.requests["review_campaign"],
+    Review: lambda d: d.requests["review"],
+    ReviewRating: lambda d: d.requests["rating"],
+    ReviewObjective: lambda d: d.requests["objective"],
+    ReviewTraining: lambda d: d.requests["training"],
+    FollowUpNote: lambda d: d.requests["note"],
+    Mission: lambda d: d.requests["mission"],
+    InterventionReport: lambda d: d.requests["report"],
+    ReportItem: lambda d: d.requests["report_item"],
+    ReportEvent: lambda d: d.requests["report_event"],
 }
 
 

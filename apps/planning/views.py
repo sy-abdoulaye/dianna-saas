@@ -16,6 +16,7 @@ from django.views.decorators.http import require_GET
 from apps.core import permissions
 from apps.core.access import module_is_enabled, module_required, permission_required
 from apps.core.htmx import is_htmx
+from apps.core.http import attachment
 from apps.core.models import Module, Service, Site
 from apps.core.ratelimit import (
     EXPORT_LIMIT_MESSAGE,
@@ -194,6 +195,4 @@ def download(request):
         scope_label=form.scope_label,
         request=request,
     )
-    response = HttpResponse(content, content_type=content_type)
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+    return attachment(content, content_type, filename)

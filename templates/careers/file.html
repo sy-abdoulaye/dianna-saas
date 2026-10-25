@@ -1,0 +1,73 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Fiche de suivi" %} · {{ employee.full_name }} · Dianna{% endblock %}
+{% block content %}
+  {% url "careers:home" as home_url %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ home_url }}">{% translate "Carrière et évaluations" %}</a> › {% translate "Fiche de suivi" %} · {{ employee.full_name }}</div>
+      <h1 class="h1">{% translate "Fiche de suivi" %}</h1>
+      <p class="sub">{{ employee.full_name }}{% if employee.job_title %} · {{ employee.job_title }}{% endif %}{% if employee.arrival_date %} · {% blocktranslate with month=employee.arrival_date|fr_date:"month" %}arrivée en {{ month }}{% endblocktranslate %}{% endif %}</p>
+    </div>
+    <div class="actions">
+      {% url "careers:file_pdf" employee.public_id as pdf_url %}
+      {% button _("Exporter en PDF") icon="dl" href=pdf_url %}
+      {% if can_add %}
+        {% url "careers:note" employee.public_id as note_url %}
+        {% button _("Ajouter une note") variant="primary" icon="plus" hx_get=note_url hx_target="#modal-root" %}
+      {% endif %}
+    </div>
+  </div>
+  <div class="split">
+    <section class="card card-body stack" aria-labelledby="h-history">
+      <h2 class="h2" id="h-history">{% translate "Historique" %}</h2>
+      {% if notes %}
+        <ul class="timeline">
+          {% for note in notes %}
+            <li>
+              <div>
+                <b>{{ note.date|fr_date:"long" }}</b>
+                <div class="meta">{{ note.author.full_name }}</div>
+              </div>
+              <div class="stack gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="badge badge-info">{{ note.get_kind_display }}</span>
+                  {% if note.is_private %}
+                    <span class="pill">{% icon "lock" 16 %}{% translate "Privée" %}</span>
+                  {% endif %}
+                </div>
+                <div class="prose-text">{{ note.text|plain_text }}</div>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {% translate "Aucune note" as t %}{% translate "La fiche de suivi est vide. Les entretiens clos et les notes ajoutées y apparaîtront." as x %}
+        {% include "components/empty_state.html" with icon="file" title=t text=x %}
+      {% endif %}
+    </section>
+    <aside class="stack">
+      <div class="card card-body stack">
+        <h3 class="h3">{% translate "Synthèse" %}</h3>
+        <dl class="dl">
+          <dt>{% translate "Manager" %}</dt><dd>{% if employee.manager %}{{ employee.manager.full_name }}{% else %}—{% endif %}</dd>
+          <dt>{% translate "Dernier entretien" %}</dt><dd>{% if last_review %}{{ last_review.meeting_date|default:last_review.closed_at|fr_date:"long" }}{% else %}—{% endif %}</dd>
+          <dt>{% translate "Prochain entretien de parcours" %}</dt><dd>{% if review_due %}{% blocktranslate with day=review_due|fr_date:"long" %}avant le {{ day }}{% endblocktranslate %}{% else %}—{% endif %}</dd>
+          <dt>{% translate "Prochain état des lieux" %}</dt><dd>{% if summary_due %}{% blocktranslate with day=summary_due|fr_date:"long" %}avant le {{ day }}{% endblocktranslate %}{% else %}—{% endif %}</dd>
+        </dl>
+        <p class="hint">{% translate "Échéances suggérées de l'entretien de parcours professionnel. Règles légales à confirmer par un juriste." %}</p>
+        {% button _("Voir les entretiens") size="sm" href=home_url %}
+      </div>
+      <div class="card card-body stack">
+        <h3 class="h3">{% translate "Formations" %}</h3>
+        {% if trainings %}
+          <ul class="rows">{% for training in trainings %}<li>{{ training }}</li>{% endfor %}</ul>
+        {% else %}
+          <p class="meta">{% translate "Aucune formation enregistrée." %}</p>
+        {% endif %}
+      </div>
+      {% translate "Les notes privées ne sont visibles que par leur auteur." as privacy %}
+      {% include "components/banner.html" with kind="info" text=privacy %}
+    </aside>
+  </div>
+{% endblock %}

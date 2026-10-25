@@ -6,7 +6,7 @@ import json
 from functools import wraps
 
 from django.core.paginator import Paginator
-from django.http import Http404, HttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -45,6 +45,7 @@ from apps.core.htmx import (
     form_error_response,
     is_htmx,
 )
+from apps.core.http import attachment
 from apps.core.models import Module
 from apps.core.ratelimit import (
     EXPORT_LIMIT_MESSAGE,
@@ -519,12 +520,6 @@ def proof_file(request, public_id):
 EXPORTABLE = {"telework", "on_call", "leave", "transport"}
 
 
-def _download(content, content_type, filename):
-    response = HttpResponse(content, content_type=content_type)
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
-
-
 @require_GET
 @module_view
 def export_requests(request, kind):
@@ -550,7 +545,7 @@ def export_requests(request, kind):
         return download_response(f"{action_url}?{request.GET.urlencode()}")
     if not record_export(me):
         return export_limited_response(request, reverse(KINDS[kind].url_name))
-    return _download(*exports.export_file(kind, me, form.cleaned_data, request=request))
+    return attachment(*exports.export_file(kind, me, form.cleaned_data, request=request))
 
 
 @require_GET
@@ -564,7 +559,7 @@ def campaign_summary(request, pk):
     if fmt in exports.FORMAT_LABELS:
         if not record_export(request.employee):
             return export_limited_response(request, request.path)
-        return _download(*exports.campaign_file(request.employee, campaign, fmt, request=request))
+        return attachment(*exports.campaign_file(request.employee, campaign, fmt, request=request))
     mondays, summaries = exports.campaign_summary(campaign)
     return render(
         request,

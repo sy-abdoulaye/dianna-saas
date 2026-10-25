@@ -635,6 +635,26 @@
   .suggestions a { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 8px; color: var(--ink); text-decoration: none; }
   .suggestions a:hover, .suggestions a:focus-visible { background: var(--subtle); }
   .suggestions:empty { display: none; }
+  /* Blocs répétables et comptes rendus (prototype : .ivrow, .pctin). */
+  .repeat-row { display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+  .repeat-row[hidden] { display: none; }
+  .repeat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .repeat-title { font: 600 15px/24px var(--font-display); color: var(--title); }
+  .pct-input { display: flex; align-items: center; gap: 8px; }
+  .pct-input .input { max-width: 140px; }
+  .pct-input span { color: var(--ink-2); font-weight: 500; }
+  .item-read { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+  .item-read-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  /* Fiche de suivi (prototype : .tl). */
+  .timeline > li { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+  .timeline > li:first-child { border-top: 0; padding-top: 0; }
+  @media (max-width: 640px) { .timeline > li { grid-template-columns: 1fr; gap: 6px; } }
+  .mini-steps { display: inline-flex; gap: 4px; }
+  .mini-steps span { width: 22px; height: 6px; border-radius: 3px; background: var(--track); }
+  .mini-steps span.is-done { background: var(--brand); }
+  .mini-steps span.is-current { background: var(--focus); }
+  .rating-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .rating-row .rating-text { min-width: 200px; flex: 1; }
   @media (max-width: 1100px) { .split { grid-template-columns: 1fr; } .sticky-aside { position: static; } }
   @media (max-width: 640px) { .dl { grid-template-columns: 1fr; gap: 2px 0; } .dl dt { margin-top: 8px; } }
 }

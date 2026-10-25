@@ -1,0 +1,30 @@
+{% load i18n ui %}
+{% comment %}
+  Blocs répétables (apps/core/repeatable.py) : formset, block (inscription), name (clé du
+  registre), add_label, min (1 par défaut), min_title et min_message (dernier bloc),
+  removed_title (notification du retrait, avec « Annuler »).
+{% endcomment %}
+<div class="stack"
+     data-repeatable
+     data-row-label="{{ block.row_label }}"
+     data-min="{{ min|default:1 }}"
+     data-min-title="{{ min_title }}"
+     data-min-message="{{ min_message }}"
+     data-removed-title="{{ removed_title }}">
+  {{ formset.management_form }}
+  {% if formset.non_form_errors %}
+    <p class="field-error"
+       id="{{ block.prefix }}-error"
+       role="alert">{% icon "alert" 16 %}{{ formset.non_form_errors|first }}</p>
+  {% endif %}
+  <div class="stack" id="{{ block.prefix }}-rows" data-repeat-rows>
+    {% for form in formset %}
+      {% include "components/repeatable_row.html" with number=forloop.counter %}
+    {% endfor %}
+  </div>
+  <div>
+    {% url "core:add_block" name as add_url %}
+    {% blocktranslate asvar include_total with prefix=block.prefix %}[name="{{ prefix }}-TOTAL_FORMS"]{% endblocktranslate %}
+    {% button add_label icon="plus" hx_post=add_url hx_include=include_total hx_target="#"|add:block.prefix|add:"-rows" hx_swap="beforeend" data_repeat_add=True %}
+  </div>
+</div>

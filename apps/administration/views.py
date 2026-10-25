@@ -35,6 +35,7 @@ from apps.core.htmx import (
     form_error_response,
     is_htmx,
 )
+from apps.core.http import attachment
 from apps.core.models import AuditLog, Company, Module
 from apps.core.services import set_module
 from apps.people import services as people
@@ -471,7 +472,5 @@ def journal_export(request):
     content = services.export_journal_csv(
         q=q, start=start, end=end, context=ActionContext.of(request)
     )
-    response = HttpResponse(content, content_type="text/csv; charset=utf-8")
     filename = f"journal-{compact_day_stamp(start)}-{compact_day_stamp(end)}.csv"
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+    return attachment(content, "text/csv; charset=utf-8", filename)

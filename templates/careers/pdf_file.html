@@ -1,0 +1,37 @@
+{% load i18n ui %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <title>{% translate "Fiche de suivi" %} · {{ company.name }}</title>
+    <style>:root {% templatetag openbrace %}{% for name, value in pdf_tokens.items %} --{{ name }}: {{ value }};{% endfor %} {% templatetag closebrace %}</style>
+    <link rel="stylesheet" href="{{ pdf_static }}css/pdf-document.css">
+  </head>
+  <body>
+    <header>
+      {% if pdf_logo %}<img class="logo" src="{{ pdf_logo }}" alt="">{% endif %}
+      <div>
+        <h1>{% translate "Fiche de suivi" %} · {{ employee.full_name }}</h1>
+        <p>{% if employee.job_title %}{{ employee.job_title }} · {% endif %}{{ company.name }}</p>
+      </div>
+    </header>
+    <dl>
+      <dt>{% translate "Manager" %}</dt><dd>{% if employee.manager %}{{ employee.manager.full_name }}{% else %}—{% endif %}</dd>
+      <dt>{% translate "Dernier entretien" %}</dt><dd>{% if last_review %}{{ last_review.meeting_date|default:last_review.closed_at|fr_date:"long" }}{% else %}—{% endif %}</dd>
+      <dt>{% translate "Prochain entretien de parcours" %}</dt><dd>{% if review_due %}{% blocktranslate with day=review_due|fr_date:"long" %}avant le {{ day }}{% endblocktranslate %}{% else %}—{% endif %}</dd>
+      <dt>{% translate "Prochain état des lieux" %}</dt><dd>{% if summary_due %}{% blocktranslate with day=summary_due|fr_date:"long" %}avant le {{ day }}{% endblocktranslate %}{% else %}—{% endif %}</dd>
+    </dl>
+    {% if trainings %}<h2>{% translate "Formations" %}</h2>
+    <ul>{% for training in trainings %}<li>{{ training }}</li>{% endfor %}</ul>{% endif %}
+    <h2>{% translate "Historique" %}</h2>
+    {% for note in notes %}
+      <div class="item">
+        <span class="meta">{{ note.date|fr_date:"long" }} · {{ note.author.full_name }} · {{ note.get_kind_display }}</span>
+        <p class="text">{{ note.text }}</p>
+      </div>
+    {% empty %}
+      <p class="meta">{% translate "Aucune note." %}</p>
+    {% endfor %}
+    <p class="legal">{% translate "Les notes privées ne figurent jamais dans ce document." %}</p>
+  </body>
+</html>

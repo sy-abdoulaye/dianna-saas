@@ -15,6 +15,7 @@ urlpatterns = [
     path("", include("apps.equipment.urls")),  # avant les demandes : /materiel/
     path("", include("apps.announcements.urls")),
     path("", include("apps.surveys.urls")),
+    path("", include("apps.careers.urls")),
     path("", include("apps.approvals.urls")),
     path("", include("apps.planning.urls")),
 ]

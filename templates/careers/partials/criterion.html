@@ -1,0 +1,1 @@
+{% load i18n %}<dt>{{ label }}</dt><dd>{% if value is True %}{% translate "Oui" %}{% elif value is False %}{% translate "Non" %}{% else %}<span class="text-ink-3">{% translate "Non renseigné" %}</span>{% endif %}</dd>

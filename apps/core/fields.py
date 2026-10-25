@@ -9,6 +9,7 @@ import re
 from decimal import Decimal
 
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 DECIMAL_TEXT = re.compile(r"^\d{1,6}(?:[.,]\d+)?$")
 
@@ -41,3 +42,28 @@ class DecimalTextField(forms.Field):
         if isinstance(value, Decimal):
             return str(value).replace(".", ",")
         return value
+
+
+PERCENT_TEXT = re.compile(r"^\d{1,3}$")
+
+
+class PercentTextField(forms.Field):
+    """Pourcentage entier de 0 à 100 saisi en texte (`inputmode="numeric"`), pour la même
+    raison que les décimaux : jamais `type="number"` (L5-20, lot 7)."""
+
+    default_error_messages = {"range": _("Entre 0 et 100.")}
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault(
+            "widget",
+            forms.TextInput(attrs={"inputmode": "numeric", "autocomplete": "off", "size": 4}),
+        )
+        super().__init__(**kwargs)
+
+    def to_python(self, value):
+        if value in self.empty_values:
+            return None
+        text = "".join(str(value).split()).rstrip("%")
+        if not PERCENT_TEXT.match(text) or int(text) > 100:
+            raise forms.ValidationError(self.error_messages["range"], code="range")
+        return int(text)

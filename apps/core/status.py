@@ -63,9 +63,18 @@ STATUSES: dict[str, dict[str, Status]] = {
     },
     "review": {
         "todo_by_me": Status("wait", _("À faire par vous")),
+        "in_progress": Status("info", _("En cours")),
+        "waiting": Status("wait", _("En attente")),
         "signed": Status("ok", _("Signé")),
         "closed": Status("ok", _("Clos")),
         "overdue": Status("ko", _("Délai dépassé")),
+    },
+    # Visibilité d'une intervention (compte rendu, fiche 11).
+    "visibility": {
+        "planned_end": Status("off", _("Fin prévue")),
+        "extension_likely": Status("info", _("Prolongation probable")),
+        "extension_confirmed": Status("ok", _("Prolongation confirmée")),
+        "uncertain": Status("wait", _("Incertaine")),
     },
 }
 

@@ -27,7 +27,8 @@ EXPORT_PERIOD = 10 * 60  # secondes
 EXPORT_LIMIT_MESSAGE = _(
     "Vous avez fait 10 exports en moins de 10 minutes. Réessayez dans quelques minutes."
 )
-# Fenêtres conservées après leur fin, avant purge (la plus longue période utilisée : 10 min).
+# Fenêtres conservées après leur fin, avant purge (la plus longue période utilisée : 24 h,
+# relance d'un entretien).
 RETENTION = timedelta(days=1)
 
 INCREMENT_SQL = """

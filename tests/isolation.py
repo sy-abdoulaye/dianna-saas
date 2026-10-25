@@ -144,6 +144,43 @@ ISOLATION_CASES = {
         "post",
         lambda b: reverse("surveys:delete", args=[b.requests["draft_survey"].public_id]),
     ),
+    # Carrière (lot 7) : entretien, fiche de suivi et note d'une personne de B.
+    "careers:detail": (
+        "get",
+        lambda b: reverse("careers:detail", args=[b.requests["review"].public_id]),
+    ),
+    "careers:self": (
+        "post",
+        lambda b: reverse("careers:self", args=[b.requests["review"].public_id]),
+    ),
+    "careers:evaluate": (
+        "post",
+        lambda b: reverse("careers:evaluate", args=[b.requests["review"].public_id]),
+    ),
+    "careers:plan": (
+        "post",
+        lambda b: reverse("careers:plan", args=[b.requests["review"].public_id]),
+    ),
+    "careers:held": (
+        "get",
+        lambda b: reverse("careers:held", args=[b.requests["review"].public_id]),
+    ),
+    "careers:report": (
+        "post",
+        lambda b: reverse("careers:report", args=[b.requests["review"].public_id]),
+    ),
+    "careers:sign": (
+        "get",
+        lambda b: reverse("careers:sign", args=[b.requests["review"].public_id]),
+    ),
+    "careers:remind": (
+        "post",
+        lambda b: reverse("careers:remind", args=[b.requests["review"].public_id]),
+    ),
+    "careers:pdf": ("get", lambda b: reverse("careers:pdf", args=[b.requests["review"].public_id])),
+    "careers:file": ("get", lambda b: reverse("careers:file", args=[b.employee.public_id])),
+    "careers:note": ("get", lambda b: reverse("careers:note", args=[b.employee.public_id])),
+    "careers:file_pdf": ("get", lambda b: reverse("careers:file_pdf", args=[b.employee.public_id])),
     "people:detail": ("get", lambda b: reverse("people:detail", args=[b.employee.public_id])),
     "people:edit": ("get", lambda b: reverse("people:edit", args=[b.employee.public_id])),
     "people:archive": ("get", lambda b: reverse("people:archive", args=[b.employee.public_id])),
@@ -194,6 +231,11 @@ NOT_TENANT_OBJECTS = {
     # Fichiers privés : le jeton signé porte l'entreprise, refusé sur un autre hôte
     # (test : test_private_file_is_refused_on_another_company_host).
     "core:private_file",
+    # Ajout d'un bloc répétable : le paramètre est le nom d'un formulaire, aucun objet n'est lu.
+    "core:add_block",
+    # Annulations du lot 7 : jeton signé lié à l'auteur, objet relu dans l'entreprise courante.
+    "careers:undo",
+    "interventions:undo",
     # Annulation d'archivage : jeton signé lié à l'auteur ; la fiche est relue dans
     # l'entreprise courante (test : test_undo_archive_of_another_company_is_refused).
     "people:undo",

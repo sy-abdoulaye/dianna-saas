@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
@@ -49,6 +49,18 @@ class Company(Timestamped):
     summer_leave_hr_step = models.BooleanField(
         _("validation finale RH des congés d'été"), default=True
     )
+    # Entretien de parcours professionnel (loi n° 2025-989, article L6315-1, M-08) : règles
+    # légales à confirmer par un juriste.
+    career_review_interval_years = models.PositiveSmallIntegerField(
+        _("périodicité de l'entretien de parcours (années)"),
+        default=4,
+        validators=[MinValueValidator(1), MaxValueValidator(4)],
+    )
+    career_summary_interval_years = models.PositiveSmallIntegerField(
+        _("périodicité de l'état des lieux (années)"),
+        default=8,
+        validators=[MinValueValidator(1), MaxValueValidator(8)],
+    )
     timezone = models.CharField(_("fuseau horaire"), max_length=40, default="Europe/Paris")
     logo = models.ImageField(
         _("logo"),
@@ -61,6 +73,16 @@ class Company(Timestamped):
         verbose_name = _("entreprise")
         verbose_name_plural = _("entreprises")
         ordering = ["name"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(career_review_interval_years__range=(1, 4)),
+                name="core_company_career_review_interval_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(career_summary_interval_years__range=(1, 8)),
+                name="core_company_career_summary_interval_range",
+            ),
+        ]
 
     RESERVED_SLUGS = frozenset({"www", "admin", "api", "static", "media", "mail", "support"})
 

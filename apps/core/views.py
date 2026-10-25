@@ -183,3 +183,27 @@ def public_home(request):
             sent = True
     status = 422 if form.errors else 200
     return render(request, "public/home.html", {"form": form, "sent": sent}, status=status)
+
+
+@require_POST
+def add_block(request, name):
+    """« Ajouter » d'un bloc répétable (apps.core.repeatable) : un bloc vide à l'index suivant,
+    et le compteur du formset mis à jour (hors de la zone, hx-swap-oob)."""
+    from django.http import Http404, HttpResponseBadRequest
+
+    from apps.core import repeatable
+
+    block = repeatable.BLOCKS.get(name)
+    if block is None:
+        raise Http404
+    try:
+        index = int(request.POST.get(f"{block.prefix}-TOTAL_FORMS", ""))
+    except ValueError:
+        return HttpResponseBadRequest()
+    if not 0 <= index < repeatable.ABSOLUTE_MAX:
+        return HttpResponseBadRequest()
+    formset = block.formset(prefix=block.prefix)
+    form = formset.form(prefix=f"{block.prefix}-{index}", **formset.get_form_kwargs(index))
+    form.empty_permitted = True
+    context = {"form": form, "block": block, "number": index + 1, "total": index + 1, "new": True}
+    return render(request, "components/repeatable_row.html", context)

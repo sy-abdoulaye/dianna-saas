@@ -315,14 +315,17 @@ export function showToast(data) {
     link.textContent = data.action_label;
     actions.append(link);
   }
-  if (data.undo_url) {
+  // « Annuler » : action du serveur (undo_url, jeton signé) ou du navigateur (onUndo, retrait
+  // d'un bloc répétable pas encore enregistré).
+  if (data.undo_url || data.onUndo) {
     const undo = document.createElement("button");
     undo.type = "button";
     undo.className = "toast-undo";
     undo.textContent = "Annuler";
     undo.addEventListener("click", () => {
       undo.disabled = true;
-      window.htmx.ajax("POST", data.undo_url, { source: document.body, swap: "none" });
+      if (data.onUndo) data.onUndo();
+      else window.htmx.ajax("POST", data.undo_url, { source: document.body, swap: "none" });
       toast.remove();
     });
     actions.append(undo);
@@ -401,6 +404,64 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
   }
   // Formulaire renvoyé avec des erreurs (422) : focus sur le premier champ à corriger.
   if (event.detail.xhr && event.detail.xhr.status === 422) focusFirstField(event.detail.elt.isConnected ? event.detail.elt : target);
+});
+
+/* ---------- Blocs répétables (apps/core/repeatable.py) ---------- */
+// « Ajouter » est servi par le serveur (un bloc vide à l'index suivant) ; « Retirer » masque le
+// bloc et coche sa suppression, sans recharger ni vider les autres blocs ; « Annuler » le
+// rétablit. Il reste toujours au moins `data-min` blocs.
+function visibleRows(container) {
+  return $$("[data-repeat-row]", container).filter((row) => !row.hidden);
+}
+
+function renumber(container) {
+  const label = container.dataset.rowLabel;
+  visibleRows(container).forEach((row, index) => {
+    const title = $("[data-repeat-number]", row);
+    if (title) title.textContent = `${label} ${index + 1}`;
+  });
+}
+
+function setRemoved(row, removed) {
+  const flag = $("input[name$='-DELETE']", row);
+  if (flag) flag.value = removed ? "on" : "";
+  row.hidden = removed;
+  row.closest("form")?.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-repeat-remove]");
+  if (!button) return;
+  const row = button.closest("[data-repeat-row]");
+  const container = button.closest("[data-repeatable]");
+  if (visibleRows(container).length <= Number(container.dataset.min || 1)) {
+    showToast({ kind: "warn", title: container.dataset.minTitle, message: container.dataset.minMessage });
+    return;
+  }
+  const text = $("textarea, input[type=text]", row)?.value.trim() || "";
+  setRemoved(row, true);
+  renumber(container);
+  $("[data-repeat-add]", container)?.focus();
+  showToast({
+    kind: "ok",
+    title: container.dataset.removedTitle,
+    message: text ? `« ${text.slice(0, 60)} »` : "",
+    onUndo: () => {
+      setRemoved(row, false);
+      renumber(container);
+      $("textarea, input:not([type=hidden])", row)?.focus();
+    },
+  });
+});
+
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  const rows = event.detail.target;
+  if (!rows || !rows.matches || !rows.matches("[data-repeat-rows]")) return;
+  const container = rows.closest("[data-repeatable]");
+  renumber(container);
+  const added = visibleRows(container).at(-1);
+  $("textarea, input:not([type=hidden]), select", added)?.focus();
+  added?.scrollIntoView({ block: "center" });
 });
 
 /* ---------- Filtres : « Réinitialiser » vide aussi les champs ---------- */
