@@ -66,6 +66,19 @@ Entretien, fiche de suivi (jamais de note privée) et compte rendu passent par u
 - Notification visuelle : « Annuler » côté navigateur (`onUndo`), en plus du jeton du serveur.
 - Les nouveaux `services.py` et `selectors.py` entrent automatiquement dans le périmètre bloquant de mypy : 23 fichiers, annotations complètes.
 
+### Correction de la coque (25 oct., après les tests de Leo)
+
+- **Cause mesurée** (Playwright, `/interventions/nouveau/`, 1920×1080) : la zone `.main` défilait sur 2 118 px, mais le document faisait aussi 1 874 px. La légende `.sr-only` du sélecteur « Prolongation souhaitée » et ses deux boutons radio sont en position absolue, sans ancêtre positionné : leur bloc conteneur était la page entière. Placés à 1 873 px, ils allongeaient le document hors de la zone qui défilait. D'où deux défilements, et un menu latéral (100 % de la hauteur) arrêté à mi-écran une fois le document défilé.
+- **Nouvelle coque** (`layouts/app.html`, `app.css`, `ui.js`) :
+  - `.app` est la seule hauteur d'écran (100dvh), en grille : en-tête fixe en haut, menu latéral et zone principale dessous ;
+  - `.main`, positionnée, est le seul conteneur à défilement vertical ;
+  - le document ne défile plus.
+- **Hamburger** : rail d'icônes mémorisé à partir de 1 024 px ; en dessous, tiroir avec voile, Échap, piège du focus et page inerte derrière.
+- **Barre d'étapes** : elle ne défile plus horizontalement ; sous 640 px, elle passe en colonne.
+- **Contrôle automatique** (`tests/e2e/test_layout.py`) :
+  - toutes les entrées du menu des 4 profils, plus des pages longues et des états vides, à 1920×1080, 1440×900, 1280×720 et 390×844, en clair et en sombre ;
+  - parcours du rail (repli, dépli, état conservé après rechargement) et du tiroir mobile.
+
 ## Règles légales (M-08) : ce qui reste à confirmer par un juriste
 
 L'implémentation suit la loi n° 2025-989 du 24 octobre 2025 (article L6315-1 modifié) et le questions-réponses du ministère du Travail mis à jour en février 2026, résumés dans M-08 et la fiche 10 :
@@ -100,7 +113,7 @@ L'implémentation suit la loi n° 2025-989 du 24 octobre 2025 (article L6315-1 m
 | `make lint` | sans erreur (ruff, ruff format, djlint : 151 gabarits) |
 | `make typecheck` | 23 fichiers, aucune erreur (annotations complètes) |
 | `make test` | 951 tests : 949 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; couverture 96 % (services de la carrière 96 %, des interventions 97 %, `permissions.py` 99 %) ; puis 6 tests de performance |
-| `make e2e` | 70 parcours (6 nouveaux) |
+| `make e2e` | 76 parcours (12 nouveaux, dont 6 pour la coque et le hamburger) |
 | `make check` | aucune alerte, aucune migration manquante |
 
 Nouveaux tests :

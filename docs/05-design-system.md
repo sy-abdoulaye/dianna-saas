@@ -50,7 +50,8 @@ Chiffres alignés (`tabular-nums`) dans les tableaux et indicateurs.
 - Grille de 4 px. Espaces courants : 8, 12, 16, 24 px. Marge de page 24 px (16 px sur mobile).
 - Rayons : 6 (petits), 8 (boutons, champs), 12 (cartes), 16 (notifications), 20 (modales).
 - Hauteurs : boutons et champs 40 px (32 px pour les petits, 48 à 52 px dans les modales), ligne de tableau 56 px.
-- Menu latéral : 264 px, tiroir sous 1 024 px.
+- Coque (`layouts/app.html`, L7-21) : hauteur d'écran déclarée une seule fois (`.app`, 100dvh) ; le document ne défile jamais. En-tête fixe sur toute la largeur (hamburger, logo, recherche, notifications, avatar) ; dessous, le menu latéral sur toute la hauteur (son propre défilement seulement si ses entrées dépassent) et la zone principale (`.main`), seul conteneur à défilement vertical, positionnée pour contenir les éléments en position absolue. Seuls les tableaux et les barres d'onglets défilent horizontalement, dans leur conteneur. Contrôle automatique : `tests/e2e/test_layout.py`.
+- Menu latéral : 264 px. À partir de 1 024 px, le hamburger le replie en rail d'icônes de 72 px (libellés lus par les lecteurs d'écran, infobulle au survol), état mémorisé dans le navigateur et appliqué avant l'affichage. En dessous, tiroir par-dessus le contenu avec un voile ; il se ferme par le voile, Échap, un lien ou un changement de page ; le focus y reste et revient au bouton.
 
 ## Composants communs
 
