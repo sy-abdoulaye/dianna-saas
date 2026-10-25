@@ -173,7 +173,30 @@ def test_month_view_shows_letters_and_the_month_title(client_for, company_a):
 def test_week_title_and_navigation(client_for, company_a):
     content = page(client_for(company_a.employee), date="2026-10-21")
     assert "Semaine du 19 oct. au 25 octobre 2026" in content
-    assert "date=2026-10-12" in content and "date=2026-10-26" in content
+    # Le jour de référence suit la navigation : une semaine avant, une semaine après.
+    assert "date=2026-10-14" in content and "date=2026-10-28" in content
+
+
+def test_week_month_week_keeps_the_reference_week(client_for, company_a):
+    client = client_for(company_a.employee)
+    week = page(client, date="2026-10-28")
+    assert "Semaine du 26 oct. au 1er novembre 2026" in week
+    assert 'name="date" value="2026-10-28"' in week
+    month = page(client, vue="mois", date="2026-10-28")
+    assert 'name="date" value="2026-10-28"' in month
+    assert "Semaine du 26 oct. au 1er novembre 2026" in page(
+        client, vue="semaine", date="2026-10-28"
+    )
+
+
+def test_next_month_keeps_the_day_within_the_month():
+    from datetime import date
+
+    from apps.planning.services import shift
+
+    assert shift(date(2026, 10, 28), "mois", 1) == date(2026, 11, 28)
+    assert shift(date(2027, 1, 31), "mois", 1) == date(2027, 2, 28)
+    assert shift(date(2026, 1, 15), "mois", -1) == date(2025, 12, 15)
 
 
 def test_pagination_keeps_you_on_every_page(client_for, company_a):

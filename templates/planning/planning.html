@@ -27,7 +27,7 @@
     </div>
     <div id="planning-results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="requestsChanged from:body" hx-target="this" hx-disinherit="*">
       {% partialdef results inline %}
-        <input type="hidden" id="planning-date" name="date" value="{{ grid.first|date:'Y-m-d' }}" form="planning-filters">
+        <input type="hidden" id="planning-date" name="date" value="{{ anchor.isoformat }}" form="planning-filters">
         <div class="plan-nav">
           <a class="btn btn-secondary btn-icon" href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#planning-results" hx-push-url="true" aria-label="{% translate 'Période précédente' %}">{% icon "left" %}</a>
           <a class="btn btn-secondary" href="{{ today_url }}" hx-get="{{ today_url }}" hx-target="#planning-results" hx-push-url="true">{% translate "Aujourd'hui" %}</a>

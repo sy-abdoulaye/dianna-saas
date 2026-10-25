@@ -52,9 +52,9 @@ def planning(request):
     me = request.employee
     today = timezone.localdate()
     view = request.GET.get("vue") if request.GET.get("vue") in VIEWS else "semaine"
+    # Date de référence, gardée telle quelle : Semaine puis Mois puis Semaine revient à la
+    # même semaine (la grille en déduit la période affichée).
     anchor = _anchor(request.GET.get("date"), today)
-    # Début de la période : la navigation avance d'une semaine ou d'un mois entier.
-    anchor = (services.month_of(anchor) if view == "mois" else services.week_of(anchor))[0]
     company_wide = permissions.scope(me, "planning.view") == permissions.ALL
     q = request.GET.get("q", "").strip()
     service = _int(request.GET.get("service")) if company_wide else None
@@ -90,6 +90,7 @@ def planning(request):
     context = {
         "grid": grid,
         "view": view,
+        "anchor": anchor,
         "title": services.period_title(view, grid.first, grid.last),
         "today": today,
         "query": q,
@@ -108,8 +109,6 @@ def planning(request):
         "prev_url": link(date=services.shift(anchor, view, -1).isoformat()),
         "next_url": link(date=services.shift(anchor, view, 1).isoformat()),
         "today_url": link(date=today.isoformat()),
-        "week_url": link(vue="semaine", date=anchor.isoformat()),
-        "month_url": link(vue="mois", date=anchor.isoformat()),
         "reset_url": f"{base}?{urlencode({'vue': view, 'date': anchor.isoformat()})}",
         "list_url": base,
         "filtered": bool(q or service or site),

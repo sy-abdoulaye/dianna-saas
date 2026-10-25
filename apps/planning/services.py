@@ -151,9 +151,12 @@ def month_of(anchor: date) -> tuple[date, date]:
 
 
 def shift(anchor: date, view: str, step: int) -> date:
+    """Période précédente ou suivante : le même jour (borné à la fin du mois), pour que la
+    date de référence reste dans la semaine correspondante au retour en vue Semaine."""
     if view == "mois":
         month = anchor.month - 1 + step
-        return date(anchor.year + month // 12, month % 12 + 1, 1)
+        year, month = anchor.year + month // 12, month % 12 + 1
+        return date(year, month, min(anchor.day, calendar.monthrange(year, month)[1]))
     return anchor + timedelta(days=7 * step)
 
 

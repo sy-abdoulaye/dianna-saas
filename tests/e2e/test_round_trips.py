@@ -15,86 +15,158 @@ def choose(page, label):
     page.locator("form.filters fieldset.segmented label", has_text=label).click()
 
 
+def round_trip(page, start, steps):
+    """Gabarit commun des parcours aller-retour : `start` vérifie l'état de départ, chaque
+    étape est un couple (clic, vérification). Après les clics, Retour jusqu'au départ en
+    vérifiant chaque état précédent, puis Suivant jusqu'au dernier."""
+    states = [start]
+    start()
+    for click, check in steps:
+        click()
+        check()
+        states.append(check)
+    for check in reversed(states[:-1]):
+        page.go_back()
+        check()
+    for check in states[1:]:
+        page.go_forward()
+        check()
+
+
+WEEK = "Semaine du 26 oct. au 1er novembre 2026"
+
+
+def planning_shows(page, view, title):
+    def check():
+        expect(page, f"adresse de la vue {view}").to_have_url(re.compile(f"vue={view}"))
+        expect(page.locator("#planning-results table")).to_have_class(re.compile(f"plan-{view}"))
+        expect(page.locator(".plan-title")).to_have_text(title)
+        expect(page.locator(f"input[name=vue][value={view}]")).to_be_checked()
+
+    return check
+
+
 def test_planning_week_month_round_trip_and_back(page, urls, company_a):
+    """La période de référence est gardée : Semaine, Mois, Semaine revient à la même semaine."""
     sign_in(page, urls, company_a.hr)
-    page.goto(urls("/planning/"))
-    table = page.locator("#planning-results table")
-    expect(table).to_have_class(re.compile("plan-semaine"))
-    for label, view in (
-        ("Mois", "mois"),
-        ("Semaine", "semaine"),
-        ("Mois", "mois"),
-        ("Semaine", "semaine"),
-    ):
-        choose(page, label)
-        expect(table, f"vue affichée après « {label} » ({page.url})").to_have_class(
-            re.compile(f"plan-{view}")
-        )
-        expect(page).to_have_url(re.compile(f"vue={view}"))
-    # Retour : la vue précédente (mois), puis celle d'avant (semaine).
-    page.go_back()
-    expect(page).to_have_url(re.compile("vue=mois"))
-    expect(page.locator("#planning-results table")).to_have_class(re.compile("plan-mois"))
-    expect(page.locator("input[name=vue][value=mois]")).to_be_checked()
-    page.go_back()
-    expect(page).to_have_url(re.compile("vue=semaine"))
-    expect(page.locator("#planning-results table")).to_have_class(re.compile("plan-semaine"))
-    expect(page.locator("input[name=vue][value=semaine]")).to_be_checked()
+    page.goto(urls("/planning/?vue=semaine&date=2026-10-28"))
+    week, month = (
+        planning_shows(page, "semaine", WEEK),
+        planning_shows(page, "mois", "octobre 2026"),
+    )
+    round_trip(
+        page,
+        week,
+        [
+            (lambda: choose(page, "Mois"), month),
+            (lambda: choose(page, "Semaine"), week),
+            (lambda: choose(page, "Mois"), month),
+            (lambda: choose(page, "Semaine"), week),
+        ],
+    )
+
+
+def test_planning_previous_next_round_trip_and_back(page, urls, company_a):
+    sign_in(page, urls, company_a.hr)
+    page.goto(urls("/planning/?vue=semaine&date=2026-10-28"))
+
+    def period(title):
+        return lambda: expect(page.locator(".plan-title")).to_have_text(title)
+
+    def go(name):
+        return lambda: page.get_by_role("link", name=name).click()
+
+    following = "Semaine du 2 nov. au 8 novembre 2026"
+    round_trip(
+        page,
+        period(WEEK),
+        [
+            (go("Période suivante"), period(following)),
+            (go("Période précédente"), period(WEEK)),
+            (go("Période suivante"), period(following)),
+        ],
+    )
 
 
 def test_directory_list_cards_round_trip_and_back(page, urls, company_a):
     sign_in(page, urls, company_a.hr)
     page.goto(urls("/annuaire/"))
-    cards, table = page.locator("#results .person-cards"), page.locator("#results table")
-    expect(table).to_be_visible()
-    for label, view in (
-        ("Cartes", "cartes"),
-        ("Liste", "liste"),
-        ("Cartes", "cartes"),
-        ("Liste", "liste"),
-    ):
-        page.locator("fieldset.segmented label", has_text=label).click()
-        shown = cards if view == "cartes" else table
-        expect(shown, f"affichage après « {label} » ({page.url})").to_be_visible()
-        expect(page).to_have_url(re.compile(f"vue={view}"))
-    page.go_back()
-    expect(page).to_have_url(re.compile("vue=cartes"))
-    expect(page.locator("#results .person-cards")).to_be_visible()
-    expect(page.locator("input[name=vue][value=cartes]")).to_be_checked()
-    page.go_back()
-    expect(page).to_have_url(re.compile("vue=liste"))
-    expect(page.locator("#results table")).to_be_visible()
+
+    def shows(view):
+        def check():
+            shown = "#results .person-cards" if view == "cartes" else "#results table"
+            expect(page.locator(shown), f"affichage {view}").to_be_visible()
+            expect(page.locator(f"input[name=vue][value={view}]")).to_be_checked()
+
+        return check
+
+    def pick(label):
+        return lambda: page.locator("fieldset.segmented label", has_text=label).click()
+
+    round_trip(
+        page,
+        shows("liste"),
+        [
+            (pick("Cartes"), shows("cartes")),
+            (pick("Liste"), shows("liste")),
+            (pick("Cartes"), shows("cartes")),
+            (pick("Liste"), shows("liste")),
+        ],
+    )
 
 
 def test_status_filter_round_trip_and_back(page, urls, company_a):
     """Liste à choix d'une barre de filtres : retour à « Tous » puis de nouveau « Validées »."""
     sign_in(page, urls, company_a.hr)
     page.goto(urls("/teletravail/?onglet=equipe"))
-    status = page.get_by_label("Statut")
-    for value in ("approved", "", "approved", ""):
-        status.select_option(value)
-        expected = f"statut={value}&|statut={value}$" if value else r"statut=(&|$)"
-        expect(page, f"adresse après le statut « {value} »").to_have_url(re.compile(expected))
-    page.go_back()
-    expect(page).to_have_url(re.compile("statut=approved"))
-    expect(page.get_by_label("Statut")).to_have_value("approved")
+
+    def status(value):
+        def check():
+            expected = f"statut={value}(&|$)" if value else r"statut=(&|$)|^[^?]*\?(?!.*statut=)"
+            expect(page, f"adresse du statut « {value} »").to_have_url(re.compile(expected))
+            expect(page.get_by_label("Statut")).to_have_value(value)
+
+        return check
+
+    def select(value):
+        return lambda: page.get_by_label("Statut").select_option(value)
+
+    round_trip(
+        page,
+        status(""),
+        [
+            (select("approved"), status("approved")),
+            (select(""), status("")),
+            (select("approved"), status("approved")),
+        ],
+    )
 
 
 def test_tabs_round_trip_and_back(page, urls, company_a):
     sign_in(page, urls, company_a.hr)
-    page.goto(urls("/teletravail/"))
+    page.goto(urls("/teletravail/?onglet=mes-demandes"))
     tabs = page.get_by_role("navigation", name="Télétravail")
-    for name, tab in (
-        ("À valider", "a-valider"),
-        ("Mes demandes", "mes-demandes"),
-        ("À valider", "a-valider"),
-    ):
-        tabs.get_by_role("link", name=re.compile(name)).click()
-        expect(page).to_have_url(re.compile(f"onglet={tab}"))
-        expect(tabs.locator("[aria-current=page]")).to_contain_text(name)
-    page.go_back()
-    expect(page).to_have_url(re.compile("onglet=mes-demandes"))
-    expect(tabs.locator("[aria-current=page]")).to_contain_text("Mes demandes")
+
+    def current(name, tab):
+        def check():
+            expect(page).to_have_url(re.compile(f"onglet={tab}"))
+            expect(tabs.locator("[aria-current=page]")).to_contain_text(name)
+
+        return check
+
+    def open_tab(name):
+        return lambda: tabs.get_by_role("link", name=re.compile(name)).click()
+
+    to_validate, mine = current("À valider", "a-valider"), current("Mes demandes", "mes-demandes")
+    round_trip(
+        page,
+        mine,
+        [
+            (open_tab("À valider"), to_validate),
+            (open_tab("Mes demandes"), mine),
+            (open_tab("À valider"), to_validate),
+        ],
+    )
 
 
 def test_pagination_round_trip_and_back(page, urls, company_a):
@@ -103,32 +175,26 @@ def test_pagination_round_trip_and_back(page, urls, company_a):
     for index in range(12):
         EmployeeFactory(company=company_a.company, last_name=f"Zpage{index:02d}", user=None)
     sign_in(page, urls, company_a.hr)
-    page.goto(urls("/annuaire/"))
+    page.goto(urls("/annuaire/?vue=liste"))
     pager = page.locator("#results .pager")
-    for label, number in (("Page suivante", "2"), ("Page précédente", "1"), ("Page suivante", "2")):
-        pager.get_by_role("link", name=label).click()
-        expect(pager.locator("[aria-current=page]")).to_have_text(number)
-    expect(page).to_have_url(re.compile("page=2"))
-    page.go_back()
-    expect(page.locator("#results .pager [aria-current=page]")).to_have_text("1")
-    page.go_back()
-    expect(page.locator("#results .pager [aria-current=page]")).to_have_text("2")
 
+    def on(number):
+        return lambda: expect(page.locator("#results .pager [aria-current=page]")).to_have_text(
+            number
+        )
 
-def test_planning_previous_next_round_trip_and_back(page, urls, company_a):
-    sign_in(page, urls, company_a.hr)
-    page.goto(urls("/planning/"))
-    title = page.locator(".plan-title")
-    first = title.inner_text()
-    page.get_by_role("link", name="Période suivante").click()
-    expect(title).not_to_have_text(first)
-    second = title.inner_text()
-    page.get_by_role("link", name="Période précédente").click()
-    expect(title).to_have_text(first)
-    page.get_by_role("link", name="Période suivante").click()
-    expect(title).to_have_text(second)
-    page.go_back()
-    expect(page.locator(".plan-title")).to_have_text(first)
+    def follow(label):
+        return lambda: pager.get_by_role("link", name=label).click()
+
+    round_trip(
+        page,
+        on("1"),
+        [
+            (follow("Page suivante"), on("2")),
+            (follow("Page précédente"), on("1")),
+            (follow("Page suivante"), on("2")),
+        ],
+    )
 
 
 def back_and_forward_show_the_whole_page(page, url_part, heading):
@@ -178,3 +244,34 @@ def test_closure_action_then_back_and_forward(page, urls, company_a):
     expect(page.locator("#content")).to_contain_text("Pont de l'Ascension")
     back_and_forward_show_the_whole_page(page, "/administration/fermetures/", "Administration")
     expect(page.locator("#content")).to_contain_text("Pont de l'Ascension")
+
+
+def test_park_status_filter_round_trip_and_back(page, urls, company_a):
+    """Filtre « État » du parc : Retour et Suivant rendent la valeur portée par l'adresse."""
+    sign_in(page, urls, company_a.hr)
+    page.goto(urls("/materiel/?onglet=parc"))
+    status = page.get_by_label("État")
+
+    def shows(value):
+        def check():
+            expect(page).to_have_url(re.compile(f"etat={value}(&|$)" if value else "onglet=parc"))
+            expect(page.get_by_label("État")).to_have_value(value)
+
+        return check
+
+    def select(value):
+        def submit():
+            status.select_option(value)
+            page.get_by_role("button", name="Filtrer").click()  # formulaire classique
+
+        return submit
+
+    round_trip(
+        page,
+        shows(""),
+        [
+            (select("in_stock"), shows("in_stock")),
+            (select("repair"), shows("repair")),
+            (select(""), shows("")),
+        ],
+    )
