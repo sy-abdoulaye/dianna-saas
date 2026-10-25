@@ -103,6 +103,7 @@
         <h2 class="h2">{% translate "Raccourcis" %}</h2>
         {% url "people:list" as people_url %}
         {% button _("Annuaire") icon="users" href=people_url block=True %}
+        {% if careers_url %}{% button _("Carrière") icon="up" href=careers_url block=True %}{% endif %}
         {% if equipment_url %}{% button _("Mon matériel") icon="laptop" href=equipment_url block=True %}{% endif %}
       </section>
     </aside>

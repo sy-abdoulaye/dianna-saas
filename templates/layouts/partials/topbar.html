@@ -23,7 +23,7 @@
   <button class="btn btn-secondary" type="button" aria-expanded="false" aria-controls="menu-user" data-dropdown-toggle>
     {% include "components/avatar.html" with person=current_employee photo_url=current_photo_url %}
     <span class="meta hidden sm:inline">{{ current_employee.full_name }}</span>
-    {% icon "chev" 16 %}
+    {% icon "chev" 16 css="max-sm:hidden" %}
   </button>
   <div class="menu" id="menu-user" hidden>
     <a href="{% url 'people:detail' current_employee.public_id %}">{% icon "users" 16 %}{% translate "Ma fiche" %}</a>

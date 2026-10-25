@@ -254,28 +254,66 @@
   /* ---------- Mise en page ---------- */
   .skip-link { position: absolute; left: -9999px; }
   .skip-link:focus { left: 16px; top: 8px; z-index: 300; background: var(--brand); color: var(--on-brand); padding: 8px 12px; border-radius: 8px; }
-  .app { display: flex; height: 100%; min-height: 0; }
-  .side { width: 264px; flex: none; background: var(--surface); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; overflow: auto; }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 12px 12px; height: 48px; text-decoration: none; }
+  /* Coque : le document défile (position conservée au bouton Retour, barre d'adresse repliée
+     sur mobile). L'en-tête est collant en haut ; le menu latéral est collant dessous, sur toute
+     la hauteur de l'écran, et défile dans sa propre zone quand ses entrées dépassent, sans
+     barre visible (dégradé en haut et en bas, ui.js). La zone principale n'a pas de
+     défilement propre. */
+  /* Réglages de la coque : largeur du menu et du rail, marge intérieure et largeur maximale du
+     contenu. Un seul réglage pour toutes les pages (elles ne fixent pas leur propre largeur). */
+  .app { --side-w: 264px; --rail-w: 72px; --top-h: 64px; --page-pad: 24px; --page-max: 1600px; }
+  @media (min-width: 1440px) { .app { --page-pad: 32px; } }
+  @media (max-width: 640px) { .app { --page-pad: 16px; } }
+  .app { min-height: 100dvh; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "top top" "side main"; }
+  /* Espacements du prototype (docs/05-design-system.md, menu latéral) à toutes les hauteurs
+     d'écran : le menu défile sans barre visible quand ses entrées dépassent. Hauteur : l'écran
+     moins l'en-tête. Marge du bas plus grande que le dégradé : la dernière entrée s'affiche
+     entièrement au-dessus du bord, jamais sous le dégradé. */
+  .side { --side-fade: 24px; grid-area: side; position: sticky; top: var(--top-h); align-self: start; height: calc(100dvh - var(--top-h)); width: var(--side-w); background: var(--surface); border-right: 1px solid var(--line); padding: 16px 12px calc(16px + var(--side-fade)); display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .side::-webkit-scrollbar { display: none; }
+  /* Dégradé : il reste des entrées en bas (ou en haut, une fois défilé). Masque d'opacité fait
+     avec un jeton opaque, sans couleur visible. */
+  .side.fade-bottom { mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--side-fade)), transparent); }
+  .side.fade-top { mask-image: linear-gradient(to top, var(--surface) calc(100% - var(--side-fade)), transparent); }
+  .side.fade-top.fade-bottom { mask-image: linear-gradient(to bottom, transparent, var(--surface) var(--side-fade), var(--surface) calc(100% - var(--side-fade)), transparent); }
+  .brand { display: flex; align-items: center; gap: 10px; flex: none; height: 40px; padding: 0 4px; text-decoration: none; }
   .brand span { font: 700 20px/28px var(--font-display); letter-spacing: -0.02em; color: var(--title); }
   .nav { display: flex; flex-direction: column; gap: 2px; }
-  .nav-group { font: 500 12px/16px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); padding: 16px 12px 6px; }
-  .nav-item { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 8px; font: 500 14px/20px var(--font-sans); color: var(--ink-2); text-decoration: none; }
+  .nav-group { font: 500 12px/16px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); padding: 16px 12px 6px; white-space: nowrap; }
+  .nav-item { position: relative; display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 8px; font: 500 14px/20px var(--font-sans); color: var(--ink-2); text-decoration: none; }
   a.nav-item:hover { background: var(--subtle); }
   .nav-item[aria-current="page"] { background: var(--sel-bg); color: var(--sel-ink); }
   .nav-item .count, .nav-item .soon { margin-left: auto; }
   .nav-item.is-soon { cursor: default; }
+  .nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .soon { font: 500 11px/16px var(--font-sans); color: var(--ink-3); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
   .count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font: 600 12px/16px var(--font-sans); }
-  .side-me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--line); }
+  .side-me { position: relative; margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--line); }
   .side-me b { display: block; font: 500 14px/20px var(--font-sans); color: var(--ink); }
   .side-me .side-me-meta { display: block; font: 400 12px/16px var(--font-sans); color: var(--ink-2); }
-  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: auto; }
-  .topbar { position: sticky; top: 0; z-index: 20; flex: none; min-height: 64px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
-  .topbar .burger { display: none; }
+  .main { grid-area: main; position: relative; min-width: 0; }
+  .topbar { grid-area: top; position: sticky; top: 0; z-index: 30; height: var(--top-h); min-width: 0; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
   .topbar .spacer { flex: 1 1 0; }
+  .topbar-start { display: flex; align-items: center; gap: 12px; flex: none; min-width: 0; }
+  /* Menu déplié : la recherche commence au bord droit du menu, à la marge du contenu
+     (16 px de marge de l'en-tête + largeur + 12 px d'écart = menu + marge du contenu). */
+  @media (min-width: 1024px) {
+    .topbar-start { width: calc(var(--side-w) + var(--page-pad) - 28px); }
+    [data-nav="collapsed"] .topbar-start { width: auto; margin-right: calc(var(--page-pad) - 12px); }
+  }
+  /* Rail d'icônes (≥ 1 024 px, état mémorisé : data-nav="collapsed" sur <html>). Les libellés
+     restent lus par les lecteurs d'écran ; l'infobulle vient de l'attribut title (ui.js). */
+  @media (min-width: 1024px) {
+    [data-nav="collapsed"] .side { width: var(--rail-w); padding-left: 8px; padding-right: 8px; }
+    [data-nav="collapsed"] .nav-item { justify-content: center; padding: 0; }
+    [data-nav="collapsed"] .nav-label, [data-nav="collapsed"] .soon, [data-nav="collapsed"] .side-me-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    [data-nav="collapsed"] .nav-group { height: 1px; padding: 0; margin: 12px 8px; background: var(--line); color: transparent; overflow: hidden; }
+    [data-nav="collapsed"] .nav-item .count { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+    [data-nav="collapsed"] .side-me { justify-content: center; padding: 12px 0; }
+  }
   .global-search { position: relative; flex: 1000 1 auto; min-width: 0; max-width: 420px; }
-  .page { width: 100%; max-width: 1280px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 24px; }
+  @media (max-width: 1023px) { .global-search { max-width: none; } }
+  .page { width: 100%; max-width: var(--page-max); margin: 0 auto; padding: 24px max(var(--page-pad), env(safe-area-inset-right, 0px)) 48px max(var(--page-pad), env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 24px; }
   .page:focus { outline: none; }
   .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .page-head .sub { color: var(--ink-2); margin-top: 4px; }
@@ -283,12 +321,18 @@
   .crumbs a { color: var(--ink-3); text-decoration: none; }
   .crumbs a:hover { text-decoration: underline; }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  /* Sous 1 024 px : tiroir par-dessus le contenu, voile sombre ; la zone principale ne défile
+     pas derrière. */
   @media (max-width: 1023px) {
-    .side { position: fixed; left: 0; top: 0; bottom: 0; z-index: 90; transform: translateX(-105%); transition: transform 0.2s, visibility 0.2s; box-shadow: var(--sh-3); visibility: hidden; }
-    .app.nav-open .side { transform: none; visibility: visible; }
+    .app { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "main"; }
+    /* Visible tout de suite à l'ouverture (le focus y entre), masqué après le glissement à la
+       fermeture. */
+    .side { position: fixed; left: 0; top: 0; bottom: 0; z-index: 90; height: auto; align-self: stretch; width: min(300px, 85vw); transform: translateX(-105%); transition: transform 0.2s, visibility 0s linear 0.2s; box-shadow: var(--sh-3); visibility: hidden; }
+    .app.nav-open .side { transform: none; visibility: visible; transition: transform 0.2s; }
     .app.nav-open::after { content: ""; position: fixed; inset: 0; background: var(--scrim); z-index: 80; }
-    .topbar .burger { display: inline-flex; }
+    html:has(.app.nav-open) { overflow: hidden; }
   }
+  @media (max-width: 640px) { .brand span { display: none; } .topbar { gap: 8px; } }
 
   /* ---------- Cartes ---------- */
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--sh-1); }
@@ -445,8 +489,9 @@
   .skeleton .sk-block { height: 320px; }
 
   /* ---------- Étapes ---------- */
-  .stepper { position: relative; display: flex; align-items: flex-start; overflow-x: auto; padding-bottom: 4px; }
-  .step { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 150px; text-align: center; flex: none; }
+  /* Jamais de défilement horizontal : les étapes se resserrent, puis passent en colonne. */
+  .stepper { position: relative; display: flex; align-items: flex-start; padding-bottom: 4px; }
+  .step { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 0 1 150px; min-width: 0; text-align: center; }
   .step b { font: 500 13px/16px var(--font-sans); }
   .step .step-meta { font-size: 12px; line-height: 16px; color: var(--ink-3); }
   .step-num { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font: 600 13px/16px var(--font-sans); border: 1px solid var(--line-strong); color: var(--ink-3); background: var(--surface); }
@@ -454,6 +499,12 @@
   .step.is-current .step-num { border: 2px solid var(--brand); color: var(--sel-ink); box-shadow: 0 0 0 4px var(--ring); }
   .step-line { flex: 1; height: 2px; background: var(--track); margin-top: 13px; min-width: 20px; }
   .step-line.is-done { background: var(--brand); }
+  @media (max-width: 640px) {
+    .stepper { flex-direction: column; gap: 10px; }
+    .step-line { display: none; }
+    .step { flex: none; flex-direction: row; gap: 10px; text-align: left; width: 100%; }
+    .step .step-meta { margin-left: auto; }
+  }
 
   /* ---------- Menus déroulants ---------- */
   .dropdown { position: relative; display: inline-block; }
@@ -546,7 +597,7 @@
 @layer components {
   /* ---------- Mises en page de contenu (prototype : .split, .dl, .list, .cards) ---------- */
   .split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
-  .sticky-aside { position: sticky; top: 80px; }
+  .sticky-aside { position: sticky; top: calc(var(--top-h) + 24px); }
   .company-logo { max-height: 48px; max-width: 160px; object-fit: contain; }
   .stack { display: flex; flex-direction: column; gap: 16px; }
   .dl { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px 16px; }
@@ -635,6 +686,26 @@
   .suggestions a { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 8px; color: var(--ink); text-decoration: none; }
   .suggestions a:hover, .suggestions a:focus-visible { background: var(--subtle); }
   .suggestions:empty { display: none; }
+  /* Blocs répétables et comptes rendus (prototype : .ivrow, .pctin). */
+  .repeat-row { display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+  .repeat-row[hidden] { display: none; }
+  .repeat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .repeat-title { font: 600 15px/24px var(--font-display); color: var(--title); }
+  .pct-input { display: flex; align-items: center; gap: 8px; }
+  .pct-input .input { max-width: 140px; }
+  .pct-input span { color: var(--ink-2); font-weight: 500; }
+  .item-read { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--subtle); }
+  .item-read-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  /* Fiche de suivi (prototype : .tl). */
+  .timeline > li { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+  .timeline > li:first-child { border-top: 0; padding-top: 0; }
+  @media (max-width: 640px) { .timeline > li { grid-template-columns: 1fr; gap: 6px; } }
+  .mini-steps { display: inline-flex; gap: 4px; }
+  .mini-steps span { width: 22px; height: 6px; border-radius: 3px; background: var(--track); }
+  .mini-steps span.is-done { background: var(--brand); }
+  .mini-steps span.is-current { background: var(--focus); }
+  .rating-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .rating-row .rating-text { min-width: 200px; flex: 1; }
   @media (max-width: 1100px) { .split { grid-template-columns: 1fr; } .sticky-aside { position: static; } }
   @media (max-width: 640px) { .dl { grid-template-columns: 1fr; gap: 2px 0; } .dl dt { margin-top: 8px; } }
 }

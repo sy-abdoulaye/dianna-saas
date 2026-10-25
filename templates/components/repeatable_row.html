@@ -1,0 +1,21 @@
+{% load i18n ui %}
+{% comment %}
+  Un bloc répétable : titre numéroté, « Retirer », champs cachés (dont la suppression) et les
+  champs du bloc (block.fields_template). Renvoyé seul par « Ajouter », avec le compteur du
+  formset mis à jour hors de la zone (hx-swap-oob).
+{% endcomment %}
+<div class="repeat-row" data-repeat-row>
+  <div class="repeat-head">
+    <b class="repeat-title" data-repeat-number>{{ block.row_label }} {{ number }}</b>
+    {% button _("Retirer") variant="ghost" size="sm" icon="trash" data_repeat_remove=True css="text-err-ink" %}
+  </div>
+  {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+  {% include block.fields_template %}
+</div>
+{% if new %}
+  <input type="hidden"
+         name="{{ block.prefix }}-TOTAL_FORMS"
+         value="{{ total }}"
+         id="id_{{ block.prefix }}-TOTAL_FORMS"
+         hx-swap-oob="true">
+{% endif %}

@@ -800,3 +800,14 @@ def test_duplicate_email_reaching_the_service_is_a_message_not_a_500(
     )
     assert response.status_code == 422
     assert "Cette adresse est déjà utilisée par une autre fiche de l" in response.content.decode()
+
+
+def test_the_follow_up_file_shortcut_follows_the_career_scope(client_for, company_a):
+    """Lot 7 (L2-04) : le raccourci n'apparaît que pour qui peut ouvrir la fiche de suivi."""
+    url = f"/annuaire/{company_a.employee.public_id}/"
+    shortcut = f'href="/carriere/fiche/{company_a.employee.public_id}/"'
+    assert shortcut in client_for(company_a.manager).get(url).content.decode()
+    assert shortcut in client_for(company_a.employee).get(url).content.decode()
+    colleague = EmployeeFactory(company=company_a.company)
+    other = client_for(colleague).get(url).content.decode()
+    assert "Fiche de suivi" not in other

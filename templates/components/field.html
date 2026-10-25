@@ -2,6 +2,8 @@
 {% comment %}
   Champ de formulaire : libellé lié, étoile si obligatoire, aide, erreur liée (aria-describedby).
   {% include "components/field.html" with field=form.email full=True %}
+  required_mark=True : étoile sur un champ facultatif au brouillon mais obligatoire à l'envoi.
+  suffix : texte après le champ (« % »).
 {% endcomment %}
 {% if field.widget_type == "checkbox" %}
   <div class="field{% if full %} full{% endif %}">
@@ -13,9 +15,9 @@
   <div class="field{% if full %} full{% endif %}">
     <label class="label" for="{{ field.id_for_label }}">
       {{ field.label }}
-      {% if field.field.required %}<span class="req" aria-hidden="true">*</span>{% endif %}
+      {% if field.field.required or required_mark %}<span class="req" aria-hidden="true">*</span>{% endif %}
     </label>
-    {% control field %}
+    {% if suffix %}<span class="pct-input">{% control field %}<span aria-hidden="true">{{ suffix }}</span></span>{% else %}{% control field %}{% endif %}
     {% if field.help_text %}<span class="hint" id="{{ field.auto_id }}-hint">{{ field.help_text }}</span>{% endif %}
     {% if field.errors %}<p class="field-error" id="{{ field.auto_id }}-error">{% icon "alert" 16 %}{{ field.errors|first }}</p>{% endif %}
   </div>

@@ -1,0 +1,163 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Carrière et évaluations" %} · Dianna{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Carrière et évaluations" %}</h1>
+      {% if campaign %}
+        <p class="sub">{% blocktranslate with label=campaign.label start=campaign.start|fr_date:"day_month" end=campaign.end|fr_date:"day_month" %}{{ label }} · du {{ start }} au {{ end }}{% endblocktranslate %}</p>
+      {% else %}
+        <p class="sub">{% translate "Entretiens individuels, entretiens de parcours professionnel et fiches de suivi" %}</p>
+      {% endif %}
+    </div>
+    <div class="actions">
+      {% if can_manage_campaigns %}
+        {% url "careers:campaign" as campaign_url %}
+        {% if campaign %}
+          {% translate "Modifier la campagne" as campaign_label %}
+        {% else %}
+          {% translate "Ouvrir une campagne" as campaign_label %}
+        {% endif %}
+        {% button campaign_label icon="cal" hx_get=campaign_url hx_target="#modal-root" %}
+      {% endif %}
+      {% if own_file %}
+        {% url "careers:file" current_employee.public_id as my_file_url %}
+        {% button _("Ma fiche de suivi") href=my_file_url %}
+      {% endif %}
+      {% if can_launch %}
+        {% url "careers:launch" as launch_url %}
+        {% button _("Lancer un entretien") variant="primary" icon="plus" hx_get=launch_url hx_target="#modal-root" %}
+      {% endif %}
+    </div>
+  </div>
+  <div class="grid gap-4 sm:grid-cols-3">
+    {% if campaign %}
+      {% translate "Campagne terminée" as l1 %}
+      {% blocktranslate asvar v1 with progress=campaign_progress %}{{ progress }} %{% endblocktranslate %}
+      {% include "components/kpi.html" with label=l1 value=v1 progress=campaign_progress %}
+    {% endif %}
+    {% translate "À faire par vous" as l2 %}
+    {% if todo_count %}
+      {% translate "Ouvrez un entretien pour le compléter" as n2 %}
+    {% else %}
+      {% translate "Rien en attente" as n2 %}
+    {% endif %}
+    {% include "components/kpi.html" with label=l2 value=todo_count note=n2 %}
+    {% translate "Entretiens planifiés" as l3 %}{% translate "À venir" as n3 %}
+    {% include "components/kpi.html" with label=l3 value=planned note=n3 %}
+  </div>
+  {% if tabs|length > 1 %}
+    {% translate "Carrière et évaluations" as tabs_label %}
+    {% include "components/tabs.html" with label=tabs_label %}
+  {% endif %}
+  <div class="card">
+    {% include "components/filters.html" with form=filter_form action=list_url %}
+    <div id="results"
+         aria-live="polite"
+         hx-get="{{ request.get_full_path }}"
+         hx-trigger="careersChanged from:body"
+         hx-target="this"
+         hx-disinherit="*">
+      {% partialdef results inline %}
+        {% if tab == "fiches" %}
+          {% if page_obj.paginator.count %}
+            <div class="table-wrap">
+              <table class="table">
+                <caption class="sr-only">{% translate "Fiches de suivi" %}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{% translate "Collaborateur" %}</th>
+                    <th scope="col">{% translate "Dernière note" %}</th>
+                    <th scope="col">{% translate "Notes" %}</th>
+                    <th scope="col" class="end"><span class="sr-only">{% translate "Action" %}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for person in page_obj.object_list %}
+                    <tr>
+                      <td>
+                        <div class="who">
+                          {% include "components/avatar.html" with person=person %}
+                          <span class="who-text"><b>{{ person.full_name }}</b><span class="who-sub">{{ person.job_title }}</span></span>
+                        </div>
+                      </td>
+                      <td class="text-ink-2">{% if person.last_note %}{{ person.last_note.date|fr_date:"long" }}{% else %}—{% endif %}</td>
+                      <td>{{ person.note_count }}</td>
+                      <td class="end">
+                        {% url "careers:file" person.public_id as file_url %}
+                        {% button _("Ouvrir la fiche") size="sm" href=file_url %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% pagination page_obj "#results" %}
+          {% else %}
+            {% translate "Aucun résultat" as t %}{% translate "Aucun collaborateur ne correspond à cette recherche." as x %}
+            {% translate "Réinitialiser" as a %}
+            {% blocktranslate asvar reset_url %}{{ list_url }}?onglet=fiches{% endblocktranslate %}
+            {% include "components/empty_state.html" with icon="search" title=t text=x action_label=a action_url=reset_url action_variant="secondary" %}
+          {% endif %}
+        {% elif page_obj.paginator.count %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{% translate "Entretiens" %}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{% translate "Collaborateur" %}</th>
+                  <th scope="col">{% translate "Type" %}</th>
+                  <th scope="col">{% translate "Avancement" %}</th>
+                  <th scope="col">{% translate "Statut" %}</th>
+                  <th scope="col">{% translate "Entretien" %}</th>
+                  <th scope="col" class="end"><span class="sr-only">{% translate "Action" %}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in page_obj.object_list %}
+                  {% url "careers:detail" row.public_id as detail_url %}
+                  <tr>
+                    <td>
+                      <div class="who">
+                        {% include "components/avatar.html" with person=row.employee %}
+                        <span class="who-text"><b>{{ row.employee.full_name }}</b><span class="who-sub">{{ row.employee.job_title }}</span></span>
+                      </div>
+                    </td>
+                    <td>{{ row.get_kind_display }}{% if row.reason %}<div class="meta">{{ row.get_reason_display }}</div>{% endif %}</td>
+                    <td>{% include "careers/partials/mini_steps.html" with review=row %}</td>
+                    <td>
+                      {% if row.is_closed %}
+                        {% status_badge "review" "closed" %}
+                      {% elif row.todo %}
+                        {% status_badge "review" "todo_by_me" %}
+                      {% else %}
+                        {% status_badge "review" "in_progress" row.step_label %}
+                      {% endif %}
+                    </td>
+                    <td class="text-ink-2">{% if row.meeting_date %}{{ row.meeting_date|fr_date:"short" }}{% else %}—{% endif %}</td>
+                    <td class="end">
+                      {% if row.todo %}
+                        {% button _("Compléter") variant="primary" size="sm" href=detail_url %}
+                      {% else %}
+                        {% button _("Ouvrir") size="sm" href=detail_url %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% pagination page_obj "#results" %}
+        {% elif has_reviews %}
+          {% translate "Aucun entretien ne correspond" as t %}{% translate "Modifiez les filtres pour élargir la liste." as x %}
+          {% translate "Réinitialiser les filtres" as a %}
+          {% include "components/empty_state.html" with icon="search" title=t text=x action_label=a action_url=list_url action_variant="secondary" %}
+        {% else %}
+          {% translate "Aucun entretien pour le moment" as t %}{% translate "Les entretiens de la campagne apparaîtront ici dès que les RH ou votre manager en lanceront un." as x %}
+          {% include "components/empty_state.html" with icon="up" title=t text=x %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}

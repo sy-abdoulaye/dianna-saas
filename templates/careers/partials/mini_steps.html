@@ -1,0 +1,8 @@
+{% load i18n %}
+<span class="mini-steps"
+      role="img"
+      aria-label="{% blocktranslate with n=review.step_number total=review.steps|length %}Étape {{ n }} sur {{ total }}{% endblocktranslate %}">
+  {% for step in review.steps %}
+    <span class="{% if review.is_closed or forloop.counter0 < review.step_index %}is-done{% elif forloop.counter0 == review.step_index %}is-current{% endif %}"></span>
+  {% endfor %}
+</span>

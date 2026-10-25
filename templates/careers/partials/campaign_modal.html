@@ -1,0 +1,35 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}
+  {% icon "cal" %}
+{% endblock %}
+{% block modal_title %}
+  {% if campaign %}
+    {% translate "Modifier la campagne" %}
+  {% else %}
+    {% translate "Ouvrir une campagne" %}
+  {% endif %}
+{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}"
+          hx-target="this"
+          hx-swap="outerHTML"
+          hx-disabled-elt="find button[type=submit]"
+          novalidate>
+      <div class="modal-body">
+        <p class="meta">{% translate "Les entretiens lancés pendant la campagne y sont rattachés." %}</p>
+        {% include "components/form_errors.html" %}
+        {% include "components/field.html" with field=form.label %}
+        <div class="form-grid">
+          {% include "components/field.html" with field=form.start %}
+          {% include "components/field.html" with field=form.end %}
+        </div>
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Enregistrer") variant="primary" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% load i18n ui %}
+<div class="item-read">
+  <div class="item-read-head">
+    <b>{{ number }}. {{ item.description|default:_("Sans descriptif") }}</b>
+    <span class="flex flex-none flex-wrap items-center gap-2">
+      {% if item.late %}{% status_badge "review" "overdue" %}{% endif %}
+      <span class="pill">{% icon "cal" 16 %}{% if item.due_date %}{{ item.due_date|fr_date:"short_year" }}{% else %}{% translate "Sans délai" %}{% endif %}</span>
+    </span>
+  </div>
+  <div class="flex items-center gap-3">
+    <progress class="progress flex-1" max="100" value="{{ item.completion|default:0 }}" aria-label="{% translate 'Réalisation' %}">{{ item.completion|default:0 }} %</progress>
+    <span class="meta">{% if next %}{% blocktranslate with n=item.completion|default:0 %}{{ n }} % visés{% endblocktranslate %}{% else %}{% blocktranslate with n=item.completion|default:0 %}{{ n }} % réalisés{% endblocktranslate %}{% endif %}</span>
+  </div>
+  {% if item.difficulties or item.solutions or item.comments %}
+    <dl class="dl">
+      {% if item.difficulties %}<dt>{% translate "Difficultés" %}</dt><dd>{{ item.difficulties|plain_text }}</dd>{% endif %}
+      {% if item.solutions %}<dt>{% translate "Solutions proposées" %}</dt><dd>{{ item.solutions|plain_text }}</dd>{% endif %}
+      {% if item.comments %}<dt>{% translate "Commentaires" %}</dt><dd>{{ item.comments|plain_text }}</dd>{% endif %}
+    </dl>
+  {% endif %}
+</div>

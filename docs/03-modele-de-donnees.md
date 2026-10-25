@@ -15,6 +15,8 @@ Conventions : tous les modèles marqués **(T)** héritent de `TenantModel` (cha
 | telework_max_per_week | small int, défaut 2 | M-01, 0 à 5 |
 | telework_auto_approve | bool, défaut False | M-02 |
 | summer_leave_hr_step | bool, défaut True | M-03 : validation finale RH des congés d'été |
+| career_review_interval_years | entier de 1 à 4, défaut 4 | Périodicité de l'entretien de parcours professionnel (M-08, L7-02) |
+| career_summary_interval_years | entier de 1 à 8, défaut 8 | Périodicité de l'état des lieux récapitulatif (M-08, L7-02) |
 | timezone | char, défaut Europe/Paris | |
 
 **CompanyModule** (T) : `module` (choix : planning, telework, summer_leave, on_call, transport, equipment, announcements, surveys, careers, interventions), `enabled` (bool). Unique (company, module). Le socle, l'annuaire (L1-05) et l'administration ne sont pas désactivables.
@@ -106,27 +108,31 @@ Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme
 
 ## Carrière (`careers`)
 
-**ReviewCampaign** (T) : `label` (« Campagne 2026 »), `start`, `end`.
-**Competency** (T) : `name`, `description`, `order` (paramétrable ; 4 par défaut : relation client, autonomie, travail en équipe, maîtrise des outils).
+**ReviewCampaign** (T) : `label` (« Campagne 2026 »), `start`, `end` (fin ≥ début ; pas de chevauchement, contrôlé par le service).
+**Competency** (T) : `name` (unique sans tenir compte de la casse), `description`, `order`, `active` (paramétrable ; 4 par défaut : relation client, autonomie, travail en équipe, maîtrise des outils).
 **Review** (T)
 
 | Champ | Notes |
 |---|---|
-| campaign (nul), employee, manager | manager copié au lancement |
-| kind | individual, professional |
+| public_id | UUID des URL |
+| campaign (nul), employee, manager, launched_by | manager copié au lancement ; propriétaire au sens des permissions : `employee` |
+| kind | individual, professional (« Entretien de parcours professionnel », loi n° 2025-989) |
+| reason | entretien de parcours seulement : periodic, return, mid_career, end_career, summary (vide pour un entretien individuel, contrainte) |
 | step | self, manager, meeting, signature, closed. Ordre : individuel = self → manager → meeting → signature ; professionnel = self → meeting → manager → signature |
-| meeting_date, meeting_place | |
+| meeting_date, meeting_place, held_at | |
 | self_summary, self_project | partie salarié |
 | manager_summary, strengths, improvements, report | partie manager |
 | employee_comment | commentaire du salarié avant signature |
-| six_year_training, six_year_certification, six_year_progression | bool, nul (entretien professionnel : bilan à 6 ans) |
-| six_year_due | date |
-| employee_signed_at, manager_signed_at, signed_by_hr | signatures |
+| summary_training, summary_certification, summary_progression | bool, nul (état des lieux à 8 ans, motif « summary ») |
+| next_review_due, next_summary_due | dates suggérées et modifiables (L7-02) |
+| employee_signed_at, manager_signed_at, manager_signed_by, signed_by_hr, closed_at | signatures (M-09) |
 
-**ReviewRating** (T) : `review`, `competency`, `score` (1 à 4).
-**ReviewObjective** (T) : `review`, `title`, `due_date`, `result` (nul).
-**ReviewTraining** (T) : `review`, `label`.
-**FollowUpNote** (T) : `employee`, `author`, `date`, `kind` (follow_up, wish, training, review), `text`, `is_private` (visible par l'auteur seul).
+Un seul entretien en cours (étape différente de `closed`) par personne et par type (index unique partiel). Textes : 5 000 caractères au plus.
+
+**ReviewRating** (T) : `review`, `competency`, `score` (1 à 4) ; unique (review, competency).
+**ReviewObjective** (T) : `review`, `order`, `title`, `due_date`, `result` (vide).
+**ReviewTraining** (T) : `review`, `order`, `label`.
+**FollowUpNote** (T) : `employee` (propriétaire), `author`, `date`, `kind` (follow_up, wish, training, review), `text`, `is_private` (visible par l'auteur seul), `review` (nul : note de clôture).
 
 ## Suivi d'intervention (`interventions`)
 
@@ -144,8 +150,12 @@ Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme
 | extension_until | date, > planned_end |
 | follow_up | texte : points de suivi, risques, besoins |
 | reviewer_note | remarque du manager |
+| submitted_at | date d'envoi |
+| version | augmente à chaque enregistrement ; un enregistrement depuis une version dépassée est refusé (L7-10) |
 
 Unique (company, employee, mission, period).
 
 **ReportItem** (T) : `report`, `section` (done, next), `order`, `description`, `difficulties`, `solutions` (section done seulement), `completion` (0 à 100), `due_date`, `comments`.
-**ReportEvent** (T) : `report`, `actor`, `action`, `comment`, `created_at`.
+**ReportEvent** (T) : `report`, `actor`, `action` (submitted, approved, changes_requested, reverted), `comment`, `created_at`.
+
+**Mission** : nom unique sans tenir compte de la casse. Contraintes du compte rendu : `period` au 1er du mois, `extension_until` > `planned_end`, `completion` de 0 à 100.

@@ -1,0 +1,85 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Suivi d'intervention" %} · Dianna{% endblock %}
+{% block content %}
+  {% url "interventions:new" as new_url %}
+  <div class="page-head">
+    <div>
+      <h1 class="h1">{% translate "Suivi d'intervention" %}</h1>
+      <p class="sub">{% translate "Comptes rendus par période : travaux réalisés, travaux prévus, visibilité" %}</p>
+    </div>
+    <div class="actions">{% button _("Nouveau compte rendu") variant="primary" icon="plus" href=new_url %}</div>
+  </div>
+  {% if tabs|length > 1 %}{% translate "Suivi d'intervention" as tabs_label %}{% include "components/tabs.html" with label=tabs_label %}{% endif %}
+  <div class="card">
+    {% include "components/filters.html" with form=filter_form action=list_url %}
+    <div id="results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="reportsChanged from:body" hx-target="this" hx-disinherit="*">
+      {% partialdef results inline %}
+        {% if page_obj.paginator.count %}
+          <div class="table-wrap">
+            <table class="table">
+              <caption class="sr-only">{% translate "Comptes rendus d'intervention" %}</caption>
+              <thead>
+                <tr>
+                  {% if show_who %}<th scope="col">{% translate "Collaborateur" %}</th>{% endif %}
+                  <th scope="col">{% translate "Intervention" %}</th>
+                  <th scope="col">{% translate "Période" %}</th>
+                  <th scope="col">{% translate "Avancement" %}</th>
+                  <th scope="col">{% translate "Visibilité" %}</th>
+                  <th scope="col">{% translate "Statut" %}</th>
+                  <th scope="col" class="end"><span class="sr-only">{% translate "Action" %}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in page_obj.object_list %}
+                  {% url "interventions:detail" row.public_id as detail_url %}
+                  <tr>
+                    {% if show_who %}
+                      <td>
+                        <div class="who">
+                          {% include "components/avatar.html" with person=row.employee %}
+                          <span class="who-text"><b>{{ row.employee.full_name }}</b><span class="who-sub">{{ row.employee.job_title }}</span></span>
+                        </div>
+                      </td>
+                    {% endif %}
+                    <td class="min-w-56"><a class="link" href="{{ detail_url }}">{{ row.mission.name }}</a></td>
+                    <td>{{ row.period|fr_date:"month"|capfirst }}</td>
+                    <td class="min-w-36">
+                      <div class="meta">{{ row.percent }} %</div>
+                      <progress class="progress" max="100" value="{{ row.percent }}" aria-label="{% translate 'Avancement' %}">{{ row.percent }} %</progress>
+                    </td>
+                    <td>{% if row.visibility %}{% status_badge "visibility" row.visibility %}{% else %}<span class="text-ink-3">—</span>{% endif %}</td>
+                    <td>{% if row.can_decide %}{% status_badge "report" row.status _("À valider") %}{% else %}{% status_badge "report" row.status %}{% endif %}</td>
+                    <td class="end">
+                      {% if row.editable %}
+                        {% url "interventions:edit" row.public_id as edit_url %}
+                        {% button _("Compléter") variant="primary" size="sm" href=edit_url %}
+                      {% elif row.can_decide %}
+                        {% button _("Valider") variant="primary" size="sm" href=detail_url %}
+                      {% else %}
+                        {% button _("Ouvrir") size="sm" href=detail_url %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% pagination page_obj "#results" %}
+        {% elif tab == "a-valider" %}
+          {% translate "Rien à valider" as t %}{% translate "Aucun compte rendu de votre équipe n'attend votre validation." as x %}
+          {% include "components/empty_state.html" with icon="check" title=t text=x %}
+        {% elif filtered %}
+          {% translate "Aucun compte rendu ne correspond" as t %}{% translate "Modifiez la recherche ou les filtres." as x %}
+          {% translate "Réinitialiser les filtres" as a %}
+          {% blocktranslate asvar reset_url %}{{ list_url }}?onglet={{ tab }}{% endblocktranslate %}
+          {% include "components/empty_state.html" with icon="search" title=t text=x action_label=a action_url=reset_url action_variant="secondary" %}
+        {% else %}
+          {% translate "Aucun compte rendu" as t %}{% translate "Rédigez votre premier compte rendu : travaux réalisés, travaux prévus et visibilité de l'intervention." as x %}
+          {% translate "Nouveau compte rendu" as a %}
+          {% include "components/empty_state.html" with icon="tool" title=t text=x action_label=a action_url=new_url %}
+        {% endif %}
+      {% endpartialdef %}
+    </div>
+  </div>
+{% endblock %}

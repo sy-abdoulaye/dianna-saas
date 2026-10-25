@@ -88,6 +88,7 @@ Exports RH des demandes (`requests.export`, L4-09) : récapitulatif mensuel du t
 | Remplir l'évaluation, planifier, marquer réalisé | Non | Équipe | Oui (remplaçant) | Oui (remplaçant) |
 | Signer | Soi (salarié) | Équipe (manager) | Oui, à la place du manager absent | Comme RH |
 | Ajouter une note de suivi | « Souhait » sur soi | Équipe (peut être privée) | Oui | Oui |
+| Ouvrir ou modifier la campagne d'entretiens (`careers.manage_campaigns`) | Non | Non | Oui | Oui |
 
 ## Questionnaires
 
@@ -121,3 +122,4 @@ La gestion des compétences d'entretien (lot 7) fait partie de l'administration.
 | Paramètres de l'entreprise, services et sites, modules, profils, journal | Non | Non | Non | Oui |
 | Fermetures (onglet « Fermetures ») : consulter | Non | Non | Oui (seul onglet visible) | Oui |
 | Fermetures : ajouter, supprimer | Non | Non | Non | Oui |
+| Compétences (onglet « Compétences ») : ajouter, modifier, réordonner, désactiver | Non | Non | Non | Oui |

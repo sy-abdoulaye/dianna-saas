@@ -1,0 +1,75 @@
+{% load i18n ui %}
+{% comment %}Parties déjà remplies d'un entretien, en lecture (page de l'entretien).{% endcomment %}
+{% if review.self_summary %}
+  <section class="card card-body stack" aria-labelledby="h-self">
+    <h2 class="h2" id="h-self">
+      {% if review.kind == "individual" %}
+        {% translate "Auto-évaluation" %}
+      {% else %}
+        {% translate "Préparation du salarié" %}
+      {% endif %}
+    </h2>
+    <div>
+      <p class="meta">{% blocktranslate with name=review.employee.first_name %}Réponse de {{ name }}{% endblocktranslate %}</p>
+      <div class="prose-text">{{ review.self_summary|plain_text }}</div>
+    </div>
+    {% if review.self_project %}
+      <div>
+        <p class="meta">{% translate "Projet professionnel et souhaits d'évolution" %}</p>
+        <div class="prose-text">{{ review.self_project|plain_text }}</div>
+      </div>
+    {% endif %}
+  </section>
+{% endif %}
+{% if review.manager_summary %}
+  <section class="card card-body stack" aria-labelledby="h-evaluation">
+    <h2 class="h2" id="h-evaluation">{% translate "Évaluation du manager" %}</h2>
+    <div class="prose-text">{{ review.manager_summary|plain_text }}</div>
+    <dl class="dl">
+      {% for rating in ratings %}
+        <dt>{{ rating.competency.name }}</dt>
+        <dd>{% blocktranslate with score=rating.score %}{{ score }} sur 4{% endblocktranslate %}</dd>
+      {% endfor %}
+      <dt>{% translate "Points forts" %}</dt><dd>{{ review.strengths|plain_text }}</dd>
+      <dt>{% translate "Axes de progrès" %}</dt><dd>{{ review.improvements|plain_text }}</dd>
+    </dl>
+    {% if review.objectives.all %}
+      <h3 class="h3">{% translate "Objectifs de l'année suivante" %}</h3>
+      <ul class="rows">
+        {% for objective in review.objectives.all %}
+          <li><span>{{ objective.title }}</span><span class="meta">{{ objective.due_date|fr_date:"short_year" }}</span></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+{% endif %}
+{% if review.report %}
+  <section class="card card-body stack" aria-labelledby="h-report">
+    <h2 class="h2" id="h-report">{% translate "Compte rendu" %}</h2>
+    <div class="prose-text">{{ review.report|plain_text }}</div>
+    {% if review.trainings.all %}
+      <h3 class="h3">{% translate "Formations retenues" %}</h3>
+      <ul class="rows">{% for training in review.trainings.all %}<li>{{ training.label }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if review.is_summary %}
+      <h3 class="h3">{% translate "État des lieux à 8 ans" %}</h3>
+      <dl class="dl">
+        {% include "careers/partials/criterion.html" with label=_("Au moins une action de formation") value=review.summary_training %}
+        {% include "careers/partials/criterion.html" with label=_("Une certification") value=review.summary_certification %}
+        {% include "careers/partials/criterion.html" with label=_("Une progression salariale ou professionnelle") value=review.summary_progression %}
+      </dl>
+    {% endif %}
+    {% if review.next_review_due or review.next_summary_due %}
+      <dl class="dl">
+        {% if review.next_review_due %}<dt>{% translate "Prochain entretien de parcours" %}</dt><dd>{% blocktranslate with day=review.next_review_due|fr_date:"long" %}avant le {{ day }}{% endblocktranslate %}</dd>{% endif %}
+        {% if review.next_summary_due %}<dt>{% translate "Prochain état des lieux" %}</dt><dd>{% blocktranslate with day=review.next_summary_due|fr_date:"long" %}avant le {{ day }}{% endblocktranslate %}</dd>{% endif %}
+      </dl>
+    {% endif %}
+  </section>
+{% endif %}
+{% if review.employee_comment %}
+  <section class="card card-body stack" aria-labelledby="h-comment">
+    <h2 class="h2" id="h-comment">{% translate "Commentaire du salarié" %}</h2>
+    <div class="prose-text">{{ review.employee_comment|plain_text }}</div>
+  </section>
+{% endif %}

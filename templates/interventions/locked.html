@@ -1,0 +1,10 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Compte rendu" %} · Dianna{% endblock %}
+{% block content %}
+  {% url "interventions:detail" report.public_id as detail_url %}
+  {% translate "Ce compte rendu a été envoyé et ne peut plus être modifié." as t %}
+  {% translate "Il redeviendra modifiable si un complément vous est demandé." as x %}
+  {% include "components/banner.html" with kind="info" title=t text=x %}
+  <div>{% button _("Le consulter") href=detail_url %}</div>
+{% endblock %}

@@ -1,9 +1,32 @@
 {% extends "base.html" %}
 {% load i18n ui %}
 {% block body %}
+  {% comment %}
+    Coque (docs/05-design-system.md, mise en page) : le document défile ; en-tête collant en
+    haut, menu latéral collant dessous sur toute la hauteur, avec son propre défilement sans
+    barre visible quand ses entrées dépassent.
+  {% endcomment %}
   <div class="app" data-app>
+    <header class="topbar">
+      {# Hamburger et logo : menu déplié, ils ont la largeur du menu et la recherche commence à son bord droit. #}
+      <div class="topbar-start">
+        <button class="btn btn-ghost btn-icon burger"
+                type="button"
+                aria-label="{% translate 'Ouvrir le menu' %}"
+                aria-controls="side"
+                aria-expanded="false"
+                data-nav-toggle
+                data-label-open="{% translate 'Ouvrir le menu' %}"
+                data-label-close="{% translate 'Fermer le menu' %}">
+          {% icon "menu" %}
+        </button>
+        <a class="brand" href="/" aria-label="{% translate 'Dianna, accueil' %}">{% brand_mark 28 %}<span>Dianna</span></a>
+      </div>
+      {% block topbar %}
+        {% include "layouts/partials/topbar.html" %}
+      {% endblock %}
+    </header>
     <aside class="side" id="side" aria-label="{% translate 'Menu principal' %}">
-      <a class="brand" href="/" aria-label="{% translate 'Dianna, accueil' %}">{% brand_mark 28 %}<span>Dianna</span></a>
       <nav class="nav" aria-label="{% translate 'Navigation principale' %}">
         {% for group in nav_groups %}
           {% if group.label %}<div class="nav-group" id="nav-group-{{ forloop.counter }}">{{ group.label }}</div>{% endif %}
@@ -11,8 +34,8 @@
             {% for item in group.items %}
               <li>
                 {% if item.url %}
-                  <a class="nav-item" href="{{ item.url }}" {% if item.active %}aria-current="page"{% endif %}>
-                    {% icon item.icon %}<span>{{ item.label }}</span>
+                  <a class="nav-item" href="{{ item.url }}" data-label="{{ item.label }}" {% if item.active %}aria-current="page"{% endif %}>
+                    {% icon item.icon %}<span class="nav-label">{{ item.label }}</span>
                     {% if item.count %}
                       <span class="count" aria-hidden="true">{{ item.count }}</span>
                       <span class="sr-only">, {% blocktranslate count n=item.count %}{{ n }} à traiter{% plural %}{{ n }} à traiter{% endblocktranslate %}</span>
@@ -21,7 +44,7 @@
                 {% else %}
                   {# Entrée « Bientôt » : visible, non cliquable (L1-01). #}
                   <span class="nav-item is-soon" title="{% translate 'Disponible dans une prochaine version' %}">
-                    {% icon item.icon %}<span>{{ item.label }}</span>
+                    {% icon item.icon %}<span class="nav-label">{{ item.label }}</span>
                     <span class="soon" aria-hidden="true">{% translate "Bientôt" %}</span>
                     <span class="sr-only">, {% translate "Disponible dans une prochaine version" %}</span>
                   </span>
@@ -35,7 +58,7 @@
         {% if current_employee %}
           <div class="side-me">
             {% include "components/avatar.html" with person=current_employee photo_url=current_photo_url %}
-            <div class="min-w-0">
+            <div class="side-me-text min-w-0">
               <b>{{ current_employee.full_name }}</b>
               <span class="side-me-meta">{{ current_employee.get_role_display }}{% if current_employee.service %} · {{ current_employee.service }}{% endif %}</span>
             </div>
@@ -43,20 +66,7 @@
         {% endif %}
       {% endblock %}
     </aside>
-    <div class="main">
-      <header class="topbar">
-        <button class="btn btn-secondary btn-icon burger"
-                type="button"
-                aria-label="{% translate 'Ouvrir le menu' %}"
-                aria-controls="side"
-                aria-expanded="false"
-                data-nav-toggle>
-          {% icon "menu" %}
-        </button>
-        {% block topbar %}
-          {% include "layouts/partials/topbar.html" %}
-        {% endblock %}
-      </header>
+    <div class="main" data-main>
       {# Rechargement de la page après une action (after_action, R1-02 : PAGE_CHANGED). #}
       <main id="content" class="page" tabindex="-1" hx-get="{{ page_url }}" hx-trigger="pageChanged from:body" hx-select="#content" hx-target="this" hx-swap="outerHTML" hx-disinherit="*">
         {% block content %}{% endblock %}

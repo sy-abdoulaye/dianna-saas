@@ -50,7 +50,10 @@ Chiffres alignés (`tabular-nums`) dans les tableaux et indicateurs.
 - Grille de 4 px. Espaces courants : 8, 12, 16, 24 px. Marge de page 24 px (16 px sur mobile).
 - Rayons : 6 (petits), 8 (boutons, champs), 12 (cartes), 16 (notifications), 20 (modales).
 - Hauteurs : boutons et champs 40 px (32 px pour les petits, 48 à 52 px dans les modales), ligne de tableau 56 px.
-- Menu latéral : 264 px, tiroir sous 1 024 px.
+- Coque (`layouts/app.html`, L7-21 à L7-23) : le document défile (position conservée au bouton Retour, barre d'adresse repliée sur mobile). En-tête collant en haut sur toute la largeur (hamburger, logo, recherche, notifications, avatar) ; dessous, le menu latéral collant sur toute la hauteur de l'écran et la zone principale, sans défilement propre. Seuls le menu (sans barre visible), les tableaux et les barres d'onglets ont leur propre défilement. Contrôle automatique : `tests/e2e/test_layout.py`.
+- Largeur du contenu : un seul réglage sur `.app` (`--page-max` 1 600 px centrée, `--page-pad` 16 px sur mobile, 24 px, puis 32 px à partir de 1 440 px). Les pages ne fixent pas leur propre largeur, sauf les formulaires de l'administration (largeur de lecture).
+- Menu latéral : 264 px de large ; hauteur : l'écran moins l'en-tête (64 px). Espacements du prototype, mesurés dans `reference/prototype-dianna.html` et identiques à toutes les hauteurs d'écran : marge intérieure 16 px en haut, 12 px sur les côtés ; entrée de 40 px de haut (12 px de marge horizontale), 2 px entre deux entrées (pas de 42 px) ; titre de groupe (DEMANDES, ACTIVITÉ…) de 38 px : 16 px au-dessus, texte de 16 px, 6 px dessous ; carte nom et profil en bas, 12 px de marge intérieure, toujours affichée (le prototype la garde et fait défiler le menu). Marge du bas : 16 px, plus les 24 px du dégradé, pour que la dernière entrée s'affiche entièrement au-dessus du bord et jamais sous le dégradé. Quand les entrées dépassent, le menu défile sans barre visible, avec un dégradé de 24 px en bas (et en haut une fois défilé) ; l'entrée courante est visible à l'ouverture de la page. Mêmes règles dans le rail replié (8 px sur les côtés) et dans le tiroir mobile. À partir de 1 024 px, le bouton ☰ le replie en **rail d'icônes** de 72 px (libellés lus par les lecteurs d'écran, infobulle au survol) ou le déplie ; état mémorisé dans le navigateur et appliqué avant l'affichage. **Écart au prototype**, qui n'a pas de rail (L7-22). Sur mobile, le menu est masqué : tiroir par-dessus le contenu avec un voile, fermé par le voile, Échap, un lien ou un changement de page ; le focus y reste et revient au bouton.
+- Recherche de l'en-tête : menu déplié, elle commence au bord droit du menu, à la marge du contenu ; menu replié, après le logo et le nom, à la même marge ; sur mobile, elle prend la largeur restante.
 
 ## Composants communs
 
@@ -60,7 +63,8 @@ Chaque composant est un template d'inclusion dans `templates/components/` (ou un
 |---|---|---|
 | Bouton | `button.html` | variantes primary, secondary, ghost, danger, icon ; taille sm ; état de chargement (spinner, désactivé) |
 | Badge de statut | `status_badge.html` | point + libellé ; correspondance statut → couleur centralisée dans `core/status.py` |
-| Champ de formulaire | `field.html` | libellé, étoile si obligatoire, aide, message d'erreur lié (`aria-describedby`), `aria-invalid` |
+| Champ de formulaire | `field.html` | libellé, étoile si obligatoire (`required_mark` : obligatoire à l'envoi seulement), aide, message d'erreur lié (`aria-describedby`), `aria-invalid`, texte après le champ (`suffix`, « % ») |
+| Blocs répétables | `repeatable.html`, `repeatable_row.html` | blocs numérotés (« Travail réalisé 2 »), « Retirer » annulable, « Ajouter » sans recharger ni vider les autres blocs (lot 7) |
 | Résumé d'erreurs | `form_errors.html` | bandeau rouge en tête de formulaire : « N informations sont à corriger » |
 | Zone de fichier | `file_drop.html` | bordure pointillée, nom du fichier choisi, état d'erreur |
 | Sélecteur segmenté | `segmented.html` | radios stylés (Liste/Cartes, Semaine/Mois, Oui/Non) |

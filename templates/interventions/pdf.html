@@ -1,0 +1,55 @@
+{% load i18n ui %}<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{% translate "Compte rendu d'intervention" %} · {{ company.name }}</title>
+  <style>:root {% templatetag openbrace %}{% for name, value in pdf_tokens.items %} --{{ name }}: {{ value }};{% endfor %} {% templatetag closebrace %}</style>
+  <link rel="stylesheet" href="{{ pdf_static }}css/pdf-document.css">
+</head>
+<body>
+  <header>
+    {% if pdf_logo %}<img class="logo" src="{{ pdf_logo }}" alt="">{% endif %}
+    <div>
+      <h1>{% translate "Compte rendu" %} · {{ report.period|fr_date:"month"|capfirst }}</h1>
+      <p>{{ report.mission.name }} · {{ report.employee.full_name }} · {{ company.name }}</p>
+    </div>
+  </header>
+  <dl>
+    <dt>{% translate "Statut" %}</dt><dd>{{ report.get_status_display }}</dd>
+    <dt>{% translate "Avancement moyen" %}</dt><dd>{{ average }} %</dd>
+    <dt>{% translate "Visibilité" %}</dt><dd>{{ report.get_visibility_display|default:"—" }}</dd>
+    <dt>{% translate "Fin prévue" %}</dt><dd>{% if report.planned_end %}{{ report.planned_end|fr_date:"long" }}{% else %}—{% endif %}</dd>
+    <dt>{% translate "Prolongation souhaitée" %}</dt><dd>{% if report.extension_wanted %}{% if report.extension_until %}{% blocktranslate with day=report.extension_until|fr_date:"long" %}Oui, jusqu'au {{ day }}{% endblocktranslate %}{% else %}{% translate "Oui" %}{% endif %}{% else %}{% translate "Non" %}{% endif %}</dd>
+  </dl>
+  <h2>{% translate "Travaux réalisés sur la période" %}</h2>
+  {% for item in done_items %}
+    <div class="item">
+      <strong>{{ forloop.counter }}. {{ item.description }}</strong>
+      <span class="meta"> · {{ item.completion|default:0 }} %{% if item.due_date %} · {% blocktranslate with day=item.due_date|fr_date:"long" %}délai : {{ day }}{% endblocktranslate %}{% endif %}{% if item.late %} · {% translate "Délai dépassé" %}{% endif %}</span>
+      {% if item.difficulties %}<p class="text"><span class="meta">{% translate "Difficultés :" %}</span> {{ item.difficulties }}</p>{% endif %}
+      {% if item.solutions %}<p class="text"><span class="meta">{% translate "Solutions proposées :" %}</span> {{ item.solutions }}</p>{% endif %}
+      {% if item.comments %}<p class="text"><span class="meta">{% translate "Commentaires :" %}</span> {{ item.comments }}</p>{% endif %}
+    </div>
+  {% empty %}
+    <p class="meta">{% translate "Aucun travail renseigné." %}</p>
+  {% endfor %}
+  <h2>{% translate "Travaux prévus pour la période suivante" %}</h2>
+  {% for item in next_items %}
+    <div class="item">
+      <strong>{{ forloop.counter }}. {{ item.description }}</strong>
+      <span class="meta"> · {% blocktranslate with n=item.completion|default:0 %}{{ n }} % visés{% endblocktranslate %}{% if item.due_date %} · {% blocktranslate with day=item.due_date|fr_date:"long" %}délai : {{ day }}{% endblocktranslate %}{% endif %}</span>
+      {% if item.comments %}<p class="text"><span class="meta">{% translate "Commentaires :" %}</span> {{ item.comments }}</p>{% endif %}
+    </div>
+  {% empty %}
+    <p class="meta">{% translate "Aucun travail prévu." %}</p>
+  {% endfor %}
+  {% if report.follow_up %}
+    <h2>{% translate "Points de suivi, risques et besoins" %}</h2>
+    <p class="text">{{ report.follow_up }}</p>
+  {% endif %}
+  {% if report.reviewer_note %}
+    <h2>{% translate "Remarque du manager" %}</h2>
+    <p class="text">{{ report.reviewer_note }}</p>
+  {% endif %}
+</body>
+</html>

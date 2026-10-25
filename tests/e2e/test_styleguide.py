@@ -145,7 +145,8 @@ def test_filters_update_results_and_url(page, styleguide_url):
 def test_mobile_drawer_and_no_horizontal_scroll(page, styleguide_url):
     page.set_viewport_size({"width": 375, "height": 812})
     open_styleguide(page, styleguide_url)
-    burger = page.get_by_role("button", name="Ouvrir le menu")
+    burger = page.locator("[data-nav-toggle]")  # son nom suit l'état : Ouvrir, Fermer le menu
+    expect(burger).to_have_attribute("aria-label", "Ouvrir le menu")
     expect(page.locator("#side")).not_to_be_in_viewport()
     burger.click()
     expect(burger).to_have_attribute("aria-expanded", "true")

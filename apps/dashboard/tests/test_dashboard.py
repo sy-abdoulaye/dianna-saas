@@ -87,3 +87,30 @@ def test_disabled_modules_appear_in_no_block(client_for, company_a):
     for absent in ("Voir le planning", "Déclarer du télétravail", "Mes dernières demandes"):
         assert absent not in content
     assert "à valider" not in content
+
+
+def test_manager_has_reviews_and_reports_to_handle(client_for, company_a):
+    """Lot 7 : l'entretien de la fixture attend l'évaluation du manager, le compte rendu sa
+    validation ; chaque ligne mène à l'écran de l'action."""
+    content = client_for(company_a.manager).get("/").content.decode()
+    assert "1 entretien à compléter" in content
+    assert 'href="/carriere/?avancement=a-faire"' in content
+    assert "1 compte rendu à valider" in content
+    assert 'href="/interventions/?onglet=a-valider"' in content
+    assert kpis(content)["Entretiens à mener"] == "1"
+
+
+def test_employee_is_reminded_of_a_report_to_complete(client_for, company_a):
+    from apps.interventions.models import InterventionReport
+
+    InterventionReport.all_companies.filter(pk=company_a.requests["report"].pk).update(
+        status="changes_requested"
+    )
+    content = client_for(company_a.employee).get("/").content.decode()
+    assert "1 compte rendu à envoyer ou compléter" in content
+    assert "Carrière" in content  # raccourci du lot 7
+
+
+def test_hr_sees_the_review_campaign_progress(client_for, company_a):
+    values = kpis(client_for(company_a.hr).get("/").content.decode())
+    assert values["Campagne d'entretiens"] == "0 %"

@@ -19,6 +19,9 @@ from tests.factories import EmployeeFactory, ServiceFactory
 
 pytestmark = pytest.mark.django_db
 
+# Réglages de l'entretien de parcours (lot 7), envoyés avec le formulaire « Entreprise ».
+CAREER = {"career_review_interval_years": "4", "career_summary_interval_years": "8"}
+
 PAGES = [
     "/administration/",
     "/administration/utilisateurs/",
@@ -58,14 +61,19 @@ def test_menu_shows_administration_to_admins_only(client_for, company_a):
 
 def test_company_settings_are_validated_saved_and_logged(client_for, company_a):
     client = client_for(company_a.admin)
-    bad = client.post("/administration/", {"name": "", "telework_max_per_week": "7"})
+    bad = client.post("/administration/", {"name": "", "telework_max_per_week": "7", **CAREER})
     content = bad.content.decode()
     assert bad.status_code == 422
     assert "Indiquez le nom de l&#x27;entreprise." in content or "Indiquez le nom" in content
     assert "Saisissez un nombre entier entre 0 et 5." in content
     ok = client.post(
         "/administration/",
-        {"name": "Exemple SAS", "telework_max_per_week": "3", "telework_auto_approve": "on"},
+        {
+            "name": "Exemple SAS",
+            "telework_max_per_week": "3",
+            "telework_auto_approve": "on",
+            **CAREER,
+        },
     )
     assert ok.status_code == 302
     company = Company.objects.get(pk=company_a.company.pk)
@@ -78,7 +86,7 @@ def test_logo_appears_on_the_login_page(client_for, company_a, anonymous_client)
     logo = SimpleUploadedFile("logo.png", image_bytes(), content_type="image/png")
     client_for(company_a.admin).post(
         "/administration/",
-        {"name": "Exemple SAS", "telework_max_per_week": "2", "logo_upload": logo},
+        {"name": "Exemple SAS", "telework_max_per_week": "2", "logo_upload": logo, **CAREER},
     )
     page = anonymous_client(company_a.company).get("/connexion/").content.decode()
     url = page.split('class="company-logo self-start" src="')[1].split('"')[0]
@@ -263,7 +271,7 @@ def test_journal_export_neutralises_formulas(client_for, company_a):
 
 def test_every_action_of_the_tab_is_logged(client_for, company_a):
     client = client_for(company_a.admin)
-    client.post("/administration/", {"name": "Exemple", "telework_max_per_week": "2"})
+    client.post("/administration/", {"name": "Exemple", "telework_max_per_week": "2", **CAREER})
     client.post("/administration/structure/sites/ajouter/", {"name": "Nantes"})
     client.post(f"/administration/modules/{Module.CAREERS}/", {"enabled": "0"})
     client.post(

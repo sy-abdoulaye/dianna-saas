@@ -58,34 +58,144 @@ document.addEventListener("change", (event) => {
   }
 });
 
-/* ---------- Tiroir de navigation (sous 1 024 px) ---------- */
+/* ---------- Menu latéral : rail (≥ 1 024 px) ou tiroir (en dessous) ---------- */
+// Le hamburger replie le menu en rail d'icônes à partir de 1 024 px (état mémorisé, appliqué
+// avant l'affichage par base.html) ; en dessous, il ouvre le menu en tiroir par-dessus le
+// contenu. aria-expanded dit si le menu complet est affiché ; le libellé suit.
+const NAV_KEY = "dianna.nav";
+const desktop = window.matchMedia("(min-width: 1024px)");
+
 function navApp() {
   return $("[data-app]");
 }
 
-function setNav(open) {
+function navCollapsed() {
+  return document.documentElement.getAttribute("data-nav") === "collapsed";
+}
+
+function syncNavToggle() {
+  const toggle = $("[data-nav-toggle]");
+  const app = navApp();
+  if (!toggle || !app) return;
+  const expanded = desktop.matches ? !navCollapsed() : app.classList.contains("nav-open");
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.setAttribute("aria-label", expanded ? toggle.dataset.labelClose : toggle.dataset.labelOpen);
+  // Infobulle des entrées du rail : leur libellé (les entrées « Bientôt » gardent la leur).
+  $$(".side a.nav-item[data-label]").forEach((item) => {
+    if (desktop.matches && navCollapsed()) item.title = item.dataset.label;
+    else item.removeAttribute("title");
+  });
+}
+
+function setCollapsed(collapsed) {
+  if (collapsed) document.documentElement.setAttribute("data-nav", "collapsed");
+  else document.documentElement.removeAttribute("data-nav");
+  syncSideFades();
+  try {
+    if (collapsed) localStorage.setItem(NAV_KEY, "collapsed");
+    else localStorage.removeItem(NAV_KEY);
+  } catch {
+    // Stockage indisponible (navigation privée) : l'état vaut pour la page seulement.
+  }
+  syncNavToggle();
+}
+
+function setDrawer(open, { restoreFocus = true } = {}) {
   const app = navApp();
   const toggle = $("[data-nav-toggle]");
   if (!app || !toggle) return;
   app.classList.toggle("nav-open", open);
-  toggle.setAttribute("aria-expanded", String(open));
+  // Le reste de la page est inerte tant que le tiroir est ouvert : le focus y reste.
+  $$(".topbar, [data-main]", app).forEach((zone) => {
+    if (open) zone.setAttribute("inert", "");
+    else zone.removeAttribute("inert");
+  });
+  syncNavToggle();
   if (open) {
-    const first = $(".side a, .side button", app);
-    if (first) first.focus();
-  } else {
-    toggle.focus();
+    revealCurrentEntry();
+    syncSideFades();
+    $(".side a, .side button", app)?.focus({ preventScroll: true });
   }
+  else if (restoreFocus) toggle.focus();
+}
+
+function drawerOpen() {
+  return Boolean(navApp()?.classList.contains("nav-open"));
 }
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-nav-toggle]")) {
-    setNav(!navApp().classList.contains("nav-open"));
+    if (desktop.matches) setCollapsed(!navCollapsed());
+    else setDrawer(!drawerOpen());
     return;
   }
+  if (!drawerOpen()) return;
   const app = navApp();
-  // Clic sur le fond assombri (pseudo-élément de .app) : ferme le tiroir.
-  if (app && app.classList.contains("nav-open") && event.target === app) setNav(false);
+  // Clic sur le voile (pseudo-élément de .app) ou sur un lien du menu : le tiroir se ferme.
+  if (event.target === app) setDrawer(false);
+  else if (event.target.closest(".side a")) setDrawer(false, { restoreFocus: false });
 });
+
+// Le menu défile sans barre visible : un dégradé en bas (et en haut une fois défilé) indique
+// qu'il reste des entrées. L'entrée de la page courante est visible à l'ouverture de la page ;
+// le focus clavier fait défiler le menu jusqu'à l'entrée (comportement du navigateur).
+function syncSideFades() {
+  const side = document.getElementById("side");
+  if (!side) return;
+  // Tolérance de 2 px : au zoom ou sur un écran haute densité, la position de fin de défilement
+  // est fractionnaire ; sans elle, le dégradé du bas resterait et masquerait la fin du menu.
+  const rest = side.scrollHeight - side.clientHeight - side.scrollTop;
+  side.classList.toggle("fade-top", side.scrollTop > 2);
+  side.classList.toggle("fade-bottom", rest > 2);
+}
+
+function revealCurrentEntry() {
+  const side = document.getElementById("side");
+  const current = side && $("[aria-current=page]", side);
+  if (!current) return;
+  const top = current.offsetTop;
+  const bottom = top + current.offsetHeight;
+  if (top < side.scrollTop || bottom > side.scrollTop + side.clientHeight) {
+    side.scrollTop = top - (side.clientHeight - current.offsetHeight) / 2;
+  }
+}
+
+document.getElementById("side")?.addEventListener("scroll", syncSideFades, { passive: true });
+window.addEventListener("resize", syncSideFades);
+revealCurrentEntry();
+syncSideFades();
+
+// Tabulation : le focus tourne dans le tiroir ouvert.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Tab" || !drawerOpen()) return;
+  const items = $$(".side a, .side button", navApp());
+  if (!items.length) return;
+  const first = items[0];
+  const last = items.at(-1);
+  const inside = event.target.closest && event.target.closest(".side");
+  if (event.shiftKey && (event.target === first || !inside)) {
+    last.focus();
+    event.preventDefault();
+  } else if (!event.shiftKey && (event.target === last || !inside)) {
+    first.focus();
+    event.preventDefault();
+  }
+});
+
+// Changement de page sans rechargement (HX-Location, Retour) : le tiroir se ferme.
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  if (drawerOpen() && event.detail.target && event.detail.target.id === "content") {
+    setDrawer(false, { restoreFocus: false });
+  }
+});
+window.addEventListener("popstate", () => {
+  if (drawerOpen()) setDrawer(false, { restoreFocus: false });
+});
+desktop.addEventListener("change", () => {
+  if (drawerOpen()) setDrawer(false, { restoreFocus: false });
+  syncNavToggle();
+});
+syncNavToggle();
 
 /* ---------- Menus déroulants ---------- */
 function closeMenus(except) {
@@ -127,8 +237,7 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
-  const app = navApp();
-  if (app && app.classList.contains("nav-open") && !$("dialog[open]")) setNav(false);
+  if (drawerOpen() && !$("dialog[open]")) setDrawer(false);
 });
 
 /* ---------- Fenêtres modales ---------- */
@@ -246,6 +355,8 @@ document.body.addEventListener("htmx:beforeRequest", (event) => {
   // son bouton pour y revenir après le rechargement de la zone.
   const elt = event.detail.elt;
   const verb = (event.detail.requestConfig && event.detail.requestConfig.verb) || "get";
+  // L'enregistrement automatique ne touche jamais au focus de la saisie en cours.
+  if (elt instanceof HTMLElement && elt.matches("[data-autosave-sender]")) return;
   if (verb !== "get" && elt instanceof HTMLElement && !elt.closest("dialog, #toasts")) {
     returnFocus(event.detail.requestConfig.triggeringEvent?.submitter || elt);
   }
@@ -315,14 +426,17 @@ export function showToast(data) {
     link.textContent = data.action_label;
     actions.append(link);
   }
-  if (data.undo_url) {
+  // « Annuler » : action du serveur (undo_url, jeton signé) ou du navigateur (onUndo, retrait
+  // d'un bloc répétable pas encore enregistré).
+  if (data.undo_url || data.onUndo) {
     const undo = document.createElement("button");
     undo.type = "button";
     undo.className = "toast-undo";
     undo.textContent = "Annuler";
     undo.addEventListener("click", () => {
       undo.disabled = true;
-      window.htmx.ajax("POST", data.undo_url, { source: document.body, swap: "none" });
+      if (data.onUndo) data.onUndo();
+      else window.htmx.ajax("POST", data.undo_url, { source: document.body, swap: "none" });
       toast.remove();
     });
     actions.append(undo);
@@ -401,6 +515,91 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
   }
   // Formulaire renvoyé avec des erreurs (422) : focus sur le premier champ à corriger.
   if (event.detail.xhr && event.detail.xhr.status === 422) focusFirstField(event.detail.elt.isConnected ? event.detail.elt : target);
+});
+
+/* ---------- Blocs répétables (apps/core/repeatable.py) ---------- */
+// « Ajouter » est servi par le serveur (un bloc vide à l'index suivant) ; « Retirer » masque le
+// bloc et coche sa suppression, sans recharger ni vider les autres blocs ; « Annuler » le
+// rétablit. Il reste toujours au moins `data-min` blocs.
+function visibleRows(container) {
+  return $$("[data-repeat-row]", container).filter((row) => !row.hidden);
+}
+
+function renumber(container) {
+  const label = container.dataset.rowLabel;
+  visibleRows(container).forEach((row, index) => {
+    const title = $("[data-repeat-number]", row);
+    if (title) title.textContent = `${label} ${index + 1}`;
+  });
+}
+
+function setRemoved(row, removed) {
+  const flag = $("input[name$='-DELETE']", row);
+  if (flag) flag.value = removed ? "on" : "";
+  row.hidden = removed;
+  row.closest("form")?.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-repeat-remove]");
+  if (!button) return;
+  const row = button.closest("[data-repeat-row]");
+  const container = button.closest("[data-repeatable]");
+  if (visibleRows(container).length <= Number(container.dataset.min || 1)) {
+    showToast({ kind: "warn", title: container.dataset.minTitle, message: container.dataset.minMessage });
+    return;
+  }
+  const text = $("textarea, input[type=text]", row)?.value.trim() || "";
+  setRemoved(row, true);
+  renumber(container);
+  $("[data-repeat-add]", container)?.focus();
+  showToast({
+    kind: "ok",
+    title: container.dataset.removedTitle,
+    message: text ? `« ${text.slice(0, 60)} »` : "",
+    onUndo: () => {
+      setRemoved(row, false);
+      renumber(container);
+      $("textarea, input:not([type=hidden])", row)?.focus();
+    },
+  });
+});
+
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  const rows = event.detail.target;
+  if (!rows || !rows.matches || !rows.matches("[data-repeat-rows]")) return;
+  const container = rows.closest("[data-repeatable]");
+  renumber(container);
+  const added = visibleRows(container).at(-1);
+  $("textarea, input:not([type=hidden]), select", added)?.focus();
+  added?.scrollIntoView({ block: "center" });
+});
+
+/* ---------- Enregistrement automatique (compte rendu d'intervention, lot 7) ---------- */
+// Toutes les 30 s, seulement si la saisie a changé depuis le dernier envoi. Le serveur refuse
+// un enregistrement fait depuis une version dépassée (autre onglet) : l'enregistrement
+// automatique s'arrête alors, et la notification demande de recharger la page.
+const AUTOSAVE_EVERY = 30000;
+
+function markDirty(event) {
+  const form = event.target.closest && event.target.closest("form[data-autosave]");
+  if (form) form.dataset.dirty = "1";
+}
+document.addEventListener("input", markDirty);
+document.addEventListener("change", markDirty);
+
+setInterval(() => {
+  $$("form[data-autosave]").forEach((form) => {
+    if (form.dataset.dirty !== "1" || form.dataset.autosaveStopped) return;
+    form.dataset.dirty = "";
+    form.dispatchEvent(new CustomEvent("autosave"));
+  });
+}, AUTOSAVE_EVERY);
+
+document.body.addEventListener("htmx:afterRequest", (event) => {
+  const sender = event.detail.elt;
+  if (!sender || !sender.matches || !sender.matches("[data-autosave-sender]")) return;
+  if (event.detail.xhr.status === 409) sender.closest("form").dataset.autosaveStopped = "1";
 });
 
 /* ---------- Filtres : « Réinitialiser » vide aussi les champs ---------- */

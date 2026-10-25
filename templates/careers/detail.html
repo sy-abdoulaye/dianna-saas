@@ -1,0 +1,206 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{{ review.get_kind_display }} · {{ review.employee.full_name }} · Dianna{% endblock %}
+{% block content %}
+  {% url "careers:home" as home_url %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ home_url }}">{% translate "Carrière et évaluations" %}</a> › {{ review.get_kind_display }} · {{ review.employee.full_name }}</div>
+      <h1 class="h1">{{ review.get_kind_display }}{% if review.campaign %} · {{ review.campaign.label }}{% endif %}</h1>
+      <p class="sub">{{ review.employee.full_name }}{% if review.employee.service %} · {{ review.employee.service.name }}{% endif %}{% if review.employee.site %} · {{ review.employee.site.name }}{% endif %}{% if review.reason %} · {% translate "Motif :" %} {{ review.get_reason_display|lower }}{% endif %}</p>
+    </div>
+    <div class="actions">
+      {% url "careers:pdf" review.public_id as pdf_url %}
+      {% button _("Exporter en PDF") icon="dl" href=pdf_url %}
+    </div>
+  </div>
+  <div class="card card-body">{% include "components/stepper.html" with steps=steps %}</div>
+  <div class="split">
+    <div class="stack">
+      {% if panel == "closed" %}
+        {% translate "Entretien clos." as closed_title %}
+        {% blocktranslate asvar closed_text with name=review.employee.full_name %}Le compte rendu est archivé dans la fiche de suivi de {{ name }}.{% endblocktranslate %}
+        {% include "components/banner.html" with kind="ok" title=closed_title text=closed_text %}
+      {% elif panel == "waiting" %}
+        {% blocktranslate asvar waiting_title with who=waiting_label %}En attente de {{ who }}.{% endblocktranslate %}
+        {% blocktranslate asvar waiting_text with step=review.step_label %}Étape : {{ step }}. Vous pourrez consulter les réponses dès qu'elles seront envoyées.{% endblocktranslate %}
+        {% include "components/banner.html" with kind="info" title=waiting_title text=waiting_text %}
+        {% if can_remind %}
+          {% url "careers:remind" review.public_id as remind_url %}
+          <div>{% button _("Relancer") icon="send" hx_post=remind_url hx_swap="none" %}</div>
+        {% endif %}
+      {% else %}
+        {% if replaced %}
+          {% blocktranslate asvar replaced_title with name=replaced.full_name %}Vous agissez à la place de {{ name }}.{% endblocktranslate %}
+          {% translate "Votre action est inscrite au journal d'activité." as replaced_text %}
+          {% include "components/banner.html" with kind="warn" title=replaced_title text=replaced_text %}
+        {% endif %}
+        {% partialdef form inline %}
+          {% if panel == "self" %}
+            {% url "careers:self" review.public_id as step_url %}
+            <form class="card card-body stack"
+                  hx-post="{{ step_url }}"
+                  hx-target="this"
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type=submit]"
+                  novalidate>
+              <h2 class="h2">
+                {% if review.kind == "individual" %}
+                  {% translate "Votre auto-évaluation" %}
+                {% else %}
+                  {% translate "Votre préparation" %}
+                {% endif %}
+              </h2>
+              <p class="meta">{% translate "Votre manager la lira avant l'entretien. Écrivez au moins quelques phrases." %}</p>
+              {% include "components/form_errors.html" %}
+              {% include "components/field.html" with field=form.summary %}
+              {% if form.project %}
+                {% include "components/field.html" with field=form.project %}
+              {% endif %}
+              <div class="actions justify-end">{% button _("Envoyer à mon manager") variant="primary" icon="send" type="submit" %}</div>
+            </form>
+          {% elif panel == "evaluation" %}
+            {% url "careers:evaluate" review.public_id as step_url %}
+            <form class="card card-body stack"
+                  hx-post="{{ step_url }}"
+                  hx-target="this"
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type=submit]"
+                  novalidate>
+              <h2 class="h2">{% blocktranslate with name=review.employee.first_name %}Évaluation de {{ name }}{% endblocktranslate %}</h2>
+              {% include "components/form_errors.html" %}
+              {% include "components/field.html" with field=form.summary %}
+              <div>
+                <h3 class="h3">{% translate "Compétences" %}</h3>
+                <p class="hint">{% translate "1 à développer · 2 correct · 3 maîtrisé · 4 référent" %}</p>
+                {% for field in form.rating_fields %}
+                  <div class="rating-row">{% include "components/rating.html" with field=field %}</div>
+                {% endfor %}
+              </div>
+              <div class="form-grid">
+                {% include "components/field.html" with field=form.strengths %}
+                {% include "components/field.html" with field=form.improvements %}
+              </div>
+              <div class="stack">
+                <h3 class="h3">{% translate "Objectifs de l'année suivante" %}</h3>
+                {% translate "Ajouter un objectif" as add_label %}
+                {% translate "Au moins un objectif est nécessaire" as min_title %}
+                {% translate "Modifiez-le plutôt que de le retirer." as min_message %}
+                {% translate "Objectif retiré" as removed_title %}
+                {% include "components/repeatable.html" with formset=objectives block=objectives_block name="careers-objectives" add_label=add_label min_title=min_title min_message=min_message removed_title=removed_title %}
+              </div>
+              <div class="actions justify-end">{% button _("Enregistrer l'évaluation") variant="primary" type="submit" %}</div>
+            </form>
+          {% elif panel == "report" %}
+            {% url "careers:report" review.public_id as step_url %}
+            <form class="card card-body stack"
+                  hx-post="{{ step_url }}"
+                  hx-target="this"
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type=submit]"
+                  novalidate>
+              <h2 class="h2">{% translate "Compte rendu de l'entretien de parcours" %}</h2>
+              {% include "components/form_errors.html" %}
+              {% include "components/field.html" with field=form.report %}
+              {% include "components/field.html" with field=form.trainings %}
+              {% if form.is_summary %}
+                <fieldset class="stack">
+                  <legend class="h3">{% translate "État des lieux à 8 ans" %}</legend>
+                  {% translate "Règles légales à confirmer par un juriste." as legal_title %}
+                  {% translate "Au cours des 8 dernières années, la personne a-t-elle bénéficié de :" as legal_text %}
+                  {% include "components/banner.html" with kind="info" title=legal_title text=legal_text %}
+                  {% for field in form.criteria_fields %}
+                    {% include "components/field.html" with field=field %}
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+              <div class="form-grid">
+                {% include "components/field.html" with field=form.next_review_due %}
+                {% include "components/field.html" with field=form.next_summary_due %}
+              </div>
+              <p class="hint">{% translate "Échéances suggérées d'après la périodicité de l'entreprise ; modifiables." %}</p>
+              <div class="actions justify-end">{% button _("Enregistrer le compte rendu") variant="primary" type="submit" %}</div>
+            </form>
+          {% elif panel == "meeting" %}
+            {% url "careers:plan" review.public_id as step_url %}
+            <form class="card card-body stack"
+                  hx-post="{{ step_url }}"
+                  hx-target="this"
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type=submit]"
+                  novalidate>
+              <h2 class="h2">{% translate "Planifier et tenir l'entretien" %}</h2>
+              {% include "components/form_errors.html" %}
+              <div class="form-grid">
+                {% include "components/field.html" with field=form.meeting_date %}
+                {% include "components/field.html" with field=form.place %}
+              </div>
+              <datalist id="meeting-places">
+                {% for place in places %}<option value="{{ place }}"></option>{% endfor %}
+                <option value="{% translate 'Visioconférence' %}"></option>
+              </datalist>
+                <div class="actions justify-end">
+                  {% button _("Planifier") type="submit" %}
+                  {% if review.meeting_date and review.meeting_date <= today %}
+                    {% url "careers:held" review.public_id as held_url %}
+                    {% button _("Marquer l'entretien comme réalisé") variant="primary" hx_get=held_url hx_target="#modal-root" hx_swap="innerHTML" %}
+                  {% elif review.meeting_date %}
+                    <span class="hint">{% blocktranslate with day=review.meeting_date|fr_date:"long" %}L'entretien pourra être marqué comme réalisé à partir du {{ day }}.{% endblocktranslate %}</span>
+                  {% else %}
+                    <span class="hint">{% translate "Planifiez une date pour pouvoir clore cette étape." %}</span>
+                  {% endif %}
+                </div>
+              </form>
+          {% elif panel == "sign" %}
+            <div class="card card-body stack">
+              <h2 class="h2">{% translate "Signatures" %}</h2>
+              <p class="meta">{% translate "Chaque partie signe pour confirmer la tenue de l'entretien." %}</p>
+              {% url "careers:sign" review.public_id as sign_url %}
+              <div>{% button _("Signer l'entretien") variant="primary" hx_get=sign_url hx_target="#modal-root" %}</div>
+            </div>
+          {% endif %}
+        {% endpartialdef %}
+      {% endif %}
+      {% include "careers/partials/review_read.html" %}
+    </div>
+    <aside class="stack">
+      <div class="card card-body stack">
+        <h3 class="h3">{% translate "Entretien" %}</h3>
+        <dl class="dl">
+          <dt>{% translate "Date" %}</dt>
+          <dd>{% if review.meeting_date %}{{ review.meeting_date|fr_date:"long" }}{% else %}<span class="text-ink-3">{% translate "À planifier" %}</span>{% endif %}</dd>
+          {% if review.meeting_place %}<dt>{% translate "Lieu" %}</dt><dd>{{ review.meeting_place }}</dd>{% endif %}
+          <dt>{% translate "Manager" %}</dt>
+          <dd>{% if acting_manager %}{{ acting_manager.full_name }}{% else %}{% translate "Les RH" %}{% endif %}</dd>
+          <dt>{% translate "Campagne" %}</dt>
+          <dd>{% if review.campaign %}{{ review.campaign.label }}{% else %}—{% endif %}</dd>
+        </dl>
+      </div>
+      <div class="card card-body stack">
+        <h3 class="h3">{% translate "Signatures" %}</h3>
+        <ul class="rows">
+          <li>
+            <span class="who">{% include "components/avatar.html" with person=review.employee %}<span>{{ review.employee.full_name }}</span></span>
+            {% if review.employee_signed_at %}
+              {% status_badge "review" "signed" %}
+            {% else %}
+              {% status_badge "review" "waiting" %}
+            {% endif %}
+          </li>
+          <li>
+            <span>{% if review.manager_signed_by %}{{ review.manager_signed_by.full_name }}{% if review.signed_by_hr %} <span class="meta">({% translate "RH" %})</span>{% endif %}{% elif acting_manager %}{{ acting_manager.full_name }}{% else %}{% translate "Les RH" %}{% endif %}</span>
+            {% if review.manager_signed_at %}
+              {% status_badge "review" "signed" %}
+            {% else %}
+              {% status_badge "review" "waiting" %}
+            {% endif %}
+          </li>
+        </ul>
+        <p class="hint">{% translate "La signature confirme que l'entretien a eu lieu, pas que le salarié est d'accord." %}</p>
+      </div>
+      {% blocktranslate asvar privacy with name=review.employee.first_name %}Visible par {{ name }}, son manager et les RH. Aucun autre manager n'y a accès.{% endblocktranslate %}
+      {% include "components/banner.html" with kind="info" text=privacy %}
+      {% button _("Voir la fiche de suivi") href=file_url block=True %}
+    </aside>
+  </div>
+{% endblock %}

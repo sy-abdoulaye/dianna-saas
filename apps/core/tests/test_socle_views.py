@@ -230,6 +230,25 @@ def test_seed_demo_loads_both_companies(settings, db):
         "Retour sur l'intégration des nouveaux arrivants": False,  # 3 réponses < 5
         "Enquête télétravail 2025": True,
     }
+    # Lot 7 : 10 entretiens à toutes les étapes, une note privée de Louise, 4 comptes rendus.
+    from apps.careers.models import FollowUpNote, Review
+    from apps.interventions.models import InterventionReport
+
+    reviews = Review.all_companies.filter(company=exemple)
+    assert reviews.count() == 10
+    assert set(reviews.values_list("step", flat=True)) == {
+        "self",
+        "manager",
+        "meeting",
+        "signature",
+        "closed",
+    }
+    private = FollowUpNote.all_companies.get(company=exemple, is_private=True)
+    assert private.author == louise
+    statuses = InterventionReport.all_companies.filter(company=exemple).values_list(
+        "status", flat=True
+    )
+    assert sorted(statuses) == ["approved", "changes_requested", "draft", "submitted"]
     with pytest.raises(CommandError):
         call_command("seed_demo")
     call_command("seed_demo", "--reset")

@@ -53,6 +53,7 @@ RULES: dict[str, tuple] = {
     "careers.evaluate":                 (NONE,    TEAM,    ALL,     ALL),
     "careers.sign":                     (SELF,    TEAM,    ALL,     ALL),
     "careers.add_note":                 (SELF,    TEAM,    ALL,     ALL),
+    "careers.manage_campaigns":         (NONE,    NONE,    ALL,     ALL),
     # Questionnaires
     "surveys.answer":                   (SELF,    SELF,    SELF,    SELF),
     "surveys.view_results":             (NONE,    ALL,     ALL,     ALL),

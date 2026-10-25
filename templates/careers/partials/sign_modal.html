@@ -1,0 +1,37 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}
+  {% icon "check" %}
+{% endblock %}
+{% block modal_title %}
+  {% translate "Signer l'entretien" %}
+{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}"
+          hx-target="this"
+          hx-swap="outerHTML"
+          hx-disabled-elt="find button[type=submit]"
+          novalidate>
+      <div class="modal-body">
+        <p>{% translate "La signature confirme que l'entretien a eu lieu, pas que le salarié est d'accord." %}</p>
+        {% if replaced %}
+          {% blocktranslate asvar replaced_title with name=replaced.full_name %}Vous agissez à la place de {{ name }}.{% endblocktranslate %}
+          {% translate "Votre signature côté manager est inscrite au journal d'activité." as replaced_text %}
+          {% include "components/banner.html" with kind="warn" title=replaced_title text=replaced_text %}
+        {% elif not acting_manager and not form %}
+          {% translate "Vous signez pour les RH, en l'absence de manager." as hr_title %}
+          {% include "components/banner.html" with kind="info" title=hr_title %}
+        {% endif %}
+        {% if form %}
+          {% include "components/form_errors.html" %}
+          {% include "components/field.html" with field=form.comment %}
+        {% endif %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% button _("Signer l'entretien") variant="primary" type="submit" %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

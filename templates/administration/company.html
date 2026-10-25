@@ -12,6 +12,16 @@
       {% include "components/field.html" with field=form.summer_leave_hr_step full=True %}
     </div>
     <p class="meta">{% translate "Les campagnes de congés d'été se gèrent dans le module Congés estivaux (RH)." %}</p>
+    <fieldset class="stack">
+      <legend class="h3">{% translate "Entretien de parcours professionnel" %}</legend>
+      {% translate "Règles légales à confirmer par un juriste." as legal_title %}
+      {% translate "Loi n° 2025-989 du 24 octobre 2025 (article L6315-1 du Code du travail) : un premier entretien dans la première année de présence, puis tous les 4 ans au plus ; un état des lieux récapitulatif tous les 8 ans. Ces réglages servent aux échéances suggérées." as legal_text %}
+      {% include "components/banner.html" with kind="info" title=legal_title text=legal_text %}
+      <div class="form-grid">
+        {% include "components/field.html" with field=form.career_review_interval_years %}
+        {% include "components/field.html" with field=form.career_summary_interval_years %}
+      </div>
+    </fieldset>
     <div class="flex flex-wrap items-center gap-4">
       {% if logo_url %}<img class="company-logo" src="{{ logo_url }}" alt="{% translate 'Logo actuel' %}" data-fallback>{% else %}{% brand_mark 40 %}{% endif %}
         <div class="min-w-64 flex-1">

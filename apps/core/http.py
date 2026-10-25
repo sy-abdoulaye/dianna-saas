@@ -30,3 +30,12 @@ def client_ip(request) -> str | None:
             if ip:
                 return ip
     return _valid(request.META.get("REMOTE_ADDR"))
+
+
+def attachment(content: bytes | str, content_type: str, filename: str):
+    """Fichier à télécharger (export) : nom ASCII choisi par l'application, jamais saisi."""
+    from django.http import HttpResponse
+
+    response = HttpResponse(content, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response

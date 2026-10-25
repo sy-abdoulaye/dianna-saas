@@ -84,3 +84,16 @@ def render_document(template: str, context: dict, *, company=None, fetcher=None)
     )
     fetcher = fetcher or DiannaURLFetcher(company)
     return HTML(string=html, base_url=ORIGIN, url_fetcher=fetcher).render()
+
+
+def pdf_response(request, template: str, context: dict, *, filename: str, back_url: str):
+    """Document PDF d'un écran (entretien, fiche de suivi, compte rendu) : même limite de
+    fréquence que tous les exports (ratelimit.record_export) et même récupérateur fermé que
+    le planning. L'appelant contrôle la permission avant et journalise après."""
+    from apps.core.http import attachment
+    from apps.core.ratelimit import export_limited_response, record_export
+
+    if not record_export(request.employee):
+        return export_limited_response(request, back_url)
+    content = render_pdf(template, context, company=request.company)
+    return attachment(content, PDF_CONTENT_TYPE, filename)

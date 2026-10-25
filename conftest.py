@@ -211,6 +211,102 @@ def build_communication(*, author, people, respondent) -> dict:
     }
 
 
+def build_careers(*, employee, manager, hr) -> dict:
+    """Lot 7 : compétences par défaut, une campagne, un entretien individuel à l'étape du
+    manager (note et objectif), un entretien de parcours clos (formation), une note publique
+    et une note privée du manager ; une intervention et un compte rendu envoyé (deux travaux,
+    historique)."""
+    from datetime import date
+
+    from django.utils import timezone
+
+    from apps.careers.models import (
+        Competency,
+        FollowUpNote,
+        Review,
+        ReviewCampaign,
+        ReviewObjective,
+        ReviewRating,
+        ReviewTraining,
+    )
+    from apps.careers.services import create_default_competencies
+    from apps.interventions.models import InterventionReport, Mission, ReportEvent, ReportItem
+
+    create_default_competencies()
+    competency = Competency.objects.order_by("order").first()
+    today = timezone.localdate()
+    campaign = ReviewCampaign.objects.create(
+        label="Campagne de test",
+        start=today.replace(month=1, day=1),
+        end=today.replace(month=12, day=31),
+    )
+    review = Review.objects.create(
+        employee=employee,
+        manager=manager,
+        launched_by=manager,
+        kind="individual",
+        step="manager",
+        campaign=campaign,
+        self_summary="Une année riche en projets et en apprentissages.",
+    )
+    rating = ReviewRating.objects.create(review=review, competency=competency, score=3)
+    objective = ReviewObjective.objects.create(
+        review=review, title="Former un nouvel arrivant", due_date=date(2031, 6, 30)
+    )
+    closed = Review.objects.create(
+        employee=employee,
+        manager=manager,
+        kind="professional",
+        reason="periodic",
+        step="closed",
+        closed_at=timezone.now(),
+    )
+    training = ReviewTraining.objects.create(review=closed, label="Animation de réunion")
+    note = FollowUpNote.objects.create(
+        employee=employee, author=manager, date=today, kind="follow_up", text="Point de suivi."
+    )
+    private_note = FollowUpNote.objects.create(
+        employee=employee,
+        author=manager,
+        date=today,
+        kind="follow_up",
+        text="Note privée du manager.",
+        is_private=True,
+    )
+    mission = Mission.objects.create(name="Support niveau 2 · contrat Atlas")
+    report = InterventionReport.objects.create(
+        employee=employee,
+        mission=mission,
+        period=today.replace(day=1),
+        status="submitted",
+        visibility="planned_end",
+        planned_end=date(2031, 12, 31),
+        submitted_at=timezone.now(),
+    )
+    item = ReportItem.objects.create(
+        report=report, section="done", order=1, description="Tickets de niveau 2", completion=80
+    )
+    ReportItem.objects.create(
+        report=report, section="next", order=1, description="Base de connaissances", completion=50
+    )
+    report_event = ReportEvent.objects.create(report=report, actor=employee, action="submitted")
+    return {
+        "competency": competency,
+        "review_campaign": campaign,
+        "review": review,
+        "rating": rating,
+        "objective": objective,
+        "closed_review": closed,
+        "training": training,
+        "note": note,
+        "private_note": private_note,
+        "mission": mission,
+        "report": report,
+        "report_item": item,
+        "report_event": report_event,
+    }
+
+
 def build_company(slug: str, name: str) -> CompanyData:
     company = CompanyFactory(slug=slug, name=name)
     site = SiteFactory(company=company, name="Lyon")
@@ -237,6 +333,7 @@ def build_company(slug: str, name: str) -> CompanyData:
                 author=hr, people=[admin, hr, manager, employee], respondent=employee
             )
         )
+        requests.update(build_careers(employee=employee, manager=manager, hr=hr))
     audit = AuditLogFactory(company=company, actor=admin)
     return CompanyData(
         company,

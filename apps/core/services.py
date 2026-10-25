@@ -34,6 +34,7 @@ def create_company(
     """Crée l'entreprise, active tous les modules, crée la fiche du premier administrateur et
     lui envoie son invitation. Renvoie (company, employee)."""
     from apps.accounts import services as accounts
+    from apps.careers.services import create_default_competencies
     from apps.people.models import Employee, Role
 
     company = Company(name=data.name, slug=data.slug)
@@ -43,6 +44,7 @@ def create_company(
         CompanyModule.objects.bulk_create(
             [CompanyModule(company=company, module=m, enabled=True) for m in Module.values]
         )
+        create_default_competencies()
         admin = Employee.objects.create(
             first_name=data.admin_first_name,
             last_name=data.admin_last_name,

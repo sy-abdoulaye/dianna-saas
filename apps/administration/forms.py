@@ -22,7 +22,14 @@ class CompanyForm(forms.ModelForm):
 
     class Meta:
         model = Company
-        fields = ["name", "telework_max_per_week", "telework_auto_approve", "summer_leave_hr_step"]
+        fields = [
+            "name",
+            "telework_max_per_week",
+            "telework_auto_approve",
+            "summer_leave_hr_step",
+            "career_review_interval_years",
+            "career_summary_interval_years",
+        ]
         labels = {
             "name": _("Nom de l'entreprise"),
             "telework_max_per_week": _("Jours de télétravail par semaine"),
@@ -30,9 +37,15 @@ class CompanyForm(forms.ModelForm):
                 "Valider automatiquement le télétravail dans la limite du quota"
             ),
             "summer_leave_hr_step": _("Validation finale des congés d'été par les RH"),
+            "career_review_interval_years": _("Entretien de parcours professionnel tous les"),
+            "career_summary_interval_years": _("État des lieux récapitulatif tous les"),
         }
         help_texts = {
             "telework_max_per_week": _("Entre 0 et 5. Appliqué aux nouvelles demandes."),
+            "career_review_interval_years": _(
+                "En années, 4 au plus (un accord d'entreprise ou de branche peut prévoir moins)."
+            ),
+            "career_summary_interval_years": _("En années, 8 au plus."),
         }
 
     def __init__(self, *args, **kwargs):
@@ -44,6 +57,30 @@ class CompanyForm(forms.ModelForm):
         for key in ("required", "invalid", "max_value", "min_value"):
             quota.error_messages[key] = message
         quota.validators = []
+        for name, maximum in (
+            ("career_review_interval_years", 4),
+            ("career_summary_interval_years", 8),
+        ):
+            years = self.fields[name]
+            years.widget.attrs.update({"min": 1, "max": maximum})
+            years.validators = []
+            message = _("Saisissez un nombre entier entre 1 et %(max)s.") % {"max": maximum}
+            for key in ("required", "invalid", "max_value", "min_value"):
+                years.error_messages[key] = message
+
+    def _years(self, name: str, maximum: int) -> int:
+        value = self.cleaned_data.get(name)
+        if value is None or not 1 <= value <= maximum:
+            raise forms.ValidationError(
+                _("Saisissez un nombre entier entre 1 et %(max)s.") % {"max": maximum}
+            )
+        return value
+
+    def clean_career_review_interval_years(self):
+        return self._years("career_review_interval_years", 4)
+
+    def clean_career_summary_interval_years(self):
+        return self._years("career_summary_interval_years", 8)
 
     def clean_telework_max_per_week(self):
         value = self.cleaned_data["telework_max_per_week"]
@@ -160,3 +197,19 @@ class ClosureForm(forms.Form):
 
     def clean_site(self):
         return self.sites.get(self.cleaned_data.get("site") or "")
+
+
+class CompetencyForm(forms.Form):
+    """Compétence évaluée en entretien individuel (fiche 04, onglet Compétences)."""
+
+    name = forms.CharField(
+        label=_("Nom"),
+        max_length=80,
+        error_messages={"required": _("Indiquez un nom.")},
+    )
+    description = forms.CharField(
+        label=_("Description"),
+        max_length=160,
+        required=False,
+        help_text=_("Facultatif. Affichée sous la compétence pendant l'évaluation."),
+    )

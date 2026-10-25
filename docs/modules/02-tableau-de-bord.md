@@ -22,6 +22,8 @@ Route : `/`. Titre « Bonjour {prénom} », sous-titre : date, profil, entrepris
 - Admin : inchangé.
 « À traiter » : une ligne par module avec des demandes à valider (mêmes compteurs que le menu), bouton « Ouvrir » vers l'onglet « À valider ». « Aujourd'hui » : répartition du périmètre du planning, lien « Voir le planning ». Raccourcis : Annuaire.
 
+**Lot 7.** « À traiter » ajoute les entretiens à compléter (lien vers « À faire par moi ») et les comptes rendus à valider ou à envoyer ; indicateurs « Entretiens à mener » (manager, à la place de « En congés aujourd'hui ») et « Campagne d'entretiens » (RH, si une campagne est en cours) ; raccourci « Carrière ».
+
 ## Critères d'acceptation
 
 - Chaque élément « À traiter » mène à l'écran où l'action se fait.

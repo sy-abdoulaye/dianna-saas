@@ -29,7 +29,7 @@ Un nouveau compte rendu reprend l'intervention et la visibilité du dernier comp
 - **Statuts :** Brouillon → Envoyé → Validé, ou → Complément demandé → (modification) → Envoyé. Seul l'auteur modifie, et seulement en Brouillon ou Complément demandé.
 - **Valideur :** manager direct ; RH et administrateur peuvent agir à la place du manager (M-12) ; leur onglet « À valider » ne montre que les personnes sans manager.
 - **Repère « Délai dépassé » :** délai passé et réalisation < 100 %.
-- La saisie en cours n'est jamais perdue : ajout et retrait de blocs via HTMX sans recharger la page ; brouillon enregistré automatiquement toutes les 30 secondes (lot 7, à confirmer).
+- La saisie en cours n'est jamais perdue : ajout et retrait de blocs via HTMX sans recharger la page (retrait annulable) ; brouillon enregistré automatiquement toutes les 30 secondes quand la saisie a changé. Chaque enregistrement porte la version lue : depuis une version dépassée (autre fenêtre), rien n'est écrasé et « Ce compte rendu a été modifié dans une autre fenêtre. Rechargez la page. » s'affiche (L7-10).
 - **Export PDF** du compte rendu (lot 7) ; tableau de synthèse par intervention pour les RH (plus tard).
 
 ## Critères d'acceptation
