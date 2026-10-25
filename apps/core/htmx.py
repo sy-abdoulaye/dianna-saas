@@ -110,6 +110,17 @@ def _classic_redirect(request, toast: Toast, go_to: str) -> HttpResponse:
     return redirect(target)
 
 
+def download_response(path: str) -> HttpResponse:
+    """Fin d'un export demandé depuis une modale : la modale se ferme et le navigateur
+    télécharge le fichier (HX-Redirect vers l'adresse du fichier, qui refait tous les
+    contrôles : permission, périmètre, limite de fréquence, journal)."""
+    if not path.startswith("/") or path.startswith("//"):
+        raise ValueError("HX-Redirect : chemin interne seulement.")
+    response = trigger(HttpResponse(status=204), close_modal=True)
+    response["HX-Redirect"] = path
+    return response
+
+
 def toast_response(toast: Toast, *, close_modal=False, status=204) -> HttpResponse:
     """Réponse vide qui affiche une notification (et ferme la modale si demandé)."""
     return trigger(HttpResponse(status=status), toast=toast, close_modal=close_modal)

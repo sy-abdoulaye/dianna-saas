@@ -40,6 +40,7 @@ from apps.core.files import (
 from apps.core.htmx import (
     Toast,
     after_action,
+    download_response,
     error_response,
     form_error_response,
     is_htmx,
@@ -546,9 +547,7 @@ def export_requests(request, kind):
     if not form.is_valid():
         return form_error_response(request, template, context)
     if is_htmx(request):
-        response = HttpResponse(status=204)
-        response["HX-Redirect"] = f"{action_url}?{request.GET.urlencode()}"
-        return response
+        return download_response(f"{action_url}?{request.GET.urlencode()}")
     if not record_export(me):
         return export_limited_response(request, reverse(KINDS[kind].url_name))
     return _download(*exports.export_file(kind, me, form.cleaned_data, request=request))

@@ -101,3 +101,14 @@ def test_a_page_rendered_by_a_post_reloads_the_address_shown_in_the_browser():
         "/questionnaires/x/repondre/", HTTP_HX_CURRENT_URL="https://ailleurs.fr/piege/"
     )
     assert page_url(other_host) == "/questionnaires/x/repondre/"
+
+
+def test_an_export_closes_its_modal_then_downloads_the_file():
+    from apps.core.htmx import download_response
+
+    response = download_response("/teletravail/export/?format=csv")
+    assert response.status_code == 204
+    assert response["HX-Redirect"] == "/teletravail/export/?format=csv"
+    assert json.loads(response["HX-Trigger"]) == {"closeModal": True}
+    with pytest.raises(ValueError):
+        download_response("https://ailleurs.example/fichier.csv")
