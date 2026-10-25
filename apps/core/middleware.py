@@ -11,6 +11,7 @@ L'entreprise est placée dans request.company et dans la ContextVar, remise à z
 from django.conf import settings
 from django.contrib.auth import logout
 from django.shortcuts import render
+from django.utils.cache import patch_cache_control, patch_vary_headers
 
 from apps.core.models import Company
 from apps.core.tenancy import current_company
@@ -98,3 +99,19 @@ class EmployeeMiddleware:
                 # garde la session de l'équipe Dianna (L0-13).
                 logout(request)
         return self.get_response(request)
+
+
+class HtmxCacheMiddleware:
+    """Une même adresse rend la page entière ou un fragment selon l'en-tête HX-Request : le
+    navigateur doit les distinguer (Vary) et ne jamais garder un fragment (no-store), sinon
+    Retour puis Suivant affiche le fragment nu à la place de la page."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        patch_vary_headers(response, ("HX-Request",))
+        if request.headers.get("HX-Request") == "true":
+            patch_cache_control(response, no_store=True)
+        return response

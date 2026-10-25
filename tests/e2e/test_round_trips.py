@@ -129,3 +129,52 @@ def test_planning_previous_next_round_trip_and_back(page, urls, company_a):
     expect(title).to_have_text(second)
     page.go_back()
     expect(page.locator(".plan-title")).to_have_text(first)
+
+
+def back_and_forward_show_the_whole_page(page, url_part, heading):
+    """Après une action, Retour puis Suivant : la page entière revient (jamais un fragment
+    nu tiré du cache du navigateur, Vary: HX-Request et Cache-Control: no-store)."""
+    page.go_back()
+    expect(page).not_to_have_url(re.compile(re.escape(url_part)))
+    page.go_forward()
+    expect(page).to_have_url(re.compile(re.escape(url_part)))
+    expect(page.get_by_role("heading", level=1)).to_contain_text(heading)
+    expect(page.get_by_role("button", name=re.compile("Notifications"))).to_be_visible()
+    expect(page.locator("main#content")).to_have_count(1)
+
+
+def test_telework_action_then_back_and_forward(page, urls, company_a):
+    from apps.approvals.tests.conftest import next_weekday
+    from tests.e2e.test_requests import declare
+
+    sign_in(page, urls, company_a.employee)
+    page.goto(urls("/teletravail/"))
+    declare(page, next_weekday(weekday=1))
+    expect(page.locator("#toasts .toast").last).to_contain_text("Demande envoyée")
+    expect(page.locator("#results")).to_contain_text("En attente")
+    back_and_forward_show_the_whole_page(page, "/teletravail/", "Télétravail")
+    expect(page.locator("#results")).to_contain_text("En attente")
+
+
+def test_validation_action_then_back_and_forward(page, urls, company_a, submit):
+    submit(company_a, company_a.employee)
+    sign_in(page, urls, company_a.manager)
+    page.goto(urls("/teletravail/?onglet=a-valider"))
+    page.locator("#results tbody tr").first.get_by_role("button", name="Valider").click()
+    expect(page.locator("#toasts .toast").last).to_contain_text("Demande validée")
+    expect(page.locator("#results tbody tr")).to_have_count(1)
+    back_and_forward_show_the_whole_page(page, "onglet=a-valider", "Télétravail")
+    expect(page.locator("#results tbody tr")).to_have_count(1)
+
+
+def test_closure_action_then_back_and_forward(page, urls, company_a):
+    sign_in(page, urls, company_a.admin)
+    page.goto(urls("/administration/fermetures/"))
+    page.get_by_role("button", name="Ajouter une fermeture").click()
+    dialog = page.locator("dialog[open]")
+    dialog.get_by_label("Date").fill("2031-05-30")
+    dialog.get_by_label("Libellé").fill("Pont de l'Ascension")
+    dialog.get_by_role("button", name="Ajouter").click()
+    expect(page.locator("#content")).to_contain_text("Pont de l'Ascension")
+    back_and_forward_show_the_whole_page(page, "/administration/fermetures/", "Administration")
+    expect(page.locator("#content")).to_contain_text("Pont de l'Ascension")

@@ -75,3 +75,23 @@ def test_tampered_token_is_refused(make_request):
     token = undo.make_token(request, "a", "b")
     with pytest.raises(undo.UndoError):
         undo.read_token(request, token[:-2] + "xx")
+
+
+def test_htmx_responses_are_never_stored_and_vary_on_hx_request(client_for, company_a):
+    client = client_for(company_a.admin)
+    fragment = client.get("/administration/fermetures/", headers={"HX-Request": "true"})
+    assert "HX-Request" in fragment["Vary"]
+    assert "no-store" in fragment["Cache-Control"]
+    page = client.get("/administration/fermetures/")
+    assert "HX-Request" in page["Vary"]
+    assert "no-store" not in page.get("Cache-Control", "")
+
+
+def test_htmx_action_responses_are_never_stored(client_for, company_a):
+    response = client_for(company_a.admin).post(
+        "/administration/fermetures/ajouter/",
+        {"date": "2031-05-30", "label": "Pont"},
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 204
+    assert "no-store" in response["Cache-Control"] and "HX-Request" in response["Vary"]

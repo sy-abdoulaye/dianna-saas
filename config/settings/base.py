@@ -60,6 +60,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "apps.core.middleware.HtmxCacheMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
