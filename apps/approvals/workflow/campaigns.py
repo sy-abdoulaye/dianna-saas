@@ -6,10 +6,10 @@ __init__.py) : point d'entrée unique, et point de remplacement des tests."""
 from django.db import IntegrityError, transaction
 from django.utils.translation import gettext as _
 
-from apps.approvals import workflow
 from apps.approvals.models import (
     SummerCampaign,
 )
+from apps.approvals.workflow.common import CAMPAIGN_ALREADY_OPEN, WorkflowError
 from apps.core import audit
 from apps.core.context import ActionContext
 
@@ -21,7 +21,7 @@ def create_summer_campaign(data: dict, *, context: ActionContext):
     """Crée une campagne en brouillon et l'inscrit au journal d'audit."""
     actor, http_request = context.person(), context.request
     campaign = SummerCampaign.objects.create(
-        **{name: data[name] for name in workflow.CAMPAIGN_FIELDS if name in data}
+        **{name: data[name] for name in CAMPAIGN_FIELDS if name in data}
     )
     audit.log(
         "requests.campaign_created",
@@ -41,16 +41,16 @@ def open_summer_campaign(campaign, *, context: ActionContext):
     campaigns = {c.pk: c for c in SummerCampaign.objects.select_for_update().order_by("pk")}
     campaign = campaigns.get(campaign.pk)
     if campaign is None or campaign.status != SummerCampaign.Status.DRAFT:
-        raise workflow.WorkflowError(_("Cette campagne ne peut pas être ouverte."))
+        raise WorkflowError(_("Cette campagne ne peut pas être ouverte."))
     if any(c.status == SummerCampaign.Status.OPEN for c in campaigns.values()):
-        raise workflow.WorkflowError(workflow.CAMPAIGN_ALREADY_OPEN)
+        raise WorkflowError(CAMPAIGN_ALREADY_OPEN)
     campaign.status = SummerCampaign.Status.OPEN
     try:
         with transaction.atomic():
             campaign.save(update_fields=["status", "updated_at"])
     except IntegrityError as exc:
-        raise workflow.WorkflowError(workflow.CAMPAIGN_ALREADY_OPEN) from exc
-    workflow._campaign_audit(campaign, actor, _("Campagne ouverte"), http_request)
+        raise WorkflowError(CAMPAIGN_ALREADY_OPEN) from exc
+    _campaign_audit(campaign, actor, _("Campagne ouverte"), http_request)
     return campaign
 
 
@@ -59,10 +59,10 @@ def close_summer_campaign(campaign, *, context: ActionContext):
     actor, http_request = context.person(), context.request
     campaign = SummerCampaign.objects.select_for_update().filter(pk=campaign.pk).first()
     if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
-        raise workflow.WorkflowError(_("Cette campagne n'est pas ouverte."))
+        raise WorkflowError(_("Cette campagne n'est pas ouverte."))
     campaign.status = SummerCampaign.Status.CLOSED
     campaign.save(update_fields=["status", "updated_at"])
-    workflow._campaign_audit(campaign, actor, _("Campagne close"), http_request)
+    _campaign_audit(campaign, actor, _("Campagne close"), http_request)
     return campaign
 
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 from django.utils.translation import gettext as _
 
 from apps.agenda.days import day_off, day_off_message
-from apps.approvals import rules, workflow
+from apps.approvals import rules
 from apps.approvals.models import (
     ACTIVE_STATUSES,
     LeaveRequest,
@@ -18,6 +18,7 @@ from apps.approvals.models import (
     TeleworkRequest,
     TransportProof,
 )
+from apps.approvals.workflow.common import AMOUNT_RANGE, SAME_DAY
 from apps.core.dates import format_date
 
 
@@ -26,13 +27,13 @@ def check_request(request, *, campaign=None) -> dict:
     (vide si tout va bien). `request` peut ne pas être enregistrée (envoi) ; si elle l'est,
     elle est exclue des comptes (annulation immédiate)."""
     if isinstance(request, TeleworkRequest):
-        return workflow._check_telework(request)
+        return _check_telework(request)
     if isinstance(request, LeaveRequest):
-        return workflow._check_leave(request, campaign)
+        return _check_leave(request, campaign)
     if isinstance(request, TransportProof):
-        return workflow._check_transport(request)
+        return _check_transport(request)
     if isinstance(request, OnCallDeclaration):
-        return workflow._check_on_call(request)
+        return _check_on_call(request)
     return {}
 
 
@@ -49,7 +50,7 @@ def _check_telework(request) -> dict:
         status__in=(RequestStatus.PENDING, RequestStatus.APPROVED),
     ).exclude(pk=pk)
     if same_day.exists():
-        return {"date": workflow.SAME_DAY}
+        return {"date": SAME_DAY}
     quota = rules.weekly_quota(requester)
     used = rules.telework_days_in_week(requester, request.date, exclude_pk=pk)
     if used < quota:
@@ -70,7 +71,7 @@ def _check_leave(request, campaign) -> dict:
     """Congés d'été : campagne ouverte et période comprise dans la sienne ; tout congé : pas
     de chevauchement avec une autre demande."""
     if request.leave_type == LeaveRequest.LeaveType.SUMMER:
-        errors = workflow._check_summer_campaign(request, campaign)
+        errors = _check_summer_campaign(request, campaign)
         if errors:
             return errors
     if rules.leave_overlaps(request.requester, request.start, request.end, exclude_pk=request.pk):
@@ -123,14 +124,14 @@ def _check_transport(request) -> dict:
             % {"a": format_date(first, "month"), "b": format_date(last, "month")}
         }
     if request.amount is None or not Decimal("0") < Decimal(request.amount) <= Decimal("1000"):
-        return {"amount": workflow.AMOUNT_RANGE}
-    if request.ticket_type not in workflow.SUBSCRIPTIONS:
+        return {"amount": AMOUNT_RANGE}
+    if request.ticket_type not in SUBSCRIPTIONS:
         return {}
     request.compute_validity()
     overlapping = (
         TransportProof.objects.filter(
             requester=request.requester,
-            ticket_type__in=workflow.SUBSCRIPTIONS,
+            ticket_type__in=SUBSCRIPTIONS,
             status__in=ACTIVE_STATUSES,
             month__lte=request.valid_until,
             valid_until__gte=request.month,

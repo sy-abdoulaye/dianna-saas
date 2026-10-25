@@ -121,10 +121,13 @@ def test_overlapping_subscriptions_are_refused_but_single_tickets_are_not(client
 def test_failed_submission_leaves_no_file(client_for, company_a, monkeypatch, settings):
     from pathlib import Path
 
+    from apps.approvals.models import RequestEvent
+
     def broken(*args, **kwargs):
         raise RuntimeError("panne après l'écriture du fichier")
 
-    monkeypatch.setattr(workflow, "_event", broken)
+    # Panne à l'écriture de l'événement, après le fichier et l'INSERT de la demande.
+    monkeypatch.setattr(RequestEvent.objects, "create", broken)
     with pytest.raises(RuntimeError):
         send(client_for(company_a.employee))
     folder = Path(settings.PRIVATE_MEDIA_ROOT) / str(company_a.company.pk) / "transport"

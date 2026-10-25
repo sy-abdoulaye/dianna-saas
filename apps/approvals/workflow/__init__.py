@@ -29,18 +29,12 @@ noms publics d'ici ; le code est réparti dans les modules du paquet."""
 
 from apps.approvals.workflow.campaigns import (
     CAMPAIGN_FIELDS,
-    _campaign_audit,
     close_summer_campaign,
     create_summer_campaign,
     open_summer_campaign,
 )
 from apps.approvals.workflow.checks import (
     SUBSCRIPTIONS,
-    _check_leave,
-    _check_on_call,
-    _check_summer_campaign,
-    _check_telework,
-    _check_transport,
     check_request,
 )
 from apps.approvals.workflow.common import (
@@ -55,28 +49,13 @@ from apps.approvals.workflow.common import (
     RequestValidationError,
     TransitionResult,
     WorkflowError,
-    _audit,
-    _event,
-    _forget_file,
-    _latest_event_id,
-    _lock,
-    _lock_requester,
-    _save_checked,
-    _write_file,
     history,
     sync_calendar,
 )
 from apps.approvals.workflow.notifications import (
-    _current_validators,
-    _module_url,
-    _notify,
-    _notify_requester,
-    _notify_validators,
+    module_url,
 )
 from apps.approvals.workflow.transitions import (
-    _approve_automatically,
-    _submit,
-    _substitution,
     approve,
     cancel,
     cancel_approved,
@@ -86,10 +65,6 @@ from apps.approvals.workflow.transitions import (
 from apps.approvals.workflow.undo import (
     REACTIVATING,
     UNDO_EXPECTED_STATUS,
-    _lock_for_undo,
-    _restore_previous_state,
-    _undo_decision,
-    _undo_submit,
     undo,
 )
 from apps.approvals.workflow.validators import (
@@ -103,7 +78,11 @@ from apps.approvals.workflow.validators import (
     is_hr_or_admin,
     to_validate,
 )
-from apps.core.constraints import CONSTRAINT_MESSAGES, INVALID_VALUE, constraint_name
+from apps.core.constraints import (
+    CONSTRAINT_MESSAGES,
+    INVALID_VALUE,
+    constraint_name,
+)
 
 __all__ = [
     "ALREADY_PROCESSED",
@@ -123,32 +102,6 @@ __all__ = [
     "RequestValidationError",
     "TransitionResult",
     "WorkflowError",
-    "_approve_automatically",
-    "_audit",
-    "_campaign_audit",
-    "_check_leave",
-    "_check_on_call",
-    "_check_summer_campaign",
-    "_check_telework",
-    "_check_transport",
-    "_current_validators",
-    "_event",
-    "_forget_file",
-    "_latest_event_id",
-    "_lock",
-    "_lock_for_undo",
-    "_lock_requester",
-    "_module_url",
-    "_notify",
-    "_notify_requester",
-    "_notify_validators",
-    "_restore_previous_state",
-    "_save_checked",
-    "_submit",
-    "_substitution",
-    "_undo_decision",
-    "_undo_submit",
-    "_write_file",
     "acting_for",
     "active_manager",
     "approve",
@@ -165,6 +118,7 @@ __all__ = [
     "history",
     "hr_validators",
     "is_hr_or_admin",
+    "module_url",
     "open_summer_campaign",
     "refuse",
     "submit",

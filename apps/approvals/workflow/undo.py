@@ -7,13 +7,27 @@ from django.db import transaction
 from django.utils.translation import gettext as _
 
 from apps.agenda.models import CalendarEvent
-from apps.approvals import workflow
 from apps.approvals.models import (
     ACTIVE_STATUSES,
     LeaveRequest,
     RequestEvent,
     RequestStatus,
 )
+from apps.approvals.workflow.checks import check_request
+from apps.approvals.workflow.common import (
+    ALREADY_PROCESSED,
+    OTHER_DECISION,
+    RequestValidationError,
+    WorkflowError,
+    _audit,
+    _event,
+    _forget_file,
+    _latest_event_id,
+    _lock_requester,
+    _save_checked,
+    sync_calendar,
+)
+from apps.approvals.workflow.notifications import _current_validators, _notify_validators
 from apps.core import notifications
 from apps.core.context import ActionContext
 from apps.core.models import Notification
@@ -38,11 +52,11 @@ def undo(model, payload: dict, *, context: ActionContext):
     Après une décision : l'état précédent est rétabli ; si la demande redevient active
     (refus ou annulation défaits), les contrôles métier sont refaits sous verrou (A3-02)."""
     actor, http_request = context.person(), context.request
-    request = workflow._lock_for_undo(model, payload)
+    request = _lock_for_undo(model, payload)
     if payload["action"] == "submit":
-        workflow._undo_submit(request, actor, http_request=http_request)
+        _undo_submit(request, actor, http_request=http_request)
         return None
-    return workflow._undo_decision(request, payload, actor, http_request=http_request)
+    return _undo_decision(request, payload, actor, http_request=http_request)
 
 
 def _lock_for_undo(model, payload: dict):
@@ -50,9 +64,9 @@ def _lock_for_undo(model, payload: dict):
     que l'événement à défaire est toujours le dernier."""
     found = model.objects.filter(public_id=payload["id"]).values_list("requester_id").first()
     if found is None:
-        raise workflow.WorkflowError(workflow.ALREADY_PROCESSED)
-    if payload["action"] in workflow.REACTIVATING:
-        workflow._lock_requester(found[0])
+        raise WorkflowError(ALREADY_PROCESSED)
+    if payload["action"] in REACTIVATING:
+        _lock_requester(found[0])
     request = (
         model.objects.select_for_update(of=("self",))
         .select_related("requester", "requester__manager", "requester__company")
@@ -60,56 +74,53 @@ def _lock_for_undo(model, payload: dict):
         .first()
     )
     if request is None:
-        raise workflow.WorkflowError(workflow.ALREADY_PROCESSED)
-    if payload.get("event") is None or workflow._latest_event_id(request) != payload["event"]:
-        raise workflow.WorkflowError(workflow.OTHER_DECISION)
+        raise WorkflowError(ALREADY_PROCESSED)
+    if payload.get("event") is None or _latest_event_id(request) != payload["event"]:
+        raise WorkflowError(OTHER_DECISION)
     return request
 
 
 def _undo_submit(request, actor, *, http_request) -> None:
     if request.requester_id != actor.pk:
-        raise workflow.WorkflowError(workflow.ALREADY_PROCESSED)
+        raise WorkflowError(ALREADY_PROCESSED)
     Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
     CalendarEvent.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
     RequestEvent.objects.filter(request_type=request.request_type, request_id=request.pk).delete()
-    workflow._audit(
+    _audit(
         request, actor, "withdrawn", _("Demande envoyée puis retirée"), http_request=http_request
     )
     request.delete()
     if request.file_field:
         # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
-        transaction.on_commit(lambda: workflow._forget_file(request))
+        transaction.on_commit(lambda: _forget_file(request))
 
 
 def _undo_decision(request, payload: dict, actor, *, http_request):
     action, previous = payload["action"], payload["previous"]
-    if (
-        request.status not in workflow.UNDO_EXPECTED_STATUS[action]
-        or previous not in ACTIVE_STATUSES
-    ):
-        raise workflow.WorkflowError(workflow.ALREADY_PROCESSED)
-    workflow._restore_previous_state(request, action, payload)
-    if action in workflow.REACTIVATING:
-        errors = workflow.check_request(request, campaign=getattr(request, "campaign", None))
+    if request.status not in UNDO_EXPECTED_STATUS[action] or previous not in ACTIVE_STATUSES:
+        raise WorkflowError(ALREADY_PROCESSED)
+    _restore_previous_state(request, action, payload)
+    if action in REACTIVATING:
+        errors = check_request(request, campaign=getattr(request, "campaign", None))
         if errors:
-            raise workflow.WorkflowError(next(iter(errors.values())))
+            raise WorkflowError(next(iter(errors.values())))
     try:
-        workflow._save_checked(request)
-    except workflow.RequestValidationError as error:
-        raise workflow.WorkflowError(error.message) from error
+        _save_checked(request)
+    except RequestValidationError as error:
+        raise WorkflowError(error.message) from error
     Notification.objects.filter(
         pk__in=payload.get("notifications", []),
         source_type=request.request_type,
         source_id=request.pk,
     ).delete()
     notifications.retract_unsent(request)
-    workflow._event(request, actor, RequestEvent.Action.REVERTED)
-    workflow.sync_calendar(request)
+    _event(request, actor, RequestEvent.Action.REVERTED)
+    sync_calendar(request)
     # La transition défaite avait retiré « Demande à valider » : les valideurs actuels sont
     # de nouveau prévenus.
     if request.status != RequestStatus.APPROVED:
-        workflow._notify_validators(request, workflow._current_validators(request))
-    workflow._audit(request, actor, "reverted", _("Décision annulée"), http_request=http_request)
+        _notify_validators(request, _current_validators(request))
+    _audit(request, actor, "reverted", _("Décision annulée"), http_request=http_request)
     return request
 
 

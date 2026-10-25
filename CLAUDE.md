@@ -62,7 +62,7 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
   - contrainte de base : l'inscrire dans la table commune (`apps/core/constraints.register`) et traduire l'erreur par `constraints.translate`.
 - Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
 - Annotations de type sur les fonctions de service et de sélection ; `make typecheck` (mypy, django-stubs) est bloquant sur tous les `services.py`, `selectors.py` et `apps/approvals/workflow/`.
-- Moteur des demandes : paquet `apps/approvals/workflow/` (socle, valideurs, contrôles, notifications, transitions, annulation, campagnes). On l'importe toujours par la façade (`from apps.approvals import workflow`), et ses modules s'appellent entre eux par elle (`workflow._event(...)`) : un seul point d'entrée.
+- Moteur des demandes : paquet `apps/approvals/workflow/` (socle, valideurs, contrôles, notifications, transitions, annulation, campagnes). Hors du paquet, on l'importe toujours par la façade (`from apps.approvals import workflow`), qui n'exporte que les noms publics ; à l'intérieur, les modules s'importent directement, sans cycle (validators et common en bas, transitions et undo en haut). Un test injecte une panne au plus bas (gestionnaire du modèle, enregistrement direct), jamais en remplaçant une fonction privée du moteur.
 - Noms explicites en anglais.
 - Docstring courte qui dit pourquoi, pas quoi.
 - Pas de code mort, pas de TODO sans décision inscrite dans `docs/00-decisions.md`.

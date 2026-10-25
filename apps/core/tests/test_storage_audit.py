@@ -210,20 +210,30 @@ def test_service_checks_the_month_window_and_the_amount(company_a):
     assert amount.value.errors == {"amount": workflow.AMOUNT_RANGE}
 
 
-def test_integrity_errors_are_translated_by_constraint_name(company_a, monkeypatch):
-    monkeypatch.setattr(workflow, "_check_transport", lambda request: {})
-    before = stored_files(company_a.company)
-    with (
-        tenant_context(company_a.company),
-        pytest.raises(workflow.RequestValidationError) as error,
-    ):
-        workflow.submit(
-            TransportProof,
-            proof_data(amount=Decimal("5000")),
-            context=ActionContext(company_a.employee),
+def test_integrity_errors_are_translated_by_constraint_name(company_a):
+    """L5-19 : un enregistrement direct du modèle, sans les contrôles du service, viole la
+    contrainte de base ; l'erreur est traduite par le nom de cette contrainte."""
+    from django.db import IntegrityError, transaction
+
+    from apps.approvals.models import RequestStatus
+    from apps.core import constraints
+
+    with tenant_context(company_a.company):
+        proof = TransportProof(
+            requester=company_a.employee,
+            month=timezone.localdate().replace(day=1),
+            ticket_type="monthly",
+            amount=Decimal("5000"),
+            file_type="application/pdf",
+            status=RequestStatus.PENDING,
+            submitted_at=timezone.now(),
+            file=f"{company_a.company.pk}/transport/x.pdf",
         )
-    assert error.value.errors == {"amount": workflow.AMOUNT_RANGE}  # transport_amount_range
-    assert stored_files(company_a.company) == before
+        proof.compute_validity()
+        with pytest.raises(IntegrityError) as raised, transaction.atomic():
+            proof.save()
+    field, message = constraints.translate(raised.value, "message par défaut")
+    assert (field, message) == ("amount", workflow.AMOUNT_RANGE)  # transport_amount_range
 
 
 # ---------- e. Numéro de série normalisé ----------

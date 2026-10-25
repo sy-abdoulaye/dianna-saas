@@ -10,7 +10,6 @@ from django.db import DataError, IntegrityError, transaction
 from django.utils.translation import gettext as _
 
 from apps.agenda.models import CalendarEvent
-from apps.approvals import workflow
 from apps.approvals.kinds import kind_of
 from apps.approvals.models import (
     ApprovalRequest,
@@ -18,6 +17,7 @@ from apps.approvals.models import (
     RequestStatus,
 )
 from apps.core import audit, constraints
+from apps.core.constraints import INVALID_VALUE
 from apps.core.errors import ServiceError
 from apps.core.files import delete_private, write_private
 from apps.people.models import Employee
@@ -136,10 +136,10 @@ def _save_checked(request, **kwargs):
         with transaction.atomic():
             request.save(**kwargs)
     except IntegrityError as exc:
-        field, message = constraints.translate(exc, workflow.UNKNOWN_CONSTRAINT)
-        raise workflow.RequestValidationError({field: message}) from exc
+        field, message = constraints.translate(exc, UNKNOWN_CONSTRAINT)
+        raise RequestValidationError({field: message}) from exc
     except DataError as exc:
-        raise workflow.RequestValidationError({None: workflow.INVALID_VALUE}) from exc
+        raise RequestValidationError({None: INVALID_VALUE}) from exc
 
 
 def _write_file(request, content, cleanup):

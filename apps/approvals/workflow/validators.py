@@ -3,7 +3,6 @@
 Les fonctions du paquet s'appellent par la façade `workflow` (apps/approvals/workflow/
 __init__.py) : point d'entrée unique, et point de remplacement des tests."""
 
-from apps.approvals import workflow
 from apps.approvals.models import (
     LeaveRequest,
     RequestStatus,
@@ -46,11 +45,11 @@ def first_validators(request) -> list[Employee]:
     autres que le demandeur (M-12, L3-02). Types validés par les RH (transport, matériel,
     L5-04) : les RH et administrateurs autres que le demandeur."""
     if request.hr_validated:
-        return workflow.hr_validators(exclude=request.requester)
-    manager = workflow.active_manager(request.requester)
+        return hr_validators(exclude=request.requester)
+    manager = active_manager(request.requester)
     if manager is not None:
         return [manager]
-    return workflow.hr_validators(exclude=request.requester)
+    return hr_validators(exclude=request.requester)
 
 
 def can_decide(employee, request) -> bool:
@@ -62,16 +61,14 @@ def can_decide(employee, request) -> bool:
     if request.hr_validated:
         return (
             request.status == RequestStatus.PENDING
-            and workflow.is_hr_or_admin(employee)
+            and is_hr_or_admin(employee)
             and permissions.can(employee, request.decide_action, request)
         )
     if request.status == RequestStatus.PENDING:
-        manager = workflow.active_manager(request.requester)
+        manager = active_manager(request.requester)
         if manager is not None and manager.pk == employee.pk:
             return True
-        return workflow.is_hr_or_admin(employee) and permissions.can(
-            employee, "requests.decide", request
-        )
+        return is_hr_or_admin(employee) and permissions.can(employee, "requests.decide", request)
     if request.status == RequestStatus.MANAGER_APPROVED:
         return permissions.can(employee, "requests.final_decision", request)
     return False
@@ -87,8 +84,8 @@ def acting_for(employee, request):
     """Manager remplacé quand un RH ou un administrateur décide à sa place (bandeau M-12)."""
     if request.status != RequestStatus.PENDING or request.hr_validated:
         return None
-    manager = workflow.active_manager(request.requester)
-    if manager is not None and manager.pk != employee.pk and workflow.is_hr_or_admin(employee):
+    manager = active_manager(request.requester)
+    if manager is not None and manager.pk != employee.pk and is_hr_or_admin(employee):
         return manager
     return None
 
@@ -101,7 +98,7 @@ def to_validate(employee, model):
     related = ("requester", "requester__service", "requester__manager")
     if model.hr_validated:
         # Transport, matériel : toutes les demandes en attente, pour les RH seulement.
-        if not workflow.is_hr_or_admin(employee):
+        if not is_hr_or_admin(employee):
             return model.objects.none()
         return (
             model.objects.filter(status=RequestStatus.PENDING)
@@ -111,7 +108,7 @@ def to_validate(employee, model):
     in_post_ids = Employee.objects.filter(status__in=IN_POST_STATUSES).values("pk")
     has_active_manager = Q(requester__manager_id__in=in_post_ids)
     condition = Q(status=RequestStatus.PENDING, requester__manager=employee) & has_active_manager
-    if workflow.is_hr_or_admin(employee):
+    if is_hr_or_admin(employee):
         condition |= Q(status=RequestStatus.PENDING) & ~has_active_manager
         if model is LeaveRequest:
             condition |= Q(status=RequestStatus.MANAGER_APPROVED)
