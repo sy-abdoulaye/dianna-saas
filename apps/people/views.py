@@ -2,12 +2,13 @@
 
 import json
 import uuid
+from urllib.parse import urlencode
 
 from django.core.paginator import Paginator
 from django.db import DatabaseError
 from django.db.models import Q
 from django.http import Http404
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views import View
@@ -69,6 +70,9 @@ class DirectoryView(PermissionRequiredMixin, View):
     template_name = "people/directory.html"
 
     def get(self, request):
+        view = request.GET.get("vue")
+        if view not in PER_PAGE:
+            return self._with_view(request)
         me = request.employee
         can_see_left = permissions.can(me, "people.view_left")
         form = DirectoryFilterForm(request.GET or None, show_status=can_see_left)
@@ -93,8 +97,6 @@ class DirectoryView(PermissionRequiredMixin, View):
             people = people.filter(service=data["service"])
         if data.get("site"):
             people = people.filter(site=data["site"])
-        view = request.GET.get("vue") or request.session.get(VIEW_SESSION_KEY, "liste")
-        view = view if view in PER_PAGE else "liste"
         request.session[VIEW_SESSION_KEY] = view  # sélecteur mémorisé
         page_obj = Paginator(people, PER_PAGE[view]).get_page(request.GET.get("page"))
         for person in page_obj.object_list:
@@ -113,12 +115,22 @@ class DirectoryView(PermissionRequiredMixin, View):
                 "sites": in_post.values("site").distinct().exclude(site=None).count(),
                 "services": in_post.values("service").distinct().exclude(service=None).count(),
             },
-            "list_url": reverse("people:list"),
+            # Réinitialiser garde l'affichage choisi.
+            "list_url": f"{reverse('people:list')}?{urlencode({'vue': view})}",
             "view_options": [("liste", _("Liste"), "list"), ("cartes", _("Cartes"), "grid")],
         }
         if is_htmx(request) and request.htmx.target == "results":
             return render(request, f"{self.template_name}#results", context)
         return render(request, self.template_name, context)
+
+    @staticmethod
+    def _with_view(request):
+        """L'adresse porte toujours l'affichage (liste ou cartes) : Retour retrouve celui de
+        la page quittée, et non le dernier mémorisé."""
+        params = request.GET.copy()
+        saved = request.session.get(VIEW_SESSION_KEY)
+        params["vue"] = saved if saved in PER_PAGE else "liste"
+        return redirect(f"{request.path}?{params.urlencode()}")
 
 
 @require_GET

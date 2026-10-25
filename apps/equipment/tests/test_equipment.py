@@ -341,3 +341,10 @@ def test_the_only_item_of_the_requested_kind_is_preselected(client_for, company_
     page = hr.get(url).content.decode()
     assert f'<option value="{stock.pk}" selected>' not in page  # plusieurs : à choisir
     assert '<option value="" selected>Choisir…</option>' in page
+
+
+def test_park_filters_are_not_autofilled_by_the_browser(client_for, company_a):
+    content = client_for(company_a.hr).get("/materiel/?onglet=parc&etat=in_stock").content.decode()
+    form = content.split('<form class="filters"', 1)[1].split(">", 1)[0]
+    assert 'autocomplete="off"' in form
+    assert 'name="etat"' in content

@@ -14,11 +14,14 @@
   l'élément à la précédente ; celle d'un bouton radio ne change jamais, et un second clic
   sur « Mois » ou « Cartes » était ignoré. Un champ texte n'émet « input » que si son texte
   change.
+  autocomplete="off" : au Retour, le navigateur ne remet pas dans les champs une valeur que
+  l'adresse ne porte pas (liste « État » du parc).
 {% endcomment %}
 <form class="filters"
       method="get"
       action="{{ action }}"
       role="search"
+      autocomplete="off"
       {% if form_id %}id="{{ form_id }}"{% endif %}
       {% if not classic %}
         hx-get="{{ action }}"

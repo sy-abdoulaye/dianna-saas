@@ -52,7 +52,7 @@ def test_employee_sees_no_status_no_left_people_no_hr_info(client_for, company_a
         status="left",
         registration_number="MAT-SECRET",
     )
-    content = client_for(company_a.employee).get("/annuaire/").content.decode()
+    content = client_for(company_a.employee).get("/annuaire/", follow=True).content.decode()
     assert "Les informations RH (contrat, matricule) ne sont pas affichées." in content
     assert ">Statut<" not in content
     assert "Partie" not in content
@@ -60,7 +60,7 @@ def test_employee_sees_no_status_no_left_people_no_hr_info(client_for, company_a
 
 
 def test_hr_sees_status_and_actions(client_for, company_a):
-    content = client_for(company_a.hr).get("/annuaire/").content.decode()
+    content = client_for(company_a.hr).get("/annuaire/", follow=True).content.decode()
     assert ">Statut<" in content
     assert "Ajouter un collaborateur" in content
     assert f"Archiver {company_a.employee.full_name}" in content
@@ -70,21 +70,21 @@ def test_upcoming_arrivals_are_visible_and_counted_in_post(client_for, company_a
     EmployeeFactory(
         company=company_a.company, user=None, last_name="Arrivante", status=EmployeeStatus.UPCOMING
     )
-    content = client_for(company_a.employee).get("/annuaire/").content.decode()
+    content = client_for(company_a.employee).get("/annuaire/", follow=True).content.decode()
     assert "Arrivante" in content
     assert "Arrivée prochaine" in content
-    hr = client_for(company_a.hr).get("/annuaire/?statut=en_poste").content.decode()
+    hr = client_for(company_a.hr).get("/annuaire/?statut=en_poste", follow=True).content.decode()
     assert "Arrivante" in hr
 
 
 def test_hr_filters_left_people(client_for, company_a):
     EmployeeFactory(company=company_a.company, user=None, last_name="Partie", status="left")
-    content = client_for(company_a.hr).get("/annuaire/?statut=partis").content.decode()
+    content = client_for(company_a.hr).get("/annuaire/?statut=partis", follow=True).content.decode()
     assert "Partie" in content and company_a.employee.last_name not in content
 
 
 def test_search_without_result_shows_the_empty_state(client_for, company_a):
-    content = client_for(company_a.employee).get("/annuaire/?q=zzzz").content.decode()
+    content = client_for(company_a.employee).get("/annuaire/?q=zzzz", follow=True).content.decode()
     assert "Aucun collaborateur trouvé" in content
     assert "Aucune fiche ne correspond à « zzzz »" in content
     assert "Réinitialiser les filtres" in content
@@ -92,7 +92,7 @@ def test_search_without_result_shows_the_empty_state(client_for, company_a):
 
 def test_filters_and_page_live_in_the_url_and_htmx_returns_the_fragment(client_for, company_a):
     client = client_for(company_a.employee)
-    url = f"/annuaire/?q={company_a.manager.last_name}&page=1"
+    url = f"/annuaire/?q={company_a.manager.last_name}&page=1&vue=liste"
     full = client.get(url).content.decode()
     assert "<html" in full and company_a.manager.full_name in full
     fragment = client.get(url, headers={"HX-Request": "true", "HX-Target": "results"})
@@ -101,13 +101,24 @@ def test_filters_and_page_live_in_the_url_and_htmx_returns_the_fragment(client_f
     assert company_a.employee.full_name not in content
 
 
+def test_directory_address_always_carries_the_view(client_for, company_a):
+    client = client_for(company_a.employee)
+    first = client.get("/annuaire/?q=dupont")
+    assert first.status_code == 302 and first["Location"] == "/annuaire/?q=dupont&vue=liste"
+    client.get("/annuaire/?vue=cartes")
+    remembered = client.get("/annuaire/?vue=inconnue&page=2")
+    assert remembered["Location"] == "/annuaire/?vue=cartes&page=2"
+    content = client.get("/annuaire/?vue=cartes&q=zzzz").content.decode()
+    assert 'href="/annuaire/?vue=cartes"' in content  # Réinitialiser garde l'affichage
+
+
 def test_cards_view_is_remembered_and_shows_12_per_page(client_for, company_a):
     for index in range(14):
         EmployeeFactory(company=company_a.company, user=None, last_name=f"Zz{index:02d}")
     client = client_for(company_a.employee)
     content = client.get("/annuaire/?vue=cartes").content.decode()
     assert "1 à 12 sur" in content and "person-card" in content
-    assert "person-card" in client.get("/annuaire/").content.decode()  # mémorisé
+    assert "person-card" in client.get("/annuaire/", follow=True).content.decode()  # mémorisé
     assert "1 à 8 sur" in client.get("/annuaire/?vue=liste").content.decode()
 
 
@@ -472,7 +483,7 @@ def test_hr_cannot_archive_an_administrator(client_for, company_a):
     client = client_for(company_a.hr)
     detail = client.get(detail_url(admin)).content.decode()
     assert f"/annuaire/{admin.public_id}/archiver/" not in detail
-    listing = client.get("/annuaire/").content.decode()
+    listing = client.get("/annuaire/", follow=True).content.decode()
     assert f"/annuaire/{admin.public_id}/archiver/" not in listing
     assert f"/annuaire/{company_a.employee.public_id}/archiver/" in listing
     response = client.post(

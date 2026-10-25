@@ -137,7 +137,7 @@ def test_photos_never_call_exists_and_fail_quietly(client_for, company_a, monkey
     assert client.get(signed_url(employee.photo)).status_code == 404  # fichier absent
     broken_storage(monkeypatch)
     assert client.get(signed_url(employee.photo)).status_code == 404  # stockage en panne
-    page = client.get("/annuaire/").content.decode()
+    page = client.get("/annuaire/", follow=True).content.decode()
     assert "data-fallback" in page  # l'image se retire, les initiales restent
 
 
@@ -157,7 +157,7 @@ def test_directory_answers_quickly_when_the_storage_does_not_answer(
     employee = Employee.all_companies.get(pk=company_a.employee.pk)
     client = client_for(company_a.hr)
     start = time.perf_counter()
-    page = client.get("/annuaire/")
+    page = client.get("/annuaire/", follow=True)
     photo = client.get(signed_url(employee.photo))
     elapsed = time.perf_counter() - start
     assert page.status_code == 200 and photo.status_code == 404
