@@ -101,9 +101,15 @@ plugins = ["mypy_django_plugin.main"]
 files = ["apps/*/services.py", "apps/*/selectors.py", "apps/approvals/workflow/*.py"]
 # Les modules importés sont analysés pour connaître leurs types, sans y signaler d'erreur.
 follow_imports = "silent"
-ignore_missing_imports = true
 warn_unused_ignores = true
 check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# Bibliothèques sans types (ni marqueur py.typed, ni paquet de stubs) : vues comme Any.
+[[tool.mypy.overrides]]
+module = ["allauth.*", "botocore.*", "environ", "storages.*"]
+ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "config.settings.test"

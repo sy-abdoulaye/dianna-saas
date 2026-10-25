@@ -3,7 +3,12 @@
 Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
 par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
+from typing import TypeGuard
+
+from django.db.models import QuerySet
+
 from apps.approvals.models import (
+    ApprovalRequest,
     LeaveRequest,
     RequestStatus,
 )
@@ -11,14 +16,14 @@ from apps.core import permissions
 from apps.people.models import IN_POST_STATUSES, Employee, Role
 
 
-def active_manager(employee: Employee):
+def active_manager(employee: Employee) -> Employee | None:
     manager = employee.manager
     if manager is not None and manager.status in IN_POST_STATUSES:
         return manager
     return None
 
 
-def hr_validators(exclude: Employee):
+def hr_validators(exclude: Employee) -> list[Employee]:
     """RH et administrateurs en poste, autres que le demandeur (M-12)."""
     return list(
         Employee.objects.filter(role__in=(Role.HR, Role.ADMIN), status__in=IN_POST_STATUSES)
@@ -27,11 +32,11 @@ def hr_validators(exclude: Employee):
     )
 
 
-def is_hr_or_admin(employee) -> bool:
+def is_hr_or_admin(employee: Employee | None) -> bool:
     return employee is not None and employee.role in (Role.HR, Role.ADMIN)
 
 
-def has_hr_step(request) -> bool:
+def has_hr_step(request: ApprovalRequest) -> TypeGuard[LeaveRequest]:
     """Congés d'été avec validation finale RH (M-03, `summer_leave_hr_step`)."""
     return (
         isinstance(request, LeaveRequest)
@@ -40,7 +45,7 @@ def has_hr_step(request) -> bool:
     )
 
 
-def first_validators(request) -> list[Employee]:
+def first_validators(request: ApprovalRequest) -> list[Employee]:
     """Qui reçoit la demande à l'envoi : le manager direct, sinon les RH et administrateurs
     autres que le demandeur (M-12, L3-02). Types validés par les RH (transport, matériel,
     L5-04) : les RH et administrateurs autres que le demandeur."""
@@ -52,7 +57,7 @@ def first_validators(request) -> list[Employee]:
     return hr_validators(exclude=request.requester)
 
 
-def can_decide(employee, request) -> bool:
+def can_decide(employee: Employee | None, request: ApprovalRequest) -> bool:
     """Valider ou refuser maintenant : manager direct (quel que soit son profil, L1-02), ou
     RH et administrateur à sa place (M-12) ; l'étape RH des congés d'été est réservée aux RH
     et administrateurs. Personne ne décide pour soi-même."""
@@ -74,13 +79,13 @@ def can_decide(employee, request) -> bool:
     return False
 
 
-def can_cancel_approved(employee, request) -> bool:
+def can_cancel_approved(employee: Employee, request: ApprovalRequest) -> bool:
     return request.status == RequestStatus.APPROVED and permissions.can(
         employee, "requests.cancel_approved", request
     )
 
 
-def acting_for(employee, request):
+def acting_for(employee: Employee, request: ApprovalRequest) -> Employee | None:
     """Manager remplacé quand un RH ou un administrateur décide à sa place (bandeau M-12)."""
     if request.status != RequestStatus.PENDING or request.hr_validated:
         return None
@@ -90,7 +95,7 @@ def acting_for(employee, request):
     return None
 
 
-def to_validate(employee, model):
+def to_validate(employee: Employee, model: type[ApprovalRequest]) -> QuerySet:
     """Onglet « À valider » : équipe directe pour un manager ; pour les RH et administrateurs,
     seulement les personnes sans manager (M-12) et l'étape RH des congés d'été."""
     from django.db.models import Q

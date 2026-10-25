@@ -8,6 +8,7 @@ from django.utils.translation import gettext as _
 
 from apps.approvals.kinds import kind_of, summary
 from apps.approvals.models import (
+    ApprovalRequest,
     RequestStatus,
 )
 from apps.approvals.workflow.validators import first_validators, hr_validators
@@ -16,18 +17,26 @@ from apps.core.models import Notification
 from apps.people.models import Employee
 
 
-def module_url(request, tab=""):
+def module_url(request: ApprovalRequest, tab: str = "") -> str:
     url = reverse(kind_of(request).url_name)
     return f"{url}?onglet={tab}" if tab else url
 
 
-def _notify(recipient, text, url, kind, *, email_subject="", request=None) -> int:
+def _notify(
+    recipient: Employee,
+    text: str,
+    url: str,
+    kind: str,
+    *,
+    email_subject: str = "",
+    request: ApprovalRequest | None = None,
+) -> int:
     return notifications.notify(
         recipient, text, url=url, kind=kind, email_subject=email_subject, source=request
     ).pk
 
 
-def _notify_validators(request, validators) -> list[int]:
+def _notify_validators(request: ApprovalRequest, validators: list[Employee]) -> list[int]:
     kind = kind_of(request)
     text = _("%(name)s : %(kind)s à valider (%(summary)s)") % {
         "name": request.requester.full_name,
@@ -45,7 +54,9 @@ def _notify_validators(request, validators) -> list[int]:
     return [notification.pk for notification in created]
 
 
-def _notify_requester(request, verb: str, reason: str = "", *, email: bool = True) -> int:
+def _notify_requester(
+    request: ApprovalRequest, verb: str, reason: str = "", *, email: bool = True
+) -> int:
     kind = kind_of(request)
     text = _("Votre demande (%(kind)s, %(summary)s) a été %(verb)s.") % {
         "kind": kind.lower,
@@ -67,7 +78,7 @@ def _notify_requester(request, verb: str, reason: str = "", *, email: bool = Tru
     )
 
 
-def _current_validators(request) -> list[Employee]:
+def _current_validators(request: ApprovalRequest) -> list[Employee]:
     if request.status == RequestStatus.MANAGER_APPROVED:
         return hr_validators(request.requester)
     if request.status == RequestStatus.PENDING:

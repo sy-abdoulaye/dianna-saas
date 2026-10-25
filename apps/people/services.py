@@ -3,14 +3,21 @@
 Chaque transition vérifie l'état de départ, écrit l'historique de la fiche (EmployeeChange,
 noms des champs seulement) et le journal d'audit (sans contenu personnel)."""
 
+from collections.abc import Iterable
+from datetime import date
+from typing import Any
+
+from django.core.files import File
 from django.db import transaction
+from django.db.models import QuerySet
+from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from apps.core import audit, constraints, permissions
 from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
-from apps.core.files import delete_after_commit, file_writes
+from apps.core.files import FileWrites, delete_after_commit, file_writes
 from apps.core.tenancy import get_current_company
 from apps.people.models import Employee, EmployeeChange, EmployeeStatus, Role
 
@@ -55,7 +62,7 @@ constraints.register(
 )
 
 
-def _save_employee(employee, **kwargs):
+def _save_employee(employee: Employee, **kwargs: Any) -> None:
     from django.db import DataError, IntegrityError
 
     try:
@@ -68,7 +75,15 @@ def _save_employee(employee, **kwargs):
         raise PeopleError(constraints.INVALID_VALUE) from exc
 
 
-def _record(employee, context: ActionContext, kind, fields=(), *, action=None, summary=None):
+def _record(
+    employee: Employee,
+    context: ActionContext,
+    kind: str,
+    fields: Iterable[str] = (),
+    *,
+    action: str | None = None,
+    summary: str | None = None,
+) -> None:
     EmployeeChange.objects.create(
         employee=employee, actor=context.actor, kind=kind, fields=sorted(set(fields))
     )
@@ -81,14 +96,14 @@ def _record(employee, context: ActionContext, kind, fields=(), *, action=None, s
     )
 
 
-def status_for_arrival(arrival_date) -> str:
+def status_for_arrival(arrival_date: date | None) -> str:
     """Date d'arrivée future : « Arrivée prochaine »."""
     if arrival_date and arrival_date > timezone.localdate():
         return EmployeeStatus.UPCOMING
     return EmployeeStatus.ACTIVE
 
 
-def active_admins(exclude=None):
+def active_admins(exclude: Employee | None = None) -> QuerySet[Employee]:
     admins = Employee.objects.filter(
         role=Role.ADMIN, status__in=(EmployeeStatus.ACTIVE, EmployeeStatus.UPCOMING)
     )
@@ -97,7 +112,9 @@ def active_admins(exclude=None):
     return admins
 
 
-def ensure_an_admin_remains(employee, *, new_role=None, leaving=False):
+def ensure_an_admin_remains(
+    employee: Employee, *, new_role: str | None = None, leaving: bool = False
+) -> None:
     """Il doit toujours rester au moins un administrateur actif (fiche administration)."""
     losing_admin = employee.role == Role.ADMIN and (
         leaving or (new_role and new_role != Role.ADMIN)
@@ -112,7 +129,7 @@ def ensure_an_admin_remains(employee, *, new_role=None, leaving=False):
         )
 
 
-def create_employee(data: dict, *, context: ActionContext, photo=None) -> Employee:
+def create_employee(data: dict, *, context: ActionContext, photo: File | None = None) -> Employee:
     """Crée la fiche au profil Salarié ; un autre profil est ensuite attribué par change_role
     (journalisé people.role_changed, comme tout changement de profil). La photo est écrite
     avant l'INSERT et supprimée si la création échoue (L5-18)."""
@@ -120,7 +137,9 @@ def create_employee(data: dict, *, context: ActionContext, photo=None) -> Employ
         return _create_employee(data, context, photo=photo, files=files)
 
 
-def _create_employee(data: dict, context: ActionContext, *, photo, files) -> Employee:
+def _create_employee(
+    data: dict, context: ActionContext, *, photo: File | None, files: FileWrites
+) -> Employee:
     data = dict(data)
     role = data.pop("role", None) or Role.EMPLOYEE
     employee = Employee(**data)
@@ -137,7 +156,12 @@ def _create_employee(data: dict, context: ActionContext, *, photo, files) -> Emp
 
 
 def update_employee(
-    employee: Employee, data: dict, *, context: ActionContext, photo=None, remove_photo=False
+    employee: Employee,
+    data: dict,
+    *,
+    context: ActionContext,
+    photo: File | None = None,
+    remove_photo: bool = False,
 ) -> list[str]:
     """Applique les changements et renvoie la liste des champs modifiés. Le profil d'accès
     passe par change_role (refus sur sa propre fiche, dernier administrateur protégé,
@@ -154,7 +178,15 @@ def update_employee(
         )
 
 
-def _update_employee(employee, data, context: ActionContext, *, photo, remove_photo, files):
+def _update_employee(
+    employee: Employee,
+    data: dict,
+    context: ActionContext,
+    *,
+    photo: File | None,
+    remove_photo: bool,
+    files: FileWrites,
+) -> list[str]:
     data = dict(data)
     role = data.pop("role", None)
     role_changed = role is not None and role != Employee.objects.get(pk=employee.pk).role
@@ -187,7 +219,9 @@ def _update_employee(employee, data, context: ActionContext, *, photo, remove_ph
 
 
 @transaction.atomic
-def update_contact(employee: Employee, *, phone: str, office: str, request=None) -> list[str]:
+def update_contact(
+    employee: Employee, *, phone: str, office: str, request: HttpRequest | None = None
+) -> list[str]:
     """Le salarié modifie son téléphone et son bureau (modale « Modifier mes coordonnées »)."""
     employee = Employee.objects.select_for_update().get(pk=employee.pk)
     changed = []
@@ -201,7 +235,7 @@ def update_contact(employee: Employee, *, phone: str, office: str, request=None)
     return changed
 
 
-def archive_refusal(employee: Employee, actor) -> str:
+def archive_refusal(employee: Employee, actor: Employee | None) -> str:
     """Motif de refus de l'archivage par cette personne (chaîne vide si permis). Sans auteur
     (plateforme, commande), seules les règles de la fiche s'appliquent."""
     if actor is None:
@@ -214,7 +248,9 @@ def archive_refusal(employee: Employee, actor) -> str:
 
 
 @transaction.atomic
-def archive(employee: Employee, *, context: ActionContext, departure_date=None) -> dict:
+def archive(
+    employee: Employee, *, context: ActionContext, departure_date: date | None = None
+) -> dict:
     """Statut « Parti », date de départ (aujourd'hui par défaut), compte désactivé, données
     conservées. Renvoie l'état précédent, pour l'annulation immédiate."""
     actor = context.actor

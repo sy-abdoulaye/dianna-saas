@@ -11,6 +11,7 @@ from apps.agenda.days import day_off, day_off_message
 from apps.approvals import rules
 from apps.approvals.models import (
     ACTIVE_STATUSES,
+    ApprovalRequest,
     LeaveRequest,
     OnCallDeclaration,
     RequestStatus,
@@ -22,7 +23,7 @@ from apps.approvals.workflow.common import AMOUNT_RANGE, SAME_DAY
 from apps.core.dates import format_date
 
 
-def check_request(request, *, campaign=None) -> dict:
+def check_request(request: ApprovalRequest, *, campaign: SummerCampaign | None = None) -> dict:
     """Contrôles qui dépendent des autres demandes du demandeur. Renvoie {champ: message}
     (vide si tout va bien). `request` peut ne pas être enregistrée (envoi) ; si elle l'est,
     elle est exclue des comptes (annulation immédiate)."""
@@ -37,7 +38,7 @@ def check_request(request, *, campaign=None) -> dict:
     return {}
 
 
-def _check_telework(request) -> dict:
+def _check_telework(request: TeleworkRequest) -> dict:
     """Jour non férié ni fermé (T-16, L3-12), une seule demande par jour, quota de la
     semaine."""
     requester, pk = request.requester, request.pk
@@ -67,7 +68,7 @@ def _check_telework(request) -> dict:
     }
 
 
-def _check_leave(request, campaign) -> dict:
+def _check_leave(request: LeaveRequest, campaign: SummerCampaign | None) -> dict:
     """Congés d'été : campagne ouverte et période comprise dans la sienne ; tout congé : pas
     de chevauchement avec une autre demande."""
     if request.leave_type == LeaveRequest.LeaveType.SUMMER:
@@ -79,7 +80,7 @@ def _check_leave(request, campaign) -> dict:
     return {}
 
 
-def _check_summer_campaign(request, campaign) -> dict:
+def _check_summer_campaign(request: LeaveRequest, campaign: SummerCampaign | None) -> dict:
     if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
         return {
             "leave_type": _(
@@ -100,7 +101,7 @@ def _check_summer_campaign(request, campaign) -> dict:
     return {}
 
 
-def _check_on_call(request) -> dict:
+def _check_on_call(request: OnCallDeclaration) -> dict:
     if request.kind == OnCallDeclaration.Kind.ON_CALL and rules.on_call_overlaps(
         request.requester, request.start, request.end, exclude_pk=request.pk
     ):
@@ -111,7 +112,7 @@ def _check_on_call(request) -> dict:
 SUBSCRIPTIONS = (TransportProof.TicketType.MONTHLY, TransportProof.TicketType.YEARLY)
 
 
-def _check_transport(request) -> dict:
+def _check_transport(request: TransportProof) -> dict:
     """Mois dans la fenêtre acceptée (L5-07), montant dans ses bornes, et pas de chevauchement
     entre deux abonnements actifs (mensuel ou annuel, L5-06) ; un titre unique reste toujours
     possible. Contrôles du service (A3-02), refaits même si le formulaire les a déjà faits."""

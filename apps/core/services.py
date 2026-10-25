@@ -1,14 +1,19 @@
 """Opérations de plateforme (équipe Dianna) : création d'entreprise, modules."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
 from apps.core import audit
 from apps.core.context import SYSTEM, ActionContext
 from apps.core.models import Company, CompanyModule, Module
 from apps.core.tenancy import tenant_context
+
+if TYPE_CHECKING:
+    from apps.people.models import Employee
 
 
 @transaction.atomic
@@ -23,7 +28,9 @@ class NewCompany:
     admin_email: str
 
 
-def create_company(data: NewCompany, *, invite: bool = True, request=None):
+def create_company(
+    data: NewCompany, *, invite: bool = True, request: HttpRequest | None = None
+) -> tuple[Company, "Employee"]:
     """Crée l'entreprise, active tous les modules, crée la fiche du premier administrateur et
     lui envoie son invitation. Renvoie (company, employee)."""
     from apps.accounts import services as accounts
@@ -54,7 +61,9 @@ def create_company(data: NewCompany, *, invite: bool = True, request=None):
     return company, admin
 
 
-def set_module(company: Company, module: str, enabled: bool, *, context: ActionContext = SYSTEM):
+def set_module(
+    company: Company, module: str, enabled: bool, *, context: ActionContext = SYSTEM
+) -> CompanyModule:
     actor, request = context.actor, context.request
     with tenant_context(company):
         row, _created = CompanyModule.objects.get_or_create(module=module)

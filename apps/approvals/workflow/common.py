@@ -5,8 +5,11 @@ Les modules du paquet s'importent directement entre eux ; le reste de l'applicat
 par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
 
 from dataclasses import dataclass, field
+from typing import Any, cast
 
+from django.core.files import File
 from django.db import DataError, IntegrityError, transaction
+from django.db.models import FileField, QuerySet
 from django.utils.translation import gettext as _
 
 from apps.agenda.models import CalendarEvent
@@ -79,7 +82,7 @@ class TransitionResult:
         }
 
 
-def _lock(request):
+def _lock(request: ApprovalRequest) -> ApprovalRequest:
     # Verrou sur la seule ligne de la demande : le manager (nullable) est lu sans verrou.
     return (
         type(request)
@@ -89,7 +92,7 @@ def _lock(request):
     )
 
 
-def _event(request, actor, action, comment="") -> int:
+def _event(request: ApprovalRequest, actor: Employee | None, action: str, comment: str = "") -> int:
     return RequestEvent.objects.create(
         request_type=request.request_type,
         request_id=request.pk,
@@ -99,7 +102,7 @@ def _event(request, actor, action, comment="") -> int:
     ).pk
 
 
-def _latest_event_id(request):
+def _latest_event_id(request: ApprovalRequest) -> int | None:
     return (
         RequestEvent.objects.filter(request_type=request.request_type, request_id=request.pk)
         .order_by("-pk")
@@ -108,7 +111,7 @@ def _latest_event_id(request):
     )
 
 
-def _lock_requester(employee_id) -> Employee:
+def _lock_requester(employee_id: int) -> Employee:
     """Verrou de la fiche : deux opérations simultanées pour la même personne passent l'une
     après l'autre, et la seconde voit la demande de la première."""
     return Employee.objects.select_for_update().select_related("company").get(pk=employee_id)
@@ -129,7 +132,7 @@ constraints.register(
 UNKNOWN_CONSTRAINT = _("La demande n'a pas pu être enregistrée : une valeur n'est pas acceptée.")
 
 
-def _save_checked(request, **kwargs):
+def _save_checked(request: ApprovalRequest, **kwargs: Any) -> None:
     """Enregistre sous point de sauvegarde : une contrainte de base violée malgré tout devient
     le message de cette contrainte, une valeur refusée par la base (DataError) un message
     clair ; jamais une erreur 500."""
@@ -143,19 +146,22 @@ def _save_checked(request, **kwargs):
         raise RequestValidationError({None: INVALID_VALUE}) from exc
 
 
-def _write_file(request, content, cleanup):
+def _write_file(request: ApprovalRequest, content: File, cleanup: list[str]) -> None:
     """Écrit le fichier joint avant l'INSERT ; le nom est inscrit dans `cleanup` avant
     l'écriture (L5-18)."""
-    field = request._meta.get_field(request.file_field)
-    name = field.generate_filename(request, content.name)
+    field_name = request.file_field
+    if field_name is None:
+        raise ValueError("Ce type de demande n'a pas de fichier joint.")
+    field = cast(FileField, request._meta.get_field(field_name))
+    name = field.generate_filename(request, content.name or "justificatif")
     cleanup.append(name)
     stored = write_private(name, content)
     if stored != name:
         cleanup.append(stored)
-    setattr(request, request.file_field, stored)
+    setattr(request, field_name, stored)
 
 
-def _forget_file(request):
+def _forget_file(request: ApprovalRequest) -> None:
     """Les fichiers ne suivent pas les transactions : un envoi annulé ne laisse pas de fichier
     sans demande (L5-05)."""
     field_file = getattr(request, request.file_field) if request.file_field else None
@@ -163,7 +169,7 @@ def _forget_file(request):
         delete_private(field_file.name)
 
 
-def sync_calendar(request):
+def sync_calendar(request: ApprovalRequest) -> None:
     """L'événement suit la demande : en attente (hachuré) tant qu'elle est ouverte, validé à
     la validation finale, supprimé sinon."""
     events = CalendarEvent.objects.filter(source_type=request.request_type, source_id=request.pk)
@@ -192,7 +198,9 @@ def sync_calendar(request):
         event.save(update_fields=["status", "start", "end", "updated_at"])
 
 
-def _audit(request, action, verb, *, context: ActionContext, extra=""):
+def _audit(
+    request: ApprovalRequest, action: str, verb: str, *, context: ActionContext, extra: str = ""
+) -> None:
     summary_text = _("%(verb)s : %(kind)s de %(name)s") % {
         "verb": verb,
         "kind": kind_of(request).lower,
@@ -209,13 +217,13 @@ def _audit(request, action, verb, *, context: ActionContext, extra=""):
     )
 
 
-def history(request):
+def history(request: ApprovalRequest) -> QuerySet[RequestEvent]:
     return RequestEvent.objects.filter(
         request_type=request.request_type, request_id=request.pk
     ).select_related("actor")
 
 
-def record_proof_access(request, *, context: ActionContext) -> None:
+def record_proof_access(request: ApprovalRequest, *, context: ActionContext) -> None:
     """Toute consultation d'un justificatif par une autre personne que le demandeur (RH,
     administrateur) est inscrite au journal d'audit, sans nom de fichier."""
     actor = context.actor

@@ -5,9 +5,12 @@ crée la notification (conventions de CLAUDE.md)."""
 
 import hashlib
 import secrets
+from collections.abc import Iterable
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import QuerySet
+from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -33,7 +36,7 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def email_is_taken(email: str, *, except_user=None) -> bool:
+def email_is_taken(email: str, *, except_user: User | None = None) -> bool:
     """Un compte Dianna utilise déjà cette adresse comme identifiant (toutes entreprises)."""
     users = User.objects.filter(email=normalize_email(email))
     if except_user is not None:
@@ -41,14 +44,19 @@ def email_is_taken(email: str, *, except_user=None) -> bool:
     return users.exists()
 
 
-def invitation_url(invitation, token: str) -> str:
+def invitation_url(invitation: Invitation, token: str) -> str:
     # Routes de l'espace client, même quand l'invitation part de l'hôte éditeur.
     path = reverse("accounts:invitation", args=[token], urlconf="config.urls")
     return company_url(invitation.employee.company, path)
 
 
 @transaction.atomic
-def invite(employee: Employee, *, sent_by: Employee | None = None, request=None):
+def invite(
+    employee: Employee,
+    *,
+    sent_by: Employee | None = None,
+    request: HttpRequest | None = None,
+) -> Invitation:
     """Envoie (ou renvoie) une invitation. Le jeton est créé par la tâche d'envoi et n'existe
     en clair que dans l'e-mail (A3-04) : l'empreinte enregistrée ici ne correspond à aucun
     jeton tant que l'e-mail n'est pas parti. L'invitation précédente reste valable jusqu'à
@@ -112,7 +120,7 @@ def mark_send_failed(invitation: Invitation) -> None:
     invitation.save(update_fields=["send_failed_at", "updated_at"])
 
 
-def latest_open_invitations(employees) -> dict:
+def latest_open_invitations(employees: Iterable[Employee] | QuerySet[Employee]) -> dict:
     """Dernière invitation ni acceptée ni remplacée de chaque fiche : {employee_id: invitation}."""
     latest: dict[int, Invitation] = {}
     for invitation in Invitation.objects.filter(
@@ -122,7 +130,7 @@ def latest_open_invitations(employees) -> dict:
     return latest
 
 
-def find_invitation(token: str):
+def find_invitation(token: str) -> Invitation | None:
     """Invitation de l'entreprise courante pour ce jeton, utilisable ou non (None si absente)."""
     return (
         Invitation.objects.select_related("employee").filter(token_hash=hash_token(token)).first()
@@ -130,7 +138,7 @@ def find_invitation(token: str):
 
 
 @transaction.atomic
-def accept(invitation: Invitation, password: str, *, request=None) -> User:
+def accept(invitation: Invitation, password: str, *, request: HttpRequest | None = None) -> User:
     invitation = Invitation.objects.select_for_update().get(pk=invitation.pk)
     employee = Employee.objects.select_for_update().get(pk=invitation.employee_id)
     invitation.employee = employee
@@ -154,7 +162,7 @@ def accept(invitation: Invitation, password: str, *, request=None) -> User:
 
 
 @transaction.atomic
-def request_renewal(invitation: Invitation, *, request=None) -> bool:
+def request_renewal(invitation: Invitation, *, request: HttpRequest | None = None) -> bool:
     """Lien expiré : prévient les administrateurs (une seule fois par invitation)."""
     invitation = Invitation.objects.select_for_update().get(pk=invitation.pk)
     if invitation.renewal_requested_at is not None or invitation.employee.user_id:

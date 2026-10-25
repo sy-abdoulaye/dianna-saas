@@ -9,6 +9,7 @@ from django.utils.translation import gettext as _
 from apps.agenda.models import CalendarEvent
 from apps.approvals.models import (
     ACTIVE_STATUSES,
+    ApprovalRequest,
     LeaveRequest,
     RequestEvent,
     RequestStatus,
@@ -44,7 +45,9 @@ UNDO_EXPECTED_STATUS = {
 
 
 @transaction.atomic
-def undo(model, payload: dict, *, context: ActionContext):
+def undo(
+    model: type[ApprovalRequest], payload: dict, *, context: ActionContext
+) -> ApprovalRequest | None:
     """Défait la dernière transition de son auteur, seulement si l'événement qu'elle a créé
     est toujours le dernier de la demande : sinon « Une autre décision a été prise depuis »
     et rien n'est modifié (A3-01). Après un envoi : la demande, son événement et ses
@@ -59,7 +62,7 @@ def undo(model, payload: dict, *, context: ActionContext):
     return _undo_decision(request, payload, context)
 
 
-def _lock_for_undo(model, payload: dict):
+def _lock_for_undo(model: type[ApprovalRequest], payload: dict) -> ApprovalRequest:
     """Verrouille la demande (et la fiche du demandeur si elle redevient active) et vérifie
     que l'événement à défaire est toujours le dernier."""
     found = model.objects.filter(public_id=payload["id"]).values_list("requester_id").first()
@@ -80,7 +83,7 @@ def _lock_for_undo(model, payload: dict):
     return request
 
 
-def _undo_submit(request, context: ActionContext) -> None:
+def _undo_submit(request: ApprovalRequest, context: ActionContext) -> None:
     if request.requester_id != context.person().pk:
         raise WorkflowError(ALREADY_PROCESSED)
     Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
@@ -93,7 +96,9 @@ def _undo_submit(request, context: ActionContext) -> None:
         transaction.on_commit(lambda: _forget_file(request))
 
 
-def _undo_decision(request, payload: dict, context: ActionContext):
+def _undo_decision(
+    request: ApprovalRequest, payload: dict, context: ActionContext
+) -> ApprovalRequest:
     action, previous = payload["action"], payload["previous"]
     if request.status not in UNDO_EXPECTED_STATUS[action] or previous not in ACTIVE_STATUSES:
         raise WorkflowError(ALREADY_PROCESSED)
@@ -122,7 +127,7 @@ def _undo_decision(request, payload: dict, context: ActionContext):
     return request
 
 
-def _restore_previous_state(request, action: str, payload: dict) -> None:
+def _restore_previous_state(request: ApprovalRequest, action: str, payload: dict) -> None:
     previous = payload["previous"]
     request.status = previous
     if action == "cancel_approved":

@@ -1,19 +1,33 @@
 """Administration de l'entreprise (docs/modules/04-administration.md). Toutes les actions
 de l'onglet sont journalisées."""
 
+from collections.abc import Iterator
+from datetime import date
+from typing import TYPE_CHECKING
+
+from django.core.files import File
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from apps.core import audit
+from apps.core.constraints import Message
 from apps.core.context import ActionContext
 from apps.core.csv_export import csv_content
 from apps.core.dates import format_date
 from apps.core.errors import ServiceError
-from apps.core.files import delete_after_commit, file_writes
+from apps.core.files import FileWrites, delete_after_commit, file_writes
 from apps.core.models import AuditLog, Company, Service, Site
 from apps.people.models import Employee, EmployeeStatus
+
+if TYPE_CHECKING:
+    from apps.agenda.models import Closure
+    from apps.approvals.models import TeleworkRequest
+
+# Service ou site de l'entreprise (onglet Structure).
+Structure = Service | Site
 
 STRUCTURES = {
     "services": (Service, "service", gettext_lazy("Service"), gettext_lazy("service")),
@@ -26,7 +40,12 @@ class AdministrationError(ServiceError):
 
 
 def update_company(
-    company: Company, data: dict, *, context: ActionContext, logo=None, remove_logo=False
+    company: Company,
+    data: dict,
+    *,
+    context: ActionContext,
+    logo: File | None = None,
+    remove_logo: bool = False,
 ) -> list[str]:
     """Paramètres de l'entreprise ; logo écrit avant l'UPDATE, supprimé en cas d'échec,
     ancien logo supprimé après la validation (L5-18)."""
@@ -41,7 +60,15 @@ def update_company(
         )
 
 
-def _update_company(company, data, context: ActionContext, *, logo, remove_logo, files):
+def _update_company(
+    company: Company,
+    data: dict,
+    context: ActionContext,
+    *,
+    logo: File | None,
+    remove_logo: bool,
+    files: FileWrites,
+) -> list[str]:
     actor, request = context.actor, context.request
     company = Company.objects.select_for_update().get(pk=company.pk)
     changed = [name for name, value in data.items() if getattr(company, name) != value]
@@ -67,13 +94,15 @@ def _update_company(company, data, context: ActionContext, *, logo, remove_logo,
     return changed
 
 
-def usage(kind: str, obj) -> int:
+def usage(kind: str, obj: Structure) -> int:
     """Nombre de collaborateurs en poste rattachés à ce service ou à ce site."""
     _model, field, _label, _lower = STRUCTURES[kind]
     return Employee.objects.filter(**{field: obj}).exclude(status=EmployeeStatus.LEFT).count()
 
 
-def add_structure(kind: str, name: str, *, context: ActionContext, alsace_moselle=False):
+def add_structure(
+    kind: str, name: str, *, context: ActionContext, alsace_moselle: bool = False
+) -> Structure:
     actor, request = context.actor, context.request
     model, _field, label, _lower = STRUCTURES[kind]
     extra = {"alsace_moselle": alsace_moselle} if hasattr(model, "alsace_moselle") else {}
@@ -88,17 +117,24 @@ def add_structure(kind: str, name: str, *, context: ActionContext, alsace_mosell
     return obj
 
 
-def rename_structure(kind: str, obj, name: str, *, context: ActionContext, alsace_moselle=None):
+def rename_structure(
+    kind: str,
+    obj: Structure,
+    name: str,
+    *,
+    context: ActionContext,
+    alsace_moselle: bool | None = None,
+) -> None:
     actor, request = context.actor, context.request
     old = obj.name
     obj.name = name
     fields = ["name", "updated_at"]
-    changes_holidays = (
-        alsace_moselle is not None
-        and hasattr(obj, "alsace_moselle")
+    # Jours fériés d'Alsace-Moselle : propres aux sites.
+    if (
+        isinstance(obj, Site)
+        and alsace_moselle is not None
         and obj.alsace_moselle != alsace_moselle
-    )
-    if changes_holidays:
+    ):
         obj.alsace_moselle = alsace_moselle
         fields.append("alsace_moselle")
         audit.log(
@@ -126,7 +162,7 @@ def rename_structure(kind: str, obj, name: str, *, context: ActionContext, alsac
 
 
 @transaction.atomic
-def delete_structure(kind: str, obj, *, context: ActionContext):
+def delete_structure(kind: str, obj: Structure, *, context: ActionContext) -> None:
     """Impossible tant que des fiches y sont rattachées (y compris des fiches parties, que
     la base protège : RESTRICT)."""
     actor, request = context.actor, context.request
@@ -143,7 +179,13 @@ def delete_structure(kind: str, obj, *, context: ActionContext):
     )
 
 
-def journal(queryset, *, q="", start=None, end=None):
+def journal(
+    queryset: QuerySet[AuditLog],
+    *,
+    q: str = "",
+    start: date | None = None,
+    end: date | None = None,
+) -> QuerySet[AuditLog]:
     entries = queryset.select_related("actor")
     if start:
         entries = entries.filter(created_at__date__gte=start)
@@ -161,13 +203,15 @@ def journal(queryset, *, q="", start=None, end=None):
     return entries
 
 
-def export_journal_csv(*, q, start, end, context: ActionContext) -> str:
+def export_journal_csv(
+    *, q: str, start: date | None, end: date | None, context: ActionContext
+) -> str:
     """CSV de la période (apps.core.csv_export : point-virgule, BOM, cellules neutralisées).
     L'export lui-même est journalisé."""
     actor, request = context.actor, context.request
     entries = journal(AuditLog.objects.all(), q=q, start=start, end=end).order_by("created_at")
 
-    def rows():
+    def rows() -> Iterator[list[str]]:
         for entry in entries:
             moment = timezone.localtime(entry.created_at)
             yield [
@@ -196,12 +240,12 @@ CLOSURE_DUPLICATE = gettext_lazy("Une fermeture existe déjà ce jour-là pour c
 
 
 class ClosureError(AdministrationError):
-    def __init__(self, field, message):
+    def __init__(self, field: str | None, message: Message) -> None:
         super().__init__(message)
         self.field = field
 
 
-def affected_telework(closure):
+def affected_telework(closure: "Closure") -> list["TeleworkRequest"]:
     """Demandes de télétravail en attente ou validées le jour d'une fermeture (L4-03)."""
     from apps.approvals.models import RequestStatus, TeleworkRequest
 
@@ -213,14 +257,16 @@ def affected_telework(closure):
     return list(requests.order_by("requester__last_name", "requester__first_name"))
 
 
-def closure_scope(closure) -> str:
-    if closure.site_id:
+def closure_scope(closure: "Closure") -> str:
+    if closure.site is not None:
         return _("site de %(name)s") % {"name": closure.site.name}
     return _("toute l'entreprise")
 
 
 @transaction.atomic
-def add_closure(*, day, label, site, context: ActionContext):
+def add_closure(
+    *, day: date, label: str, site: Site | None, context: ActionContext
+) -> tuple["Closure", list["TeleworkRequest"]]:
     """Ajoute une fermeture. Contrôles (date passée, doublon) faits ici, sous verrou de
     l'entreprise : deux ajouts simultanés passent l'un après l'autre (A3-02). Les demandes de
     télétravail déjà faites ce jour-là restent telles quelles (L4-03) ; leur liste, calculée
@@ -277,7 +323,7 @@ def add_closure(*, day, label, site, context: ActionContext):
 
 
 @transaction.atomic
-def delete_closure(closure, *, context: ActionContext):
+def delete_closure(closure: "Closure", *, context: ActionContext) -> None:
     actor, request = context.actor, context.request
     from apps.core.dates import format_date
 

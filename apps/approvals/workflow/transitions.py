@@ -9,6 +9,7 @@ from django.utils.translation import gettext as _
 
 from apps.approvals import rules
 from apps.approvals.models import (
+    ApprovalRequest,
     LeaveRequest,
     RequestEvent,
     RequestStatus,
@@ -44,9 +45,10 @@ from apps.approvals.workflow.validators import (
 from apps.core import notifications
 from apps.core.context import ActionContext
 from apps.core.files import delete_private
+from apps.people.models import Employee
 
 
-def submit(model, data: dict, *, context: ActionContext) -> TransitionResult:
+def submit(model: type[ApprovalRequest], data: dict, *, context: ActionContext) -> TransitionResult:
     """Envoi (voir `_submit`). Fichier joint (L5-05, L5-18) : son nom est inscrit dans la
     liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit avant
     l'INSERT, et il est supprimé si quoi que ce soit échoue ensuite (transaction annulée).
@@ -62,7 +64,9 @@ def submit(model, data: dict, *, context: ActionContext) -> TransitionResult:
 
 
 @transaction.atomic
-def _submit(model, data, *, context: ActionContext, cleanup) -> TransitionResult:
+def _submit(
+    model: type[ApprovalRequest], data: dict, *, context: ActionContext, cleanup: list[str]
+) -> TransitionResult:
     """Envoi. La fiche du demandeur est verrouillée, puis les contrôles métier sont faits
     (`check_request`) : deux envois simultanés ne peuvent ni dépasser le quota, ni créer deux
     demandes le même jour, ni deux absences ou astreintes qui se chevauchent. Lève
@@ -103,7 +107,7 @@ def _submit(model, data, *, context: ActionContext, cleanup) -> TransitionResult
     return result
 
 
-def _approve_automatically(request, reason: str, context: ActionContext) -> int:
+def _approve_automatically(request: ApprovalRequest, reason: str, context: ActionContext) -> int:
     """Validation sans valideur : le journal n'a pas d'auteur, mais garde l'adresse."""
     request.status = RequestStatus.APPROVED
     request.decided_at = timezone.now()
@@ -122,7 +126,9 @@ def _approve_automatically(request, reason: str, context: ActionContext) -> int:
 
 
 @transaction.atomic
-def approve(request, *, context: ActionContext, comment: str = "") -> TransitionResult:
+def approve(
+    request: ApprovalRequest, *, context: ActionContext, comment: str = ""
+) -> TransitionResult:
     actor = context.person()
     request = _lock(request)
     if request.status not in (RequestStatus.PENDING, RequestStatus.MANAGER_APPROVED):
@@ -169,7 +175,7 @@ def approve(request, *, context: ActionContext, comment: str = "") -> Transition
     return result
 
 
-def _substitution(request, actor, first_step) -> str:
+def _substitution(request: ApprovalRequest, actor: Employee, first_step: bool) -> str:
     """Trace d'un remplacement du manager par un RH ou un administrateur (M-12). Jamais pour
     les types validés par les RH, dont ils sont les valideurs prévus (L5-04)."""
     if request.hr_validated:
@@ -181,7 +187,7 @@ def _substitution(request, actor, first_step) -> str:
 
 
 @transaction.atomic
-def refuse(request, *, context: ActionContext, reason: str) -> TransitionResult:
+def refuse(request: ApprovalRequest, *, context: ActionContext, reason: str) -> TransitionResult:
     actor = context.person()
     reason = (reason or "").strip()
     if not reason:
@@ -211,7 +217,7 @@ def refuse(request, *, context: ActionContext, reason: str) -> TransitionResult:
 
 
 @transaction.atomic
-def cancel(request, *, context: ActionContext) -> TransitionResult:
+def cancel(request: ApprovalRequest, *, context: ActionContext) -> TransitionResult:
     """Le demandeur annule une demande encore en attente (y compris en attente de l'étape RH)."""
     actor = context.person()
     request = _lock(request)
@@ -230,7 +236,9 @@ def cancel(request, *, context: ActionContext) -> TransitionResult:
 
 
 @transaction.atomic
-def cancel_approved(request, *, context: ActionContext, reason: str) -> TransitionResult:
+def cancel_approved(
+    request: ApprovalRequest, *, context: ActionContext, reason: str
+) -> TransitionResult:
     """RH ou administrateur : annulation d'une demande validée, motif obligatoire (L3-10)."""
     actor = context.person()
     reason = (reason or "").strip()

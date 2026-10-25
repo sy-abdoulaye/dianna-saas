@@ -346,8 +346,9 @@ def file_writes():
         raise
 
 
-def delete_after_commit(name: str) -> None:
-    """Ancien fichier remplacé ou retiré : supprimé seulement si la transaction aboutit."""
+def delete_after_commit(name: str | None) -> None:
+    """Ancien fichier remplacé ou retiré : supprimé seulement si la transaction aboutit (rien
+    si le champ était vide)."""
     from django.db import transaction
 
     if name:

@@ -17,7 +17,7 @@ CAMPAIGN_FIELDS = ("label", "period_start", "period_end", "deadline", "conflict_
 
 
 @transaction.atomic
-def create_summer_campaign(data: dict, *, context: ActionContext):
+def create_summer_campaign(data: dict, *, context: ActionContext) -> SummerCampaign:
     """Crée une campagne en brouillon et l'inscrit au journal d'audit."""
     actor, http_request = context.person(), context.request
     campaign = SummerCampaign.objects.create(
@@ -34,28 +34,28 @@ def create_summer_campaign(data: dict, *, context: ActionContext):
 
 
 @transaction.atomic
-def open_summer_campaign(campaign, *, context: ActionContext):
+def open_summer_campaign(campaign: SummerCampaign, *, context: ActionContext) -> SummerCampaign:
     """Ouvre une campagne. Toutes les campagnes de l'entreprise sont verrouillées : deux
     ouvertures simultanées donnent une seule campagne ouverte (A3-06)."""
     context.person()
     campaigns = {c.pk: c for c in SummerCampaign.objects.select_for_update().order_by("pk")}
-    campaign = campaigns.get(campaign.pk)
-    if campaign is None or campaign.status != SummerCampaign.Status.DRAFT:
+    locked = campaigns.get(campaign.pk)
+    if locked is None or locked.status != SummerCampaign.Status.DRAFT:
         raise WorkflowError(_("Cette campagne ne peut pas être ouverte."))
     if any(c.status == SummerCampaign.Status.OPEN for c in campaigns.values()):
         raise WorkflowError(CAMPAIGN_ALREADY_OPEN)
-    campaign.status = SummerCampaign.Status.OPEN
+    locked.status = SummerCampaign.Status.OPEN
     try:
         with transaction.atomic():
-            campaign.save(update_fields=["status", "updated_at"])
+            locked.save(update_fields=["status", "updated_at"])
     except IntegrityError as exc:
         raise WorkflowError(CAMPAIGN_ALREADY_OPEN) from exc
-    _campaign_audit(campaign, _("Campagne ouverte"), context)
-    return campaign
+    _campaign_audit(locked, _("Campagne ouverte"), context)
+    return locked
 
 
 @transaction.atomic
-def close_summer_campaign(campaign, *, context: ActionContext):
+def close_summer_campaign(campaign: SummerCampaign, *, context: ActionContext) -> SummerCampaign:
     context.person()
     campaign = SummerCampaign.objects.select_for_update().filter(pk=campaign.pk).first()
     if campaign is None or campaign.status != SummerCampaign.Status.OPEN:
@@ -66,7 +66,7 @@ def close_summer_campaign(campaign, *, context: ActionContext):
     return campaign
 
 
-def _campaign_audit(campaign, title: str, context: ActionContext) -> None:
+def _campaign_audit(campaign: SummerCampaign, title: str, context: ActionContext) -> None:
     audit.log(
         f"requests.campaign_{campaign.status}",
         f"{title} : {campaign.label}",
