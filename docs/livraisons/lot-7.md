@@ -87,6 +87,18 @@ Entretien, fiche de suivi (jamais de note privée) et compte rendu passent par u
 - Contenu : 1 600 px au plus, centré, marges de 24 px puis 32 px à partir de 1 440 px, par un seul réglage de la coque. Le planning du mois tient maintenant en entier à 1 920 px.
 - Contrôle automatique étendu à 2 560 et 1 024 px, menu déplié et replié : aucun défilement du menu, alignement de la recherche, largeur du contenu.
 
+### Défilement du document et du menu (25 oct., L7-23)
+
+- Retour au défilement du document : en-tête et menu collants, zone principale sans défilement propre. La position est rendue au bouton Retour (contrôlé), et la barre d'adresse se replie sur mobile.
+- Le menu défile quand ses entrées dépassent, sans barre visible, avec un dégradé en haut et en bas. L'entrée courante est visible à l'ouverture ; le focus clavier fait défiler le menu.
+- Défaut trouvé par le nouveau contrôle, corrigé : en tiroir (1 920 × 1 080 zoomé à 200 %), le menu prenait la hauteur de son contenu au lieu de celle de l'écran, à cause de `align-self: start` sur un élément fixe d'une grille ; ses dernières entrées étaient inaccessibles.
+- Contrôles ajoutés :
+  - chaque entrée du menu atteignable et cliquable à 1366×650, 1280×600 et 1920×1080 zoomé à 200 %, menu déplié et replié, 4 profils ;
+  - aucune barre visible dans le menu ;
+  - aucun débordement horizontal ;
+  - focus clavier et entrée courante ;
+  - position rendue après Retour.
+
 ## Règles légales (M-08) : ce qui reste à confirmer par un juriste
 
 L'implémentation suit la loi n° 2025-989 du 24 octobre 2025 (article L6315-1 modifié) et le questions-réponses du ministère du Travail mis à jour en février 2026, résumés dans M-08 et la fiche 10 :
@@ -121,7 +133,7 @@ L'implémentation suit la loi n° 2025-989 du 24 octobre 2025 (article L6315-1 m
 | `make lint` | sans erreur (ruff, ruff format, djlint : 151 gabarits) |
 | `make typecheck` | 23 fichiers, aucune erreur (annotations complètes) |
 | `make test` | 951 tests : 949 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; couverture 96 % (services de la carrière 96 %, des interventions 97 %, `permissions.py` 99 %) ; puis 6 tests de performance |
-| `make e2e` | 76 parcours (12 nouveaux, dont 6 pour la coque et le hamburger) |
+| `make e2e` | 82 parcours (18 nouveaux, dont 12 pour la coque, le menu et le hamburger) |
 | `make check` | aucune alerte, aucune migration manquante |
 
 Nouveaux tests :
