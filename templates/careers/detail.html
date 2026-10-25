@@ -143,7 +143,7 @@
                   {% button _("Planifier") type="submit" %}
                   {% if review.meeting_date and review.meeting_date <= today %}
                     {% url "careers:held" review.public_id as held_url %}
-                    {% button _("Marquer l'entretien comme réalisé") variant="primary" hx_get=held_url hx_target="#modal-root" %}
+                    {% button _("Marquer l'entretien comme réalisé") variant="primary" hx_get=held_url hx_target="#modal-root" hx_swap="innerHTML" %}
                   {% elif review.meeting_date %}
                     <span class="hint">{% blocktranslate with day=review.meeting_date|fr_date:"long" %}L'entretien pourra être marqué comme réalisé à partir du {{ day }}.{% endblocktranslate %}</span>
                   {% else %}

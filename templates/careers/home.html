@@ -34,8 +34,8 @@
   <div class="grid gap-4 sm:grid-cols-3">
     {% if campaign %}
       {% translate "Campagne terminée" as l1 %}
-      {% blocktranslate asvar v1 %}{{ progress }} %{% endblocktranslate %}
-      {% include "components/kpi.html" with label=l1 value=v1 progress=progress %}
+      {% blocktranslate asvar v1 with progress=campaign_progress %}{{ progress }} %{% endblocktranslate %}
+      {% include "components/kpi.html" with label=l1 value=v1 progress=campaign_progress %}
     {% endif %}
     {% translate "À faire par vous" as l2 %}
     {% if todo_count %}

@@ -114,7 +114,7 @@ def home(request):
         "filter_form": form_class(request.GET, tab=tab),
         "list_url": url,
         "campaign": campaign,
-        "progress": selectors.campaign_progress(me, campaign) if campaign else None,
+        "campaign_progress": selectors.campaign_progress(me, campaign) if campaign else None,
         "todo_count": len(selectors.todo_reviews(me)),
         "planned": selectors.planned_meetings(me),
         "can_launch": permissions.can(me, "careers.launch"),
