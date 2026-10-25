@@ -90,6 +90,12 @@
               {% endif %}
             </ul>
           </div>
+          {% if follow_up_url %}
+            <div class="card card-body stack">
+              <h3 class="h3">{% translate "Raccourcis" %}</h3>
+              <ul class="rows"><li><a class="link" href="{{ follow_up_url }}">{% translate "Fiche de suivi" %}</a>{% icon "right" 16 %}</li></ul>
+            </div>
+          {% endif %}
         </aside>
       </div>
     {% elif tab == "equipe" %}

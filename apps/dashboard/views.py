@@ -1,8 +1,8 @@
-"""Tableau de bord (docs/modules/02-tableau-de-bord.md), complet au lot 4.
+"""Tableau de bord (docs/modules/02-tableau-de-bord.md).
 
-Seuls les blocs dont le module existe et est activé sont affichés (règle 6, L4-08) : les
-indicateurs du matériel, des annonces, des justificatifs et des entretiens arrivent avec
-leurs lots. Les compteurs « à traiter » sont ceux du menu (même fonction)."""
+Seuls les blocs dont le module existe et est activé sont affichés (règle 6, L4-08). Les
+compteurs « à traiter » sont ceux du menu et des listes (mêmes fonctions) : demandes à
+valider, entretiens à compléter (lot 7), comptes rendus à valider ou à envoyer (lot 7)."""
 
 from django.shortcuts import render
 from django.urls import reverse
@@ -14,10 +14,13 @@ from apps.approvals import rules
 from apps.approvals.kinds import KINDS, summary
 from apps.approvals.models import LeaveRequest, RequestStatus, TeleworkRequest
 from apps.approvals.views import is_validator, menu_counts
+from apps.careers import selectors as careers
 from apps.core import permissions
 from apps.core.access import enabled_modules, module_is_enabled
 from apps.core.dates import format_date
 from apps.core.models import AuditLog, Module, Service
+from apps.interventions import selectors as reports
+from apps.interventions.models import EDITABLE_STATUSES, InterventionReport
 from apps.people.models import IN_POST_STATUSES, Employee, EmployeeStatus, Role
 from apps.planning import services as planning
 
@@ -58,7 +61,7 @@ def indicators(request, me, today, todo_count, mix) -> list[tuple[str, object]]:
     if me.role == Role.HR:
         return _hr_indicators(request, kinds, todo_count)
     if is_validator(me):
-        return _manager_indicators(kinds, todo_count, mix)
+        return _manager_indicators(request, me, kinds, todo_count, mix)
     return _employee_indicators(request, me, today, kinds, mix)
 
 
@@ -81,6 +84,12 @@ def _hr_indicators(request, kinds, todo_count) -> list[tuple[str, object]]:
         kpis.append((_("Justificatifs à valider"), counts.get("transport", 0)))
     if any(k != "transport" for k in kinds):
         kpis.append((_("Demandes à valider"), todo_count - counts.get("transport", 0)))
+    review_campaign = (
+        careers.current_campaign() if module_is_enabled(request, Module.CAREERS) else None
+    )
+    if review_campaign is not None:
+        progress = careers.campaign_progress(request.employee, review_campaign)
+        kpis.append((_("Campagne d'entretiens"), f"{progress} %"))
     campaign = rules.open_campaign() if "leave" in kinds else None
     if campaign is not None:
         wishes = campaign.requests.exclude(
@@ -94,15 +103,18 @@ def _hr_indicators(request, kinds, todo_count) -> list[tuple[str, object]]:
     ]
 
 
-def _manager_indicators(kinds, todo_count, mix) -> list[tuple[str, object]]:
+def _manager_indicators(request, me, kinds, todo_count, mix) -> list[tuple[str, object]]:
+    """Fiche 02 : demandes à valider, équipe sur site, entretiens à mener (lot 7),
+    télétravail aujourd'hui ; « En congés aujourd'hui » quand la carrière est désactivée."""
     kpis = [(_("Demandes à valider"), todo_count)] if kinds else []
     if mix:
-        counts = mix["counts"]
-        kpis += [
-            (_("Équipe sur site aujourd'hui"), f"{counts['site']} / {mix['total']}"),
-            (_("En télétravail aujourd'hui"), counts["tt"]),
-            (_("En congés aujourd'hui"), counts["cp"]),
-        ]
+        kpis.append((_("Équipe sur site aujourd'hui"), f"{mix['counts']['site']} / {mix['total']}"))
+    if module_is_enabled(request, Module.CAREERS):
+        kpis.append((_("Entretiens à mener"), len(careers.todo_reviews(me))))
+    if mix:
+        kpis.append((_("En télétravail aujourd'hui"), mix["counts"]["tt"]))
+        if not module_is_enabled(request, Module.CAREERS):
+            kpis.append((_("En congés aujourd'hui"), mix["counts"]["cp"]))
     return kpis
 
 
@@ -145,6 +157,50 @@ def _employee_indicators(request, me, today, kinds, mix) -> list[tuple[str, obje
 
 
 def todo_items(request, me) -> list[dict]:
+    """« À traiter » : demandes à valider par module, entretiens à compléter, comptes rendus
+    à valider ou à envoyer ; chaque ligne mène à l'écran où l'action se fait."""
+    return [*_request_todo(request, me), *_career_todo(request, me), *_report_todo(request, me)]
+
+
+def _line(icon: str, text: str, url: str) -> dict:
+    return {"icon": icon, "text": text, "url": url}
+
+
+def _career_todo(request, me) -> list[dict]:
+    if not module_is_enabled(request, Module.CAREERS):
+        return []
+    count = len(careers.todo_reviews(me))
+    if not count:
+        return []
+    text = ngettext("%(n)s entretien à compléter", "%(n)s entretiens à compléter", count) % {
+        "n": count
+    }
+    return [_line("up", text, f"{reverse('careers:home')}?avancement=a-faire")]
+
+
+def _report_todo(request, me) -> list[dict]:
+    if not module_is_enabled(request, Module.INTERVENTIONS):
+        return []
+    lines = []
+    url = reverse("interventions:list")
+    own = InterventionReport.objects.filter(employee=me, status__in=EDITABLE_STATUSES).count()
+    if own:
+        text = ngettext(
+            "%(n)s compte rendu à envoyer ou compléter",
+            "%(n)s comptes rendus à envoyer ou compléter",
+            own,
+        ) % {"n": own}
+        lines.append(_line("tool", text, url))
+    waiting = reports.to_validate(me).count() if permissions.can(me, "interventions.decide") else 0
+    if waiting:
+        text = ngettext(
+            "%(n)s compte rendu à valider", "%(n)s comptes rendus à valider", waiting
+        ) % {"n": waiting}
+        lines.append(_line("tool", text, f"{url}?onglet=a-valider"))
+    return lines
+
+
+def _request_todo(request, me) -> list[dict]:
     """Une ligne par module avec des demandes à valider (mêmes compteurs que le menu)."""
     if not is_validator(me):
         return []
@@ -211,6 +267,9 @@ def home(request):
         "announcements": _latest_announcements(request, me),
         "equipment_url": reverse("equipment:home")
         if module_is_enabled(request, Module.EQUIPMENT)
+        else "",
+        "careers_url": reverse("careers:home")
+        if module_is_enabled(request, Module.CAREERS)
         else "",
         "new_telework_url": reverse("approvals:new", args=["telework"]) if can_declare else "",
     }

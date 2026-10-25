@@ -460,6 +460,12 @@ class Command(BaseCommand):
             self._seed_requests(people)
             self._seed_announcements(people)
             self._seed_surveys(people)
+            # Lot 7 : un module de démonstration par domaine (seed_demo ne grossit plus).
+            from apps.careers import demo as careers_demo
+            from apps.interventions import demo as interventions_demo
+
+            careers_demo.seed(people, shifted)
+            interventions_demo.seed(people, shifted)
             audit.log("platform.demo_loaded", "Données de démonstration chargées")
 
     def _seed_closures(self, sites):

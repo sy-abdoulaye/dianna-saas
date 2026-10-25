@@ -16,7 +16,12 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts import services as accounts
 from apps.core import permissions, undo
-from apps.core.access import PermissionRequiredMixin, permission_required, require
+from apps.core.access import (
+    PermissionRequiredMixin,
+    module_is_enabled,
+    permission_required,
+    require,
+)
 from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.files import signed_url
@@ -27,6 +32,7 @@ from apps.core.htmx import (
     form_error_response,
     is_htmx,
 )
+from apps.core.models import Module
 from apps.people import importer, services
 from apps.people.forms import (
     STATUS_IN_POST,
@@ -188,6 +194,11 @@ class EmployeeDetailView(PermissionRequiredMixin, View):
             "can_archive": is_hr and not services.archive_refusal(employee, me),
             "tab": tab,
             "detail_url": url,
+            # Raccourci « Fiche de suivi » (lot 7, L2-04) : même périmètre que la fiche.
+            "follow_up_url": reverse("careers:file", args=[employee.public_id])
+            if module_is_enabled(request, Module.CAREERS)
+            and permissions.can(me, "careers.view", employee)
+            else "",
             "tabs": [
                 {"label": label, "url": f"{url}?onglet={key}", "active": key == tab}
                 for key, label in tabs
