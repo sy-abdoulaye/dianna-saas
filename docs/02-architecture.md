@@ -179,7 +179,8 @@ Services sous verrou de l'équipement (`select_for_update`), historique `Equipme
 - activation d'un module : rechargement complet (`RELOAD_PAGE`).
 
 L'annulation passe par une seule vue (`apps.core.views.undo_action`) et le registre de `apps/core/undo.py`.
-| Lignes répétables (compte rendu d'intervention) | `hx-post` « ajouter une ligne » renvoyant un fragment de formulaire indexé ; suppression côté client et index recalculés à l'envoi |
+| Blocs répétables (objectifs d'entretien, travaux d'un compte rendu) | Brique `apps/core/repeatable.py` : formset inscrit une fois (`register`) ; « Ajouter » appelle la vue commune `core:add_block`, qui renvoie un seul bloc vide à l'index suivant et le compteur du formset (hx-swap-oob) ; « Retirer » masque le bloc et coche sa suppression dans le navigateur (ui.js), « Annuler » le rétablit ; les blocs vides sont ignorés (`kept()`) |
+| Enregistrement automatique (compte rendu) | Toutes les 30 s si la saisie a changé (ui.js) ; la version lue accompagne chaque enregistrement, un 409 arrête l'enregistrement automatique (L7-10) |
 
 Erreurs 5xx et réseau : événements `htmx:responseError` et `htmx:sendError` → bandeau « Le serveur n'a pas répondu. Vos saisies sont conservées, vous pouvez réessayer. » dans la modale ou le formulaire, sans perdre la saisie.
 

@@ -60,7 +60,8 @@ Chaque composant est un template d'inclusion dans `templates/components/` (ou un
 |---|---|---|
 | Bouton | `button.html` | variantes primary, secondary, ghost, danger, icon ; taille sm ; état de chargement (spinner, désactivé) |
 | Badge de statut | `status_badge.html` | point + libellé ; correspondance statut → couleur centralisée dans `core/status.py` |
-| Champ de formulaire | `field.html` | libellé, étoile si obligatoire, aide, message d'erreur lié (`aria-describedby`), `aria-invalid` |
+| Champ de formulaire | `field.html` | libellé, étoile si obligatoire (`required_mark` : obligatoire à l'envoi seulement), aide, message d'erreur lié (`aria-describedby`), `aria-invalid`, texte après le champ (`suffix`, « % ») |
+| Blocs répétables | `repeatable.html`, `repeatable_row.html` | blocs numérotés (« Travail réalisé 2 »), « Retirer » annulable, « Ajouter » sans recharger ni vider les autres blocs (lot 7) |
 | Résumé d'erreurs | `form_errors.html` | bandeau rouge en tête de formulaire : « N informations sont à corriger » |
 | Zone de fichier | `file_drop.html` | bordure pointillée, nom du fichier choisi, état d'erreur |
 | Sélecteur segmenté | `segmented.html` | radios stylés (Liste/Cartes, Semaine/Mois, Oui/Non) |
