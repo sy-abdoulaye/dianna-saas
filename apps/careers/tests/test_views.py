@@ -319,3 +319,77 @@ def test_pdf_exports_share_the_export_limit(client_for, company_a, monkeypatch):
     for _ in range(10):
         assert client.get(url(review_of(company_a), "pdf")).status_code == 200
     assert client.get(url(review_of(company_a), "pdf")).status_code == 429
+
+
+# ---------- Campagne, planification, compte rendu de parcours ----------
+
+
+def test_hr_edits_the_current_campaign(client_for, company_a):
+    client = client_for(company_a.hr)
+    modal = client.get("/carriere/campagne/").content.decode()
+    assert "Modifier la campagne" in modal
+    campaign = company_a.requests["review_campaign"]
+    response = client.post(
+        "/carriere/campagne/",
+        {"label": "Campagne 2026", "start": campaign.start, "end": campaign.end},
+        headers=HX,
+    )
+    assert trigger(response)["toast"]["title"] == "Campagne enregistrée"
+    page = client.get("/carriere/").content.decode()
+    assert "Campagne 2026 · du" in page
+
+
+def test_planning_a_past_date_is_refused_and_held_needs_the_date(client_for, company_a):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    review = review_of(company_a)
+    Review.all_companies.filter(pk=review.pk).update(step=ReviewStep.MEETING)
+    client = client_for(company_a.manager)
+    past = timezone.localdate() - timedelta(days=1)
+    refused = client.post(url(review, "plan"), {"meeting_date": past}, headers=HX)
+    assert "La date ne peut pas être dans le passé." in refused.content.decode()
+    client.post(url(review, "plan"), {"meeting_date": timezone.localdate()}, headers=HX)
+    assert (
+        "Oui, il a eu lieu" in client.get(f"/carriere/{review.public_id}/realise/").content.decode()
+    )
+    done = client.post(f"/carriere/{review.public_id}/realise/", headers=HX)
+    assert trigger(done)["toast"]["title"] == "Entretien marqué comme réalisé"
+    assert Review.all_companies.get(pk=review.pk).step == ReviewStep.SIGNATURE
+
+
+def test_a_summary_review_records_the_three_criteria(client_for, company_a):
+    with tenant_context(company_a.company):
+        review = Review.objects.create(
+            employee=company_a.employee,
+            manager=company_a.manager,
+            kind="professional",
+            reason="summary",
+            step="manager",
+            self_summary="Mon parcours depuis huit ans.",
+        )
+    client = client_for(company_a.manager)
+    page = client.get(url(review)).content.decode()
+    assert "État des lieux à 8 ans" in page and "Règles légales à confirmer par un juriste." in page
+    response = client.post(
+        f"/carriere/{review.public_id}/compte-rendu/",
+        {
+            "report": "Projet validé.",
+            "trainings": "ITIL\nAnimation",
+            "summary_training": "yes",
+            "summary_certification": "",
+            "summary_progression": "no",
+            "next_review_due": "2030-01-01",
+            "next_summary_due": "",
+        },
+        headers=HX,
+    )
+    assert response.status_code == 204
+    saved = Review.all_companies.get(pk=review.pk)
+    assert (saved.summary_training, saved.summary_certification, saved.summary_progression) == (
+        True,
+        None,
+        False,
+    )
+    assert saved.step == ReviewStep.SIGNATURE

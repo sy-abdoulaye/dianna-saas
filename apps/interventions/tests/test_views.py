@@ -239,3 +239,15 @@ def test_report_pdf_is_logged_without_name(client_for, company_a, monkeypatch):
     assert response["Content-Type"] == "application/pdf"
     log = AuditLog.all_companies.get(action="interventions.exported")
     assert company_a.employee.last_name not in log.summary
+
+
+def test_sending_from_the_detail_page_asks_for_confirmation(client_for, company_a):
+    client = client_for(company_a.employee)
+    save(client, "draft")
+    report = report_of(company_a.company, company_a.employee)
+    confirm = text(client.get(f"/interventions/{report.public_id}/envoyer/"))
+    assert "Envoyer le compte rendu ?" in confirm and company_a.manager.full_name in confirm
+    sent = client.post(f"/interventions/{report.public_id}/envoyer/", headers=HX)
+    assert trigger(sent)["toast"]["title"] == "Compte rendu envoyé"
+    again = client.post(f"/interventions/{report.public_id}/envoyer/", headers=HX)
+    assert again.status_code == 409
