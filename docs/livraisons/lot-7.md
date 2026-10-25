@@ -79,6 +79,14 @@ Entretien, fiche de suivi (jamais de note privée) et compte rendu passent par u
   - toutes les entrées du menu des 4 profils, plus des pages longues et des états vides, à 1920×1080, 1440×900, 1280×720 et 390×844, en clair et en sombre ;
   - parcours du rail (repli, dépli, état conservé après rechargement) et du tiroir mobile.
 
+### Menu latéral, recherche et largeur du contenu (25 oct., L7-22)
+
+- Le menu ne défile plus : ses entrées se resserrent sur les écrans peu hauts. La carte de la personne est masquée sous 760 px de haut.
+- Rail d'icônes conservé et noté comme écart au prototype.
+- Recherche alignée sur le bord droit du menu déplié (à la marge du contenu), placée après le logo quand le menu est replié, à la largeur restante sur mobile.
+- Contenu : 1 600 px au plus, centré, marges de 24 px puis 32 px à partir de 1 440 px, par un seul réglage de la coque. Le planning du mois tient maintenant en entier à 1 920 px.
+- Contrôle automatique étendu à 2 560 et 1 024 px, menu déplié et replié : aucun défilement du menu, alignement de la recherche, largeur du contenu.
+
 ## Règles légales (M-08) : ce qui reste à confirmer par un juriste
 
 L'implémentation suit la loi n° 2025-989 du 24 octobre 2025 (article L6315-1 modifié) et le questions-réponses du ministère du Travail mis à jour en février 2026, résumés dans M-08 et la fiche 10 :
