@@ -58,34 +58,110 @@ document.addEventListener("change", (event) => {
   }
 });
 
-/* ---------- Tiroir de navigation (sous 1 024 px) ---------- */
+/* ---------- Menu latéral : rail (≥ 1 024 px) ou tiroir (en dessous) ---------- */
+// Le hamburger replie le menu en rail d'icônes à partir de 1 024 px (état mémorisé, appliqué
+// avant l'affichage par base.html) ; en dessous, il ouvre le menu en tiroir par-dessus le
+// contenu. aria-expanded dit si le menu complet est affiché ; le libellé suit.
+const NAV_KEY = "dianna.nav";
+const desktop = window.matchMedia("(min-width: 1024px)");
+
 function navApp() {
   return $("[data-app]");
 }
 
-function setNav(open) {
+function navCollapsed() {
+  return document.documentElement.getAttribute("data-nav") === "collapsed";
+}
+
+function syncNavToggle() {
+  const toggle = $("[data-nav-toggle]");
+  const app = navApp();
+  if (!toggle || !app) return;
+  const expanded = desktop.matches ? !navCollapsed() : app.classList.contains("nav-open");
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.setAttribute("aria-label", expanded ? toggle.dataset.labelClose : toggle.dataset.labelOpen);
+  // Infobulle des entrées du rail : leur libellé (les entrées « Bientôt » gardent la leur).
+  $$(".side a.nav-item[data-label]").forEach((item) => {
+    if (desktop.matches && navCollapsed()) item.title = item.dataset.label;
+    else item.removeAttribute("title");
+  });
+}
+
+function setCollapsed(collapsed) {
+  if (collapsed) document.documentElement.setAttribute("data-nav", "collapsed");
+  else document.documentElement.removeAttribute("data-nav");
+  try {
+    if (collapsed) localStorage.setItem(NAV_KEY, "collapsed");
+    else localStorage.removeItem(NAV_KEY);
+  } catch {
+    // Stockage indisponible (navigation privée) : l'état vaut pour la page seulement.
+  }
+  syncNavToggle();
+}
+
+function setDrawer(open, { restoreFocus = true } = {}) {
   const app = navApp();
   const toggle = $("[data-nav-toggle]");
   if (!app || !toggle) return;
   app.classList.toggle("nav-open", open);
-  toggle.setAttribute("aria-expanded", String(open));
-  if (open) {
-    const first = $(".side a, .side button", app);
-    if (first) first.focus();
-  } else {
-    toggle.focus();
-  }
+  // Le reste de la page est inerte tant que le tiroir est ouvert : le focus y reste.
+  $$(".topbar, [data-main]", app).forEach((zone) => {
+    if (open) zone.setAttribute("inert", "");
+    else zone.removeAttribute("inert");
+  });
+  syncNavToggle();
+  if (open) $(".side a, .side button", app)?.focus();
+  else if (restoreFocus) toggle.focus();
+}
+
+function drawerOpen() {
+  return Boolean(navApp()?.classList.contains("nav-open"));
 }
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-nav-toggle]")) {
-    setNav(!navApp().classList.contains("nav-open"));
+    if (desktop.matches) setCollapsed(!navCollapsed());
+    else setDrawer(!drawerOpen());
     return;
   }
+  if (!drawerOpen()) return;
   const app = navApp();
-  // Clic sur le fond assombri (pseudo-élément de .app) : ferme le tiroir.
-  if (app && app.classList.contains("nav-open") && event.target === app) setNav(false);
+  // Clic sur le voile (pseudo-élément de .app) ou sur un lien du menu : le tiroir se ferme.
+  if (event.target === app) setDrawer(false);
+  else if (event.target.closest(".side a")) setDrawer(false, { restoreFocus: false });
 });
+
+// Tabulation : le focus tourne dans le tiroir ouvert.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Tab" || !drawerOpen()) return;
+  const items = $$(".side a, .side button", navApp());
+  if (!items.length) return;
+  const first = items[0];
+  const last = items.at(-1);
+  const inside = event.target.closest && event.target.closest(".side");
+  if (event.shiftKey && (event.target === first || !inside)) {
+    last.focus();
+    event.preventDefault();
+  } else if (!event.shiftKey && (event.target === last || !inside)) {
+    first.focus();
+    event.preventDefault();
+  }
+});
+
+// Changement de page sans rechargement (HX-Location, Retour) : le tiroir se ferme.
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  if (drawerOpen() && event.detail.target && event.detail.target.id === "content") {
+    setDrawer(false, { restoreFocus: false });
+  }
+});
+window.addEventListener("popstate", () => {
+  if (drawerOpen()) setDrawer(false, { restoreFocus: false });
+});
+desktop.addEventListener("change", () => {
+  if (drawerOpen()) setDrawer(false, { restoreFocus: false });
+  syncNavToggle();
+});
+syncNavToggle();
 
 /* ---------- Menus déroulants ---------- */
 function closeMenus(except) {
@@ -127,8 +203,7 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
-  const app = navApp();
-  if (app && app.classList.contains("nav-open") && !$("dialog[open]")) setNav(false);
+  if (drawerOpen() && !$("dialog[open]")) setDrawer(false);
 });
 
 /* ---------- Fenêtres modales ---------- */
