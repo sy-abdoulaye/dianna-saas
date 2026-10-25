@@ -90,6 +90,7 @@ function syncNavToggle() {
 function setCollapsed(collapsed) {
   if (collapsed) document.documentElement.setAttribute("data-nav", "collapsed");
   else document.documentElement.removeAttribute("data-nav");
+  syncSideFades();
   try {
     if (collapsed) localStorage.setItem(NAV_KEY, "collapsed");
     else localStorage.removeItem(NAV_KEY);
@@ -110,7 +111,11 @@ function setDrawer(open, { restoreFocus = true } = {}) {
     else zone.removeAttribute("inert");
   });
   syncNavToggle();
-  if (open) $(".side a, .side button", app)?.focus();
+  if (open) {
+    revealCurrentEntry();
+    syncSideFades();
+    $(".side a, .side button", app)?.focus({ preventScroll: true });
+  }
   else if (restoreFocus) toggle.focus();
 }
 
@@ -130,6 +135,32 @@ document.addEventListener("click", (event) => {
   if (event.target === app) setDrawer(false);
   else if (event.target.closest(".side a")) setDrawer(false, { restoreFocus: false });
 });
+
+// Le menu défile sans barre visible : un dégradé en bas (et en haut une fois défilé) indique
+// qu'il reste des entrées. L'entrée de la page courante est visible à l'ouverture de la page ;
+// le focus clavier fait défiler le menu jusqu'à l'entrée (comportement du navigateur).
+function syncSideFades() {
+  const side = document.getElementById("side");
+  if (!side) return;
+  side.classList.toggle("fade-top", side.scrollTop > 1);
+  side.classList.toggle("fade-bottom", side.scrollTop + side.clientHeight < side.scrollHeight - 1);
+}
+
+function revealCurrentEntry() {
+  const side = document.getElementById("side");
+  const current = side && $("[aria-current=page]", side);
+  if (!current) return;
+  const top = current.offsetTop;
+  const bottom = top + current.offsetHeight;
+  if (top < side.scrollTop || bottom > side.scrollTop + side.clientHeight) {
+    side.scrollTop = top - (side.clientHeight - current.offsetHeight) / 2;
+  }
+}
+
+document.getElementById("side")?.addEventListener("scroll", syncSideFades, { passive: true });
+window.addEventListener("resize", syncSideFades);
+revealCurrentEntry();
+syncSideFades();
 
 // Tabulation : le focus tourne dans le tiroir ouvert.
 document.addEventListener("keydown", (event) => {

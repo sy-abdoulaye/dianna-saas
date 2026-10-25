@@ -1,10 +1,11 @@
 """Coque de l'application (docs/05-design-system.md, mise en page) : sur toutes les pages
 principales, pour les 4 profils, à 6 largeurs d'écran, menu déplié et replié, dans les deux
-thèmes, le document ne défile jamais, seule la zone principale défile (jamais le menu ; les
-tableaux et les barres d'onglets horizontalement), la zone principale s'arrête au contenu, le
-fond du menu atteint le bas de l'écran, la recherche est alignée sur le menu sans toucher le
-logo, et le contenu ne dépasse pas 1 600 px. Puis le hamburger : rail
-mémorisé à partir de 1 024 px, tiroir accessible en dessous."""
+thèmes, le document défile et s'arrête au contenu, aucun autre défilement que le menu (sans
+barre visible), les tableaux et les barres d'onglets, le menu collant atteint le bas de
+l'écran, la recherche est alignée sur le menu sans toucher le logo et le contenu ne dépasse
+pas 1 600 px. Puis : chaque entrée du menu est atteignable et cliquable sur les écrans peu
+hauts et avec un zoom de 200 %, la position est rendue après Retour, et le hamburger replie le
+menu en rail (≥ 1 024 px) ou l'ouvre en tiroir accessible."""
 
 import re
 from pathlib import Path
@@ -138,9 +139,9 @@ def test_mobile_drawer_opens_traps_focus_and_closes_three_ways(browser, urls, co
         expect(burger).to_have_attribute("aria-expanded", "true")
         expect(burger).to_have_attribute("aria-label", "Fermer le menu")
         assert page.evaluate("() => document.activeElement.closest('#side') !== null")
-        assert (
-            page.evaluate("() => getComputedStyle(document.querySelector('[data-main]')).overflowY")
-            == "hidden"
+        # La page ne défile pas derrière le tiroir.
+        assert page.evaluate("() => getComputedStyle(document.documentElement).overflow") == (
+            "hidden"
         )
 
     def closed(*, focus_on_burger=True):
@@ -170,4 +171,106 @@ def test_mobile_drawer_opens_traps_focus_and_closes_three_ways(browser, urls, co
     expect(page).to_have_url(re.compile("/annuaire/"))
     closed(focus_on_burger=False)
     assert not overflow_x(page)
+    context.close()
+
+
+# ---------- Menu : entrées atteignables, focus, entrée courante ----------
+
+# (largeur, hauteur, échelle) : écrans peu hauts, et 1 920 × 1 080 zoomé à 200 % (960 × 540).
+SHORT_SCREENS = [(1366, 650, 1), (1280, 600, 1), (960, 540, 2)]
+
+
+def menu_state(page) -> dict:
+    return page.evaluate(
+        """() => {
+          const side = document.getElementById('side');
+          return {
+            scrollbar: getComputedStyle(side).scrollbarWidth,
+            overflowX: document.documentElement.scrollWidth > innerWidth + 1,
+          };
+        }"""
+    )
+
+
+def open_menu_if_drawer(page):
+    if page.viewport_size["width"] < 1024:
+        page.locator("[data-nav-toggle]").click()
+        expect(page.locator("#side")).to_be_visible()
+
+
+@pytest.mark.parametrize("profile", PROFILES)
+def test_every_menu_entry_is_reachable_on_short_and_zoomed_screens(
+    browser, urls, company_a, profile
+):
+    login = browser.new_context(locale="fr-FR")
+    page = login.new_page()
+    sign_in(page, urls, getattr(company_a, profile))
+    state = login.storage_state()
+    login.close()
+    problems = []
+    for width, height, scale in SHORT_SCREENS:
+        states = NAV_STATES if width >= 1024 else NAV_STATES[:1]
+        for nav in states:
+            context = browser.new_context(
+                storage_state=state,
+                viewport={"width": width, "height": height},
+                device_scale_factor=scale,
+                locale="fr-FR",
+            )
+            if nav == "collapsed":
+                context.add_init_script("localStorage.setItem('dianna.nav', 'collapsed')")
+            view = context.new_page()
+            view.goto(urls("/interventions/nouveau/"))
+            open_menu_if_drawer(view)
+            entries = view.locator("#side .nav-item")
+            for index in range(entries.count()):
+                entry = entries.nth(index)
+                # Clic d'essai : l'entrée défile dans le menu, est visible et reçoit le clic.
+                entry.click(trial=True, timeout=3000)
+            found = menu_state(view)
+            label = f"{width}×{height} ×{scale} {nav}"
+            if found["scrollbar"] != "none":
+                problems.append(f"{label} : barre de défilement dans le menu")
+            if found["overflowX"]:
+                problems.append(f"{label} : débordement horizontal de la page")
+            context.close()
+    assert problems == [], "\n".join(problems)
+
+
+def test_keyboard_focus_scrolls_the_menu_and_the_current_entry_is_visible(browser, urls, company_a):
+    context = browser.new_context(viewport={"width": 1280, "height": 600}, locale="fr-FR")
+    page = context.new_page()
+    sign_in(page, urls, company_a.admin)
+    # L'entrée courante (la dernière du menu) est visible à l'ouverture de la page.
+    page.goto(urls("/administration/"))
+    current = page.locator("#side [aria-current=page]")
+    expect(current).to_be_in_viewport(ratio=1)
+    assert page.evaluate(
+        "() => { const s = document.getElementById('side'); return s.scrollTop > 0"
+        " && s.classList.contains('fade-top'); }"
+    )
+    # Le focus clavier fait défiler le menu jusqu'à l'entrée.
+    page.goto(urls("/"))
+    entries = page.locator("#side a.nav-item")
+    entries.first.focus()
+    for _ in range(entries.count() - 1):
+        page.keyboard.press("Tab")
+    expect(entries.last).to_be_focused()
+    expect(entries.last).to_be_in_viewport(ratio=1)
+    context.close()
+
+
+def test_scroll_position_is_restored_after_back(browser, urls, company_a):
+    context = browser.new_context(viewport={"width": 1280, "height": 600}, locale="fr-FR")
+    page = context.new_page()
+    sign_in(page, urls, company_a.employee)
+    page.goto(urls("/interventions/nouveau/"))
+    page.mouse.wheel(0, 700)
+    page.wait_for_function("() => scrollY >= 600")
+    position = page.evaluate("() => scrollY")
+    page.locator("#side a.nav-item", has_text="Annuaire").click()
+    expect(page).to_have_url(re.compile("/annuaire/"))
+    page.go_back()
+    expect(page).to_have_url(re.compile("/interventions/nouveau/"))
+    page.wait_for_function(f"() => Math.abs(scrollY - {position}) <= 2")
     context.close()

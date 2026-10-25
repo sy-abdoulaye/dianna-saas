@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% load i18n ui %}
-{% block body_class %}has-app{% endblock %}
 {% block body %}
   {% comment %}
-    Coque (docs/05-design-system.md, mise en page) : en-tête fixe, menu latéral sur toute la
-    hauteur dessous, zone principale seule à défiler. Le document ne défile jamais.
+    Coque (docs/05-design-system.md, mise en page) : le document défile ; en-tête collant en
+    haut, menu latéral collant dessous sur toute la hauteur, avec son propre défilement sans
+    barre visible quand ses entrées dépassent.
   {% endcomment %}
   <div class="app" data-app>
     <header class="topbar">

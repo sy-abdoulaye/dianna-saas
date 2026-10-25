@@ -14,7 +14,7 @@
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
     <script src="{% static 'js/ui.js' %}" type="module"></script>
   </head>
-  <body class="{% block body_class %}{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     <a class="skip-link" href="#content">{% translate "Aller au contenu" %}</a>
     {% block body %}{% endblock %}
     <div id="modal-root"></div>
