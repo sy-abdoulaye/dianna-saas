@@ -81,7 +81,7 @@ Entretien, fiche de suivi (jamais de note privée) et compte rendu passent par u
 
 ### Menu latéral, recherche et largeur du contenu (25 oct., L7-22)
 
-- Le menu ne défile plus : ses entrées se resserrent sur les écrans peu hauts. La carte de la personne est masquée sous 760 px de haut.
+- Le menu ne défile plus : ses entrées se resserrent sur les écrans peu hauts. La carte de la personne est masquée sous 760 px de haut. (Remplacé le même jour, voir « Défilement du document et du menu » et « Espacements et fin du menu ».)
 - Rail d'icônes conservé et noté comme écart au prototype.
 - Recherche alignée sur le bord droit du menu déplié (à la marge du contenu), placée après le logo quand le menu est replié, à la largeur restante sur mobile.
 - Contenu : 1 600 px au plus, centré, marges de 24 px puis 32 px à partir de 1 440 px, par un seul réglage de la coque. Le planning du mois tient maintenant en entier à 1 920 px.
@@ -98,6 +98,13 @@ Entretien, fiche de suivi (jamais de note privée) et compte rendu passent par u
   - aucun débordement horizontal ;
   - focus clavier et entrée courante ;
   - position rendue après Retour.
+
+### Espacements et fin du menu (25 oct.)
+
+- **Resserrement supprimé** : le menu reprend partout les espacements du prototype, mesurés et inscrits dans le design system (entrées de 40 px espacées de 2 px, titres de groupe de 38 px, marges de 16 et 12 px). La carte nom et profil reste toujours affichée.
+- **Fin du menu** : hauteur égale à l'écran moins l'en-tête ; marge du bas de 16 px plus les 24 px du dégradé.
+- **Cause probable du bas invisible** : à la fin du défilement, la position du menu peut être fractionnaire (zoom, écran haute densité). Le dégradé du bas restait alors affiché et masquait la fin du menu. Il est maintenant calculé avec une tolérance de 2 px.
+- **Contrôle** : à 1920×880, 1366×650, 1280×600, 1440×900 et 390×844, menu déplié, replié et en tiroir, 4 profils. Menu défilé jusqu'au bout, la dernière entrée et la carte sont entièrement visibles, au-dessus du bord et hors du dégradé, avec 42 px entre deux entrées partout.
 
 ## Règles légales (M-08) : ce qui reste à confirmer par un juriste
 
@@ -133,7 +140,7 @@ L'implémentation suit la loi n° 2025-989 du 24 octobre 2025 (article L6315-1 m
 | `make lint` | sans erreur (ruff, ruff format, djlint : 151 gabarits) |
 | `make typecheck` | 23 fichiers, aucune erreur (annotations complètes) |
 | `make test` | 951 tests : 949 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; couverture 96 % (services de la carrière 96 %, des interventions 97 %, `permissions.py` 99 %) ; puis 6 tests de performance |
-| `make e2e` | 82 parcours (18 nouveaux, dont 12 pour la coque, le menu et le hamburger) |
+| `make e2e` | 86 parcours (22 nouveaux, dont 16 pour la coque, le menu et le hamburger) |
 | `make check` | aucune alerte, aucune migration manquante |
 
 Nouveaux tests :
