@@ -57,7 +57,8 @@
           {% include "layouts/partials/topbar.html" %}
         {% endblock %}
       </header>
-      <main id="content" class="page" tabindex="-1">
+      {# Rechargement de la page après une action (after_action, R1-02 : PAGE_CHANGED). #}
+      <main id="content" class="page" tabindex="-1" hx-get="{{ page_url }}" hx-trigger="pageChanged from:body" hx-select="#content" hx-target="this" hx-swap="outerHTML" hx-disinherit="*">
         {% block content %}{% endblock %}
       </main>
     </div>

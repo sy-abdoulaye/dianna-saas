@@ -1,20 +1,38 @@
 {% load i18n ui %}
 {% comment %}
-  Barre de filtres HTMX : le premier champ est la recherche, les suivants des listes.
-  La vue renvoie le fragment « results » si la requête vient d'HTMX, la page entière sinon.
-  {% include "components/filters.html" with form=filter_form action=request.path target="#results" %}
+  Barre de filtres d'une liste, seule façon d'écrire des filtres (CLAUDE.md).
+  {% include "components/filters.html" with form=filter_form action=list_url %}
+  - form : formulaire de filtres. Champ texte (type search) : recherche avec icône ; liste
+    à choix : sélecteur ; boutons radio : sélecteur segmenté ; champs cachés : conservés.
+  - target : zone des résultats (« #results » par défaut) ; form_id : identifiant du
+    formulaire (champs placés ailleurs avec form="…").
+  - Filtrage pendant la saisie (HTMX) ; classic=True : envoi classique avec le bouton
+    « Filtrer ».
+  - Bouton « Réinitialiser » ; no_reset=True pour ne pas l'afficher.
+  - extra_template : gabarit inclus en fin de barre (choix d'affichage, action principale).
+  Déclencheur « input » sans le modificateur « changed » : celui-ci compare la valeur de
+  l'élément à la précédente ; celle d'un bouton radio ne change jamais, et un second clic
+  sur « Mois » ou « Cartes » était ignoré. Un champ texte n'émet « input » que si son texte
+  change.
+  autocomplete="off" : au Retour, le navigateur ne remet pas dans les champs une valeur que
+  l'adresse ne porte pas (liste « État » du parc).
 {% endcomment %}
 <form class="filters"
       method="get"
       action="{{ action }}"
       role="search"
-      hx-get="{{ action }}"
-      hx-target="{{ target|default:'#results' }}"
-      hx-push-url="true"
-      hx-trigger="input changed delay:300ms, submit"
-      hx-sync="this:replace">
-  {% for field in form %}
-    {% if forloop.first %}
+      autocomplete="off"
+      {% if form_id %}id="{{ form_id }}"{% endif %}
+      {% if not classic %}
+        hx-get="{{ action }}"
+        hx-target="{{ target|default:'#results' }}"
+        hx-push-url="true"
+        hx-trigger="input delay:300ms, submit"
+        hx-sync="this:replace"
+      {% endif %}>
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  {% for field, kind in form|filter_fields %}
+    {% if kind == "search" %}
       <div class="field grow">
         <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
         <div class="search-input">
@@ -22,13 +40,27 @@
           {% control field %}
         </div>
       </div>
-    {% else %}
+    {% elif kind == "segmented" %}
       <div class="field">
-        <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {% control field %}
+        <span class="label" aria-hidden="true">{{ field.label }}</span>
+        <fieldset class="segmented">
+          <legend class="sr-only">{{ field.label }}</legend>
+          {% for radio in field %}
+            <label><input type="radio" name="{{ radio.data.name }}" value="{{ radio.data.value }}" {% if radio.data.selected %}checked{% endif %}><span>{{ radio.choice_label }}</span></label>
+          {% endfor %}
+        </fieldset>
       </div>
+    {% else %}
+      {% include "components/field.html" with field=field %}
     {% endif %}
   {% endfor %}
-  <noscript>{% button _("Filtrer") type="submit" %}</noscript>
-  {% button _("Réinitialiser") variant="ghost" href=action hx_get=action hx_target=target|default:"#results" hx_push_url="true" data_filters_reset=True %}
+  {% if not classic %}
+    <noscript>{% button _("Filtrer") type="submit" %}</noscript>
+  {% else %}
+    {% button _("Filtrer") type="submit" %}
+  {% endif %}
+  {% if not no_reset %}
+    {% button _("Réinitialiser") variant="ghost" href=action hx_get=action hx_target=target|default:"#results" hx_push_url="true" data_filters_reset=True %}
+  {% endif %}
+  {% if extra_template %}{% include extra_template %}{% endif %}
 </form>

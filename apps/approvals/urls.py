@@ -1,5 +1,7 @@
 from django.urls import path, register_converter
 
+from apps.core.views import undo_action
+
 from . import views
 
 app_name = "approvals"
@@ -30,7 +32,7 @@ class KindConverter:
 register_converter(KindConverter, "kind")
 
 urlpatterns = [
-    path("demandes/annuler/<str:token>/", views.undo_transition, name="undo"),
+    path("demandes/annuler/<str:token>/", undo_action, {"prefix": "requests."}, name="undo"),
     path("conges/campagnes/", views.campaigns, name="campaigns"),
     path("conges/campagnes/nouvelle/", views.new_campaign, name="new_campaign"),
     path("conges/campagnes/<int:pk>/synthese/", views.campaign_summary, name="campaign_summary"),

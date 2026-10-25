@@ -2,9 +2,11 @@
 L'abonnement par URL personnelle et révocable est prévu au lot 8."""
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from django.utils import timezone
+
+from apps.core.dates import compact_day_stamp, ics_utc_stamp
 
 ICS_CONTENT_TYPE = "text/calendar; charset=utf-8"
 
@@ -49,7 +51,7 @@ def fold(line: str) -> str:
 
 
 def ics_content(events, *, name: str, stamp: datetime | None = None) -> str:
-    stamp = (stamp or timezone.now()).astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = ics_utc_stamp(stamp or timezone.now())
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -63,8 +65,8 @@ def ics_content(events, *, name: str, stamp: datetime | None = None) -> str:
             "BEGIN:VEVENT",
             f"UID:{escape(event.uid)}",
             f"DTSTAMP:{stamp}",
-            f"DTSTART;VALUE=DATE:{event.start:%Y%m%d}",
-            f"DTEND;VALUE=DATE:{event.end + timedelta(days=1):%Y%m%d}",
+            f"DTSTART;VALUE=DATE:{compact_day_stamp(event.start)}",
+            f"DTEND;VALUE=DATE:{compact_day_stamp(event.end + timedelta(days=1))}",
             f"SUMMARY:{escape(event.summary)}",
             f"STATUS:{'TENTATIVE' if event.tentative else 'CONFIRMED'}",
             "TRANSP:TRANSPARENT",

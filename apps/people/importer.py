@@ -20,6 +20,8 @@ from django.db.models.functions import Lower
 from django.utils.translation import gettext as _
 
 from apps.core import audit
+from apps.core.context import ActionContext
+from apps.core.errors import ServiceError
 from apps.core.models import Service, Site
 from apps.core.text import strip_unsafe_characters
 from apps.people.models import ContractType, Employee, EmployeeChange
@@ -47,10 +49,8 @@ CONTRACTS = {
 }
 
 
-class ImportFileError(Exception):
-    def __init__(self, message):
-        super().__init__(str(message))
-        self.message = message
+class ImportFileError(ServiceError):
+    """Fichier d'import illisible ou refusé (message affiché)."""
 
 
 @dataclass
@@ -228,8 +228,9 @@ def rows_from_session(data: list) -> list[ImportRow]:
 
 
 @transaction.atomic
-def run(rows: list[ImportRow], *, actor, request=None) -> int:
+def run(rows: list[ImportRow], *, context: ActionContext) -> int:
     """Importe toutes les lignes ou aucune. Les contrôles sont refaits ici."""
+    actor, request = context.actor, context.request
     preview = check(rows_from_session([asdict(r) for r in rows]))
     if not preview.is_valid:
         raise ImportFileError(_("Des erreurs bloquantes restent : aucune ligne n'est importée."))

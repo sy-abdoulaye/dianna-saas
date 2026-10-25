@@ -69,11 +69,12 @@ def notify_many(
     *,
     email_subject: str = "",
     source=None,
-) -> int:
+) -> list[Notification]:
     """Même notification pour beaucoup de personnes (annonce, questionnaire publié) : une
     seule requête d'insertion au lieu d'une par personne. Les destinataires viennent du
     gestionnaire filtré de l'entreprise courante ; l'entreprise de chacun est revérifiée,
-    car bulk_create ne passe pas par TenantModel.save() (règle 1). Renvoie le nombre créé."""
+    car bulk_create ne passe pas par TenantModel.save() (règle 1). Renvoie les notifications
+    créées (leurs identifiants servent à l'annulation immédiate)."""
     from apps.core.tenancy import get_current_company
 
     if url and (not url.startswith("/") or url.startswith("//")):
@@ -105,7 +106,7 @@ def notify_many(
             person = by_pk[notification.recipient_id]
             if person.user_id and person.user.is_active:
                 queue_notification_email(notification)
-    return len(created)
+    return created
 
 
 def retract_unsent(source, *, exclude=()) -> int:

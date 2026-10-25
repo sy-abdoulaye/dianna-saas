@@ -41,21 +41,31 @@ Les versions exactes et les bibliothèques retenues sont dans `docs/00-decisions
 - Planning et compteurs : règle de confidentialité L4-16 appliquée par une seule fonction, partout (vue, aperçu, exports, compteurs, tableau de bord).
 - Toute limite de fréquence passe par apps/core/ratelimit.py, jamais par le cache.
 - Fichiers déposés : type réel vérifié par `apps/core/files.clean_document` ; stockés sous `<company_id>/…` avec un nom aléatoire (jamais le nom d'origine) ; un justificatif est servi par `serve_isolated` après contrôle de la permission, jamais par lien signé.
-- Écriture d'un fichier (justificatif, photo, logo et tout futur dépôt) : son nom est inscrit dans la liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit explicitement avant l'INSERT ou l'UPDATE, et il est supprimé si l'opération échoue (`apps/core/files.file_writes`, `workflow.submit`) ; l'ancien fichier remplacé n'est supprimé qu'après la validation de la transaction. Jamais de `FieldFile.save()` direct dans un service. Une panne du stockage (`StorageUnavailableError`) donne un message, jamais une erreur 500.
+- Écriture d'un fichier (justificatif, photo, logo et tout futur dépôt) : son nom est inscrit dans la liste de nettoyage avant toute écriture dans le stockage, le fichier est écrit explicitement avant l'INSERT ou l'UPDATE, et il est supprimé si l'opération échoue (`apps/core/files.file_writes`, `workflow.submit`) ; l'ancien fichier remplacé n'est supprimé qu'après la validation de la transaction. Jamais de `FieldFile.save()` direct dans un service. Une panne du stockage (`StorageUnavailableError`) donne `files.storage_unavailable_response(request)` (notification 503 en HTMX, la modale reste ouverte ; page 503 sinon), jamais une erreur 500.
 - Migrations : une migration par changement logique, jamais modifiée une fois fusionnée (seule exception, sans effet sur le schéma : L5-25).
 
 ## Qualité du code
 
 - Logique métier dans `services.py`, lectures complexes (filtres, périmètres, agrégats) dans `selectors.py`, vues minces : elles lisent la requête, appellent un service ou un sélecteur, rendent la réponse.
-- Une fonction fait une chose. ruff le vérifie (`pyproject.toml`) : complexité ≤ 10, 6 `return`, 12 branches, 8 arguments, 50 instructions au plus. Un `noqa` n'est admis qu'avec sa raison sur la même ligne.
+- Une fonction fait une chose. ruff le vérifie (`pyproject.toml`) : complexité ≤ 10, 6 `return`, 12 branches, 6 arguments, 50 instructions au plus (RUF100 signale un `noqa` devenu inutile). Un `noqa` n'est admis qu'avec sa raison sur la même ligne.
 - Pas de duplication : réutiliser les briques existantes au lieu de les recopier :
   - jeton d'annulation (`apps/core/undo.py`) et confirmation (`components/confirm.html`) ;
   - notifications (`apps/core/notifications.py`), journal (`apps/core/audit.py`), e-mails (`apps/core/mail.py`) ;
   - exports (`csv_export`, `xlsx_export`, `pdf`) et limites de fréquence (`ratelimit.py`) ;
   - fichiers (`files.py`) et format des dates (`dates.py`).
-  - erreur de service (`core/errors.ServiceError`), réponses HTMX (`htmx.py` : `error_response`, `confirm_response`, `modal_form_response`, `location`), notifications groupées (`notify_many`), filtres de liste (`components/filters.html`), texte saisi affiché sans HTML (filtre `plain_text`).
+  - erreur de service (`core/errors.ServiceError`, base de toute erreur métier), réponses HTMX (`htmx.py` : `error_response`, `download_response`, `confirm_response`, `modal_form_response`, `form_error_response`, `location`), notifications à plusieurs personnes (`notify_many`, jamais une boucle de `notify`), filtres de liste (`components/filters.html`), texte saisi affiché sans HTML (filtre `plain_text`), contexte d'une action (`core/context.ActionContext`) : tout service qui agit prend `context: ActionContext` (vue : `ActionContext.of(request)` ; sans personne : `SYSTEM`), jamais la paire `actor`, `request`.
+- Pour tout nouvel écran :
+  - fin d'une action réussie : toujours `htmx.after_action` (R1-02) : même page, `refresh` (zone ou `PAGE_CHANGED`) ; autre page, `go_to` (HX-Location) ; formulaire de page complète, `page_form=True`. Jamais `messages` puis `redirect`, ni `HX-Location` ou `HX-Refresh` écrits à la main ;
+  - refus d'un service : `htmx.error_response(error)` ; si l'affichage est devenu faux, `refresh=` recharge la zone (jamais `trigger(error_response(…))`) ; retour à une autre page, `go_to=` avec `request=` (message puis redirection sans HTMX) ;
+  - fin d'un export demandé depuis une modale : toujours `htmx.download_response(path)` (la modale se ferme, puis HX-Redirect vers le fichier, qui refait tous les contrôles) ; jamais `HX-Redirect` écrit à la main ;
+  - cache : `core.middleware.HtmxCacheMiddleware` pose `Vary: HX-Request` sur toute réponse et `Cache-Control: no-store` sur celles d'HTMX (Retour puis Suivant ne montre jamais un fragment nu) ; le focus revient au bouton d'origine après une action ou une modale (`ui.js`) ;
+  - filtres d'une liste : toujours `components/filters.html` avec un formulaire de filtres (options `classic`, `no_reset`, `form_id`, `extra_template`) ;
+  - tout contrôle qui change l'affichage (vue, onglet, filtre, page) : un parcours Playwright en aller-retour par le gabarit `round_trip` (chaque état vérifié à l'aller, au Retour puis au Suivant ; `tests/e2e/test_round_trips.py`) ;
+  - annulation immédiate : `undo.register(action, traitement, refresh=…)` et la vue commune `apps.core.views.undo_action` (URL avec le préfixe des actions) ; jamais une nouvelle vue d'annulation ;
+  - contrainte de base : l'inscrire dans la table commune (`apps/core/constraints.register`) et traduire l'erreur par `constraints.translate`.
 - Si une brique doit servir un deuxième usage, la faire évoluer au lieu d'en créer une variante.
-- Annotations de type sur les fonctions de service et de sélection.
+- Annotations de type complètes sur les fonctions de service et de sélection ; `make typecheck` (mypy, django-stubs, `disallow_untyped_defs`) est bloquant sur tous les `services.py`, `selectors.py` et `apps/approvals/workflow/`. Une bibliothèque sans types est nommée dans les surcharges de `pyproject.toml`, jamais par un `ignore_missing_imports` global.
+- Moteur des demandes : paquet `apps/approvals/workflow/` (socle, valideurs, contrôles, notifications, transitions, annulation, campagnes). Hors du paquet, on l'importe toujours par la façade (`from apps.approvals import workflow`), qui n'exporte que les noms publics ; à l'intérieur, les modules s'importent directement, sans cycle (validators et common en bas, transitions et undo en haut). Un test injecte une panne au plus bas (gestionnaire du modèle, enregistrement direct), jamais en remplaçant une fonction privée du moteur.
 - Noms explicites en anglais.
 - Docstring courte qui dit pourquoi, pas quoi.
 - Pas de code mort, pas de TODO sans décision inscrite dans `docs/00-decisions.md`.
@@ -69,6 +79,7 @@ make css           # compile Tailwind en mode watch
 make test          # pytest (unitaires et intégration)
 make e2e           # tests de parcours Playwright
 make lint          # ruff check, ruff format --check, djlint
+make typecheck     # mypy sur les services et sélecteurs (bloquant)
 make seed          # charge l'entreprise de démonstration « Exemple SAS »
 make migrate
 ```

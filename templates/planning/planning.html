@@ -16,45 +16,7 @@
   </div>
 
   <div class="card">
-    <form id="planning-filters" class="filters" method="get" action="{{ list_url }}" role="search" hx-get="{{ list_url }}" hx-target="#planning-results" hx-push-url="true" hx-trigger="input changed delay:300ms, submit" hx-sync="this:replace">
-      {% translate "Semaine" as week_label %}{% translate "Mois" as month_label %}
-      <div class="field">
-        <span class="label" aria-hidden="true">{% translate "Vue" %}</span>
-        <fieldset class="segmented">
-          <legend class="sr-only">{% translate "Vue" %}</legend>
-          <label><input type="radio" name="vue" value="semaine" {% if view == "semaine" %}checked{% endif %}><span>{{ week_label }}</span></label>
-          <label><input type="radio" name="vue" value="mois" {% if view == "mois" %}checked{% endif %}><span>{{ month_label }}</span></label>
-        </fieldset>
-      </div>
-      <div class="field grow">
-        <label class="label" for="planning-q">{% translate "Recherche" %}</label>
-        <div class="search-input">
-          {% icon "search" %}
-          <input class="input" id="planning-q" type="search" name="q" value="{{ query }}" placeholder="{% translate 'Filtrer par nom' %}">
-        </div>
-      </div>
-      {% if company_wide %}
-        <div class="field">
-          <label class="label" for="planning-service">{% translate "Service" %}</label>
-          <span class="select-wrap">
-            <select class="select" id="planning-service" name="service">
-              <option value="">{% translate "Tous les services" %}</option>
-              {% for item in services %}<option value="{{ item.pk }}" {% if item.pk == service %}selected{% endif %}>{{ item.name }}</option>{% endfor %}
-            </select>
-          </span>
-        </div>
-      {% endif %}
-      <div class="field">
-        <label class="label" for="planning-site">{% translate "Site" %}</label>
-        <span class="select-wrap">
-          <select class="select" id="planning-site" name="site">
-            <option value="">{% translate "Tous les sites" %}</option>
-            {% for item in sites %}<option value="{{ item.pk }}" {% if item.pk == site %}selected{% endif %}>{{ item.name }}</option>{% endfor %}
-          </select>
-        </span>
-      </div>
-      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
-    </form>
+    {% include "components/filters.html" with form=filter_form action=list_url target="#planning-results" form_id="planning-filters" no_reset=True %}
     <div class="legend px-4 pb-3 pt-3" aria-label="{% translate 'Légende' %}">
       <span><i class="k-site"></i>{% translate "Sur site" context "planning" %}</span>
       <span><i class="k-tt"></i>{% translate "Télétravail" context "planning" %}</span>
@@ -65,7 +27,7 @@
     </div>
     <div id="planning-results" aria-live="polite" hx-get="{{ request.get_full_path }}" hx-trigger="requestsChanged from:body" hx-target="this" hx-disinherit="*">
       {% partialdef results inline %}
-        <input type="hidden" id="planning-date" name="date" value="{{ grid.first|date:'Y-m-d' }}" form="planning-filters">
+        <input type="hidden" id="planning-date" name="date" value="{{ anchor.isoformat }}" form="planning-filters">
         <div class="plan-nav">
           <a class="btn btn-secondary btn-icon" href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#planning-results" hx-push-url="true" aria-label="{% translate 'Période précédente' %}">{% icon "left" %}</a>
           <a class="btn btn-secondary" href="{{ today_url }}" hx-get="{{ today_url }}" hx-target="#planning-results" hx-push-url="true">{% translate "Aujourd'hui" %}</a>

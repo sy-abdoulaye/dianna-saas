@@ -18,6 +18,7 @@ from django.utils.functional import empty
 from apps.approvals import workflow
 from apps.approvals.models import TransportProof
 from apps.core import files
+from apps.core.context import ActionContext
 from apps.core.tenancy import tenant_context
 from apps.equipment import services as equipment
 from apps.equipment.models import EquipmentItem
@@ -85,10 +86,29 @@ def test_upload_with_storage_down_answers_503_and_saves_nothing(client_for, comp
             "amount": "12.40",
             "file": SimpleUploadedFile("t.pdf", PDF_BYTES, "application/pdf"),
         },
+        headers={"HX-Request": "true"},
     )
     assert response.status_code == 503
     assert UNAVAILABLE in response["HX-Trigger"].encode().decode("unicode_escape")
     assert TransportProof.all_companies.count() == before
+
+
+def test_upload_without_htmx_with_storage_down_answers_the_503_page(
+    client_for, company_a, monkeypatch
+):
+    broken_storage(monkeypatch)
+    response = client_for(company_a.employee).post(
+        "/transport/nouvelle/",
+        {
+            "month": timezone.localdate().strftime("%Y-%m"),
+            "ticket_type": "single",
+            "amount": "12.40",
+            "file": SimpleUploadedFile("t.pdf", PDF_BYTES, "application/pdf"),
+        },
+    )
+    assert response.status_code == 503
+    assert "HX-Trigger" not in response
+    assert "storage_unavailable" in {t.name.rsplit("/", 1)[-1][:-5] for t in response.templates}
 
 
 def test_download_with_storage_down_answers_a_503_page(client_for, company_a, monkeypatch):
@@ -117,7 +137,7 @@ def test_photos_never_call_exists_and_fail_quietly(client_for, company_a, monkey
     assert client.get(signed_url(employee.photo)).status_code == 404  # fichier absent
     broken_storage(monkeypatch)
     assert client.get(signed_url(employee.photo)).status_code == 404  # stockage en panne
-    page = client.get("/annuaire/").content.decode()
+    page = client.get("/annuaire/", follow=True).content.decode()
     assert "data-fallback" in page  # l'image se retire, les initiales restent
 
 
@@ -137,7 +157,7 @@ def test_directory_answers_quickly_when_the_storage_does_not_answer(
     employee = Employee.all_companies.get(pk=company_a.employee.pk)
     client = client_for(company_a.hr)
     start = time.perf_counter()
-    page = client.get("/annuaire/")
+    page = client.get("/annuaire/", follow=True)
     photo = client.get(signed_url(employee.photo))
     elapsed = time.perf_counter() - start
     assert page.status_code == 200 and photo.status_code == 404
@@ -154,7 +174,9 @@ def test_data_error_at_insert_leaves_no_file_and_gives_a_message(company_a):
         pytest.raises(workflow.RequestValidationError) as error,
     ):
         workflow.submit(
-            TransportProof, company_a.employee, proof_data(original_name="x" * 300 + ".pdf")
+            TransportProof,
+            proof_data(original_name="x" * 300 + ".pdf"),
+            context=ActionContext(company_a.employee),
         )
     assert error.value.errors == {None: workflow.INVALID_VALUE}
     assert stored_files(company_a.company) == before
@@ -168,7 +190,7 @@ def test_photo_is_removed_when_the_creation_fails(company_a):
     with tenant_context(company_a.company), pytest.raises(people.PeopleError):
         people.create_employee(
             {"first_name": "x" * 300, "last_name": "Long", "email": "long@exemple.fr"},
-            actor=company_a.admin,
+            context=ActionContext(company_a.admin),
             photo=photo,
         )
     assert stored_files(company_a.company) == before
@@ -192,23 +214,45 @@ def test_service_checks_the_month_window_and_the_amount(company_a):
 
     with tenant_context(company_a.company):
         with pytest.raises(workflow.RequestValidationError) as month:
-            workflow.submit(TransportProof, company_a.employee, proof_data(month=date(2010, 1, 1)))
+            workflow.submit(
+                TransportProof,
+                proof_data(month=date(2010, 1, 1)),
+                context=ActionContext(company_a.employee),
+            )
         with pytest.raises(workflow.RequestValidationError) as amount:
-            workflow.submit(TransportProof, company_a.employee, proof_data(amount=Decimal("5000")))
+            workflow.submit(
+                TransportProof,
+                proof_data(amount=Decimal("5000")),
+                context=ActionContext(company_a.employee),
+            )
     assert "Choisissez un mois entre" in str(month.value.errors["month"])
     assert amount.value.errors == {"amount": workflow.AMOUNT_RANGE}
 
 
-def test_integrity_errors_are_translated_by_constraint_name(company_a, monkeypatch):
-    monkeypatch.setattr(workflow, "_check_transport", lambda request: {})
-    before = stored_files(company_a.company)
-    with (
-        tenant_context(company_a.company),
-        pytest.raises(workflow.RequestValidationError) as error,
-    ):
-        workflow.submit(TransportProof, company_a.employee, proof_data(amount=Decimal("5000")))
-    assert error.value.errors == {"amount": workflow.AMOUNT_RANGE}  # transport_amount_range
-    assert stored_files(company_a.company) == before
+def test_integrity_errors_are_translated_by_constraint_name(company_a):
+    """L5-19 : un enregistrement direct du modèle, sans les contrôles du service, viole la
+    contrainte de base ; l'erreur est traduite par le nom de cette contrainte."""
+    from django.db import IntegrityError, transaction
+
+    from apps.approvals.models import RequestStatus
+    from apps.core import constraints
+
+    with tenant_context(company_a.company):
+        proof = TransportProof(
+            requester=company_a.employee,
+            month=timezone.localdate().replace(day=1),
+            ticket_type="monthly",
+            amount=Decimal("5000"),
+            file_type="application/pdf",
+            status=RequestStatus.PENDING,
+            submitted_at=timezone.now(),
+            file=f"{company_a.company.pk}/transport/x.pdf",
+        )
+        proof.compute_validity()
+        with pytest.raises(IntegrityError) as raised, transaction.atomic():
+            proof.save()
+    field, message = constraints.translate(raised.value, "message par défaut")
+    assert (field, message) == ("amount", workflow.AMOUNT_RANGE)  # transport_amount_range
 
 
 # ---------- e. Numéro de série normalisé ----------
@@ -217,13 +261,19 @@ def test_integrity_errors_are_translated_by_constraint_name(company_a, monkeypat
 def test_serial_numbers_are_normalized_in_the_service(company_a):
     with tenant_context(company_a.company):
         item = equipment.add_item(
-            kind="laptop", model="X", serial_number="ＡＢ-123", actor=company_a.hr
+            kind="laptop",
+            model="X",
+            serial_number="ＡＢ-123",
+            context=ActionContext(company_a.hr),
         )
         assert item.serial_number == "AB-123"
         for duplicate in ("ab-123", "AB - 123", " a b - 1 2 3 "):
             with pytest.raises(equipment.EquipmentError) as error:
                 equipment.add_item(
-                    kind="laptop", model="X", serial_number=duplicate, actor=company_a.hr
+                    kind="laptop",
+                    model="X",
+                    serial_number=duplicate,
+                    context=ActionContext(company_a.hr),
                 )
             assert str(error.value.message) == "Ce numéro de série existe déjà dans le parc."
         assert EquipmentItem.objects.filter(serial_number="AB-123").count() == 1

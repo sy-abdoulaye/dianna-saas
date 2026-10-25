@@ -16,6 +16,7 @@ from apps.approvals import workflow
 from apps.approvals.kinds import summary
 from apps.approvals.models import RequestStatus, TransportProof
 from apps.approvals.tests.conftest import next_weekday  # noqa: F401 (fixture pytest)
+from apps.core.context import ActionContext
 from apps.core.dates import format_date
 from apps.core.models import AuditLog, Notification
 from apps.core.tenancy import tenant_context
@@ -120,10 +121,13 @@ def test_overlapping_subscriptions_are_refused_but_single_tickets_are_not(client
 def test_failed_submission_leaves_no_file(client_for, company_a, monkeypatch, settings):
     from pathlib import Path
 
+    from apps.approvals.models import RequestEvent
+
     def broken(*args, **kwargs):
         raise RuntimeError("panne après l'écriture du fichier")
 
-    monkeypatch.setattr(workflow, "_event", broken)
+    # Panne à l'écriture de l'événement, après le fichier et l'INSERT de la demande.
+    monkeypatch.setattr(RequestEvent.objects, "create", broken)
     with pytest.raises(RuntimeError):
         send(client_for(company_a.employee))
     folder = Path(settings.PRIVATE_MEDIA_ROOT) / str(company_a.company.pk) / "transport"
@@ -144,11 +148,15 @@ def test_withdrawn_proof_deletes_its_file(company_a, django_capture_on_commit_ca
             "file_type": "application/pdf",
             "original_name": "abo.pdf",
         }
-        result = workflow.submit(TransportProof, company_a.employee, data)
+        result = workflow.submit(TransportProof, data, context=ActionContext(company_a.employee))
         storage, name = result.request.file.storage, result.request.file.name
         assert storage.exists(name)
         with django_capture_on_commit_callbacks(execute=True):
-            workflow.undo(TransportProof, result.undo_payload("submit"), company_a.employee)
+            workflow.undo(
+                TransportProof,
+                result.undo_payload("submit"),
+                context=ActionContext(company_a.employee),
+            )
     assert not storage.exists(name)
 
 
@@ -164,10 +172,10 @@ def test_hr_proof_is_validated_by_someone_else(company_a, submit):
             "file_type": "application/pdf",
             "original_name": "j.pdf",
         }
-        proof = workflow.submit(TransportProof, company_a.hr, data).request
+        proof = workflow.submit(TransportProof, data, context=ActionContext(company_a.hr)).request
         assert not workflow.can_decide(company_a.hr, proof)
         assert workflow.can_decide(company_a.admin, proof)
-        workflow.approve(proof, company_a.admin)
+        workflow.approve(proof, context=ActionContext(company_a.admin))
     assert TransportProof.all_companies.get(pk=proof.pk).status == RequestStatus.APPROVED
 
 
@@ -210,6 +218,17 @@ def test_hr_downloads_are_logged_without_file_name(client_for, company_a):
     assert logs.count() == 1  # le demandeur n'est pas journalisé, le RH oui
     log = logs.get()
     assert log.actor_id == company_a.hr.pk and log.summary == "Justificatif de transport consulté"
+
+
+def test_proof_access_is_logged_by_the_engine_only_for_other_people(company_a):
+    from apps.core.context import ActionContext
+
+    proof = company_a.requests["transport"]
+    with tenant_context(company_a.company):
+        workflow.record_proof_access(proof, context=ActionContext(company_a.employee))
+        workflow.record_proof_access(proof, context=ActionContext(company_a.hr))
+    logs = AuditLog.all_companies.filter(action="requests.proof_downloaded")
+    assert list(logs.values_list("actor_id", flat=True)) == [company_a.hr.pk]
 
 
 def test_proofs_are_never_served_by_signed_link(client_for, company_a):
@@ -376,8 +395,8 @@ def test_hr_validated_kinds_say_sent_to_hr_and_never_write_instead_of(client_for
     send(client, ticket="single", month=this_month())
     refused = proof_of(company_a.employee, ticket_type="single")
     with tenant_context(company_a.company):
-        workflow.approve(approved, company_a.hr)
-        workflow.refuse(refused, company_a.hr, reason="Illisible")
+        workflow.approve(approved, context=ActionContext(company_a.hr))
+        workflow.refuse(refused, reason="Illisible", context=ActionContext(company_a.hr))
         logs = AuditLog.objects.filter(target_type="approvals.transportproof")
         summaries = list(logs.values_list("summary", flat=True))
     assert len(summaries) >= 2

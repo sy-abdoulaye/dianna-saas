@@ -10,6 +10,7 @@ from django.utils.translation import gettext as _
 
 from apps.announcements.models import BODY_MAX, BODY_MIN, TITLE_MAX, Announcement, AnnouncementRead
 from apps.core import audit, notifications, permissions
+from apps.core.context import ActionContext
 from apps.core.errors import ServiceError
 from apps.core.models import Notification
 from apps.people.models import Employee, EmployeeStatus
@@ -61,9 +62,10 @@ def _check(data: AnnouncementData) -> None:
 
 
 @transaction.atomic
-def publish(data: AnnouncementData, *, actor: Employee, request=None) -> Announcement:
+def publish(data: AnnouncementData, *, context: ActionContext) -> Announcement:
     """Publie l'annonce et prévient tous les salariés présents ; une annonce épinglée part
     aussi par e-mail (M-16). L'auteur l'a déjà lue."""
+    actor, request = context.person(), context.request
     _check(data)
     announcement = Announcement.objects.create(
         **asdict(data),
@@ -82,7 +84,7 @@ def publish(data: AnnouncementData, *, actor: Employee, request=None) -> Announc
     return announcement
 
 
-def _notify(announcement: Announcement, people: QuerySet[Employee]) -> int:
+def _notify(announcement: Announcement, people: QuerySet[Employee]) -> list[Notification]:
     """Notification « Nouvelle annonce » ; e-mail 45 s plus tard si elle est épinglée."""
     text = _("Nouvelle annonce : %(title)s") % {"title": announcement.title}
     return notifications.notify_many(
@@ -107,9 +109,10 @@ def _lock(announcement: Announcement) -> Announcement:
 
 @transaction.atomic
 def update(
-    announcement: Announcement, data: AnnouncementData, *, actor: Employee, request=None
+    announcement: Announcement, data: AnnouncementData, *, context: ActionContext
 ) -> Announcement:
     """Modifie l'annonce, sans nouvelle notification ni e-mail (L6-08)."""
+    actor, request = context.actor, context.request
     _check(data)
     announcement = _lock(announcement)
     for name, value in asdict(data).items():
@@ -126,8 +129,9 @@ def update(
 
 
 @transaction.atomic
-def toggle_pin(announcement: Announcement, *, actor: Employee, request=None) -> Announcement:
+def toggle_pin(announcement: Announcement, *, context: ActionContext) -> Announcement:
     """Épingler ou désépingler ; épingler plus tard n'envoie pas d'e-mail (L6-08)."""
+    actor, request = context.actor, context.request
     announcement = _lock(announcement)
     announcement.pinned = not announcement.pinned
     announcement.save(update_fields=["pinned", "updated_at"])
@@ -147,8 +151,9 @@ def toggle_pin(announcement: Announcement, *, actor: Employee, request=None) -> 
 
 
 @transaction.atomic
-def delete(announcement: Announcement, *, actor: Employee, request=None) -> Announcement:
+def delete(announcement: Announcement, *, context: ActionContext) -> Announcement:
     """Suppression logique, annulable 30 s depuis la notification visuelle (L6-09)."""
+    actor, request = context.actor, context.request
     announcement = _lock(announcement)
     announcement.deleted_at = timezone.now()
     announcement.save(update_fields=["deleted_at", "updated_at"])
@@ -166,8 +171,9 @@ def delete(announcement: Announcement, *, actor: Employee, request=None) -> Anno
 
 
 @transaction.atomic
-def restore(public_id: str, *, actor: Employee, request=None) -> Announcement:
+def restore(public_id: str, *, context: ActionContext) -> Announcement:
     """« Annuler » après une suppression : l'annonce redevient visible pour tous."""
+    actor, request = context.actor, context.request
     announcement = (
         Announcement.objects.select_for_update()
         .filter(public_id=public_id, deleted_at__isnull=False)

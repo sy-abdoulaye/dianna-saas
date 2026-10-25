@@ -99,3 +99,37 @@ class CloseIssueForm(forms.Form):
         max_length=2000,
         error_messages={"required": _("Indiquez la résolution.")},
     )
+
+
+class ParkFilterForm(forms.Form):
+    """Filtres du parc (onglet « Parc »), envoyés de façon classique."""
+
+    onglet = forms.CharField(required=False, widget=forms.HiddenInput)
+    q = forms.CharField(
+        label=_("Recherche"),
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "type": "search",
+                "id": "park-q",
+                "placeholder": _("Modèle, n° de série ou personne"),
+            }
+        ),
+    )
+    type = forms.ChoiceField(
+        label=_("Type"),
+        required=False,
+        choices=[("", _("Tous")), *EquipmentKind.choices],
+        widget=forms.Select(attrs={"id": "park-type"}),
+    )
+    etat = forms.ChoiceField(
+        label=_("État"),
+        required=False,
+        widget=forms.Select(attrs={"id": "park-status"}),
+    )
+
+    def __init__(self, data, *, statuses):
+        data = data.copy()
+        data["onglet"] = "parc"
+        super().__init__(data)
+        self.fields["etat"].choices = [("", _("Tous (hors retirés)")), *statuses]

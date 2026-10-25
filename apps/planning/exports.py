@@ -8,7 +8,7 @@ from django.utils.translation import gettext as _
 from apps.agenda.models import CalendarEvent
 from apps.core import audit
 from apps.core.csv_export import csv_content
-from apps.core.dates import format_date
+from apps.core.dates import day_stamp, format_date
 from apps.core.ics_export import ICS_CONTENT_TYPE, IcsEvent, ics_content
 from apps.core.pdf import PDF_CONTENT_TYPE, render_pdf
 from apps.core.xlsx_export import XLSX_CONTENT_TYPE, Styled, xlsx_content
@@ -31,13 +31,14 @@ def period_text(first, last) -> str:
     }
 
 
-def build(viewer, *, first, last, service, fmt, company, people=None):
+def build(viewer, *, first, last, service, fmt, people=None):
     """(contenu, type MIME, nom de fichier). `people` : personnes retenues pour le PDF (une
-    page du planning au plus, L4-17)."""
+    page du planning au plus, L4-17). L'entreprise est celle de la personne."""
+    company = viewer.company
     header, lines, rows, working = services.export_rows(
         viewer, first, last, service=service, people=people
     )
-    stem = f"planning-{first:%Y-%m-%d}-{last:%Y-%m-%d}"
+    stem = f"planning-{day_stamp(first)}-{day_stamp(last)}"
     if fmt == "csv":
         return csv_content(header, lines), CSV_CONTENT_TYPE, f"{stem}.csv"
     if fmt == "xlsx":
@@ -136,21 +137,11 @@ def pdf_context(rows, first, last, company):
     return {"company": company, "pages": pages, "period": period_text(first, last)}
 
 
-def log_export(
-    *,
-    viewer,
-    first,
-    last,
-    fmt_label,
-    scope_label,
-    kind="planning.exported",
-    what=None,
-    request=None,
-):
+def log_export(*, viewer, first, last, fmt_label, scope_label, request=None):
     summary = _("%(what)s %(period)s, %(fmt)s, %(scope)s") % {
-        "what": what or _("Export du planning"),
+        "what": _("Export du planning"),
         "period": period_text(first, last),
         "fmt": fmt_label,
         "scope": scope_label,
     }
-    audit.log(kind, summary, actor=viewer, request=request)
+    audit.log("planning.exported", summary, actor=viewer, request=request)

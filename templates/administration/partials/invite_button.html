@@ -1,0 +1,6 @@
+{% load i18n ui %}
+{% comment %}Action principale de la liste des utilisateurs, en fin de barre de filtres.{% endcomment %}
+<div class="ml-auto self-end">
+  {% url "people:create" as invite_url %}
+  {% button _("Inviter un utilisateur") variant="primary" icon="plus" href=invite_url %}
+</div>

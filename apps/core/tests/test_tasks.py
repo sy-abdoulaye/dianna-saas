@@ -14,6 +14,7 @@ from django_tasks_db.models import DBTaskResult
 
 from apps.accounts import services as accounts
 from apps.approvals import workflow
+from apps.core.context import ActionContext
 from apps.core.mail import queue_encrypted_email, queue_notification_email
 from apps.core.models import Notification
 from apps.core.tenancy import tenant_context
@@ -89,7 +90,7 @@ def test_no_sensitive_data_left_in_task_rows(company_a, anonymous_client, submit
     )
     result = submit(company_a, company_a.employee)
     with tenant_context(company_a.company):
-        workflow.refuse(result.request, company_a.manager, reason=reason)
+        workflow.refuse(result.request, reason=reason, context=ActionContext(company_a.manager))
 
     def assert_clean():
         text = _rows_text()

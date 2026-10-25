@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -108,6 +109,7 @@ def test_export_modal_validates_then_redirects_to_the_file(client_for, company_a
     assert bad.status_code == 422 and "Choisissez le mois." in bad.content.decode()
     ok = client.get("/teletravail/export/?mois=2026-11&format=csv", HTTP_HX_REQUEST="true")
     assert ok.status_code == 204 and ok["HX-Redirect"].startswith("/teletravail/export/?")
+    assert json.loads(ok["HX-Trigger"])["closeModal"] is True  # la modale se ferme
 
 
 def test_exports_are_logged_without_names(client_for, company_a):

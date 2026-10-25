@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.core import audit
+from apps.core.context import ActionContext
 from apps.core.models import Company, CompanyModule, Module, Service, Site
 from apps.core.tenancy import tenant_context
 from apps.people.models import ContractType, Employee, EmployeeStatus, Role, WorkTime
@@ -695,17 +696,17 @@ class Command(BaseCommand):
         for spec in DEMO_SURVEYS:
             survey = services.create_draft(
                 services.DraftData(spec["title"], spec["audience"], None, *spec["questions"]),
-                actor=hr,
+                context=ActionContext(hr),
             )
             if spec["status"] == "draft":
                 continue
-            services.publish(survey, actor=hr)
+            services.publish(survey, context=ActionContext(hr))
             respondents = [people[key] for key in spec["respondents"]]
             rng.shuffle(respondents)
             for person in respondents:
                 services.submit_answers(survey, person, demo_answers(survey, rng))
             if spec["status"] == "closed":
-                services.close(survey, actor=hr)
+                services.close(survey, context=ActionContext(hr))
             # Dates d'affichage du prototype (échéance, publication), relatives à aujourd'hui.
             Survey.objects.filter(pk=survey.pk).update(
                 due_date=today + timedelta(days=spec["due_in"]),
@@ -897,14 +898,13 @@ class DemoRequestWriter:
         from apps.core import notifications
         from apps.core.models import Notification
 
-        for validator in workflow.first_validators(request):
-            notifications.notify(
-                validator,
-                f"{request.requester.full_name} : {request._meta.verbose_name} à valider",
-                url=workflow._module_url(request, "a-valider"),
-                kind=Notification.Kind.REQUEST,
-                source=request,
-            )
+        notifications.notify_many(
+            workflow.first_validators(request),
+            f"{request.requester.full_name} : {request._meta.verbose_name} à valider",
+            url=workflow.module_url(request, "a-valider"),
+            kind=Notification.Kind.REQUEST,
+            source=request,
+        )
 
 
 def demo_proof(name: str, data: bytes, mime: str) -> dict:

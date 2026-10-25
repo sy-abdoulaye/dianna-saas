@@ -1,0 +1,138 @@
+"""Annulation immédiate d'une transition par son auteur (30 s, A3-01).
+
+Les modules du paquet s'importent directement entre eux ; le reste de l'application passe
+par la façade `workflow` (apps/approvals/workflow/__init__.py)."""
+
+from django.db import transaction
+from django.utils.translation import gettext as _
+
+from apps.agenda.models import CalendarEvent
+from apps.approvals.models import (
+    ACTIVE_STATUSES,
+    ApprovalRequest,
+    LeaveRequest,
+    RequestEvent,
+    RequestStatus,
+)
+from apps.approvals.workflow.checks import check_request
+from apps.approvals.workflow.common import (
+    ALREADY_PROCESSED,
+    OTHER_DECISION,
+    RequestValidationError,
+    WorkflowError,
+    _audit,
+    _event,
+    _forget_file,
+    _latest_event_id,
+    _lock_requester,
+    _save_checked,
+    sync_calendar,
+)
+from apps.approvals.workflow.notifications import _current_validators, _notify_validators
+from apps.core import notifications
+from apps.core.context import ActionContext
+from apps.core.models import Notification
+
+REACTIVATING = ("refuse", "cancel", "cancel_approved")
+
+
+UNDO_EXPECTED_STATUS = {
+    "approve": (RequestStatus.APPROVED, RequestStatus.MANAGER_APPROVED),
+    "refuse": (RequestStatus.REFUSED,),
+    "cancel": (RequestStatus.CANCELLED,),
+    "cancel_approved": (RequestStatus.CANCELLED,),
+}
+
+
+@transaction.atomic
+def undo(
+    model: type[ApprovalRequest], payload: dict, *, context: ActionContext
+) -> ApprovalRequest | None:
+    """Défait la dernière transition de son auteur, seulement si l'événement qu'elle a créé
+    est toujours le dernier de la demande : sinon « Une autre décision a été prise depuis »
+    et rien n'est modifié (A3-01). Après un envoi : la demande, son événement et ses
+    notifications sont supprimés ; le journal garde « demande envoyée puis retirée » (L1-08).
+    Après une décision : l'état précédent est rétabli ; si la demande redevient active
+    (refus ou annulation défaits), les contrôles métier sont refaits sous verrou (A3-02)."""
+    context.person()
+    request = _lock_for_undo(model, payload)
+    if payload["action"] == "submit":
+        _undo_submit(request, context)
+        return None
+    return _undo_decision(request, payload, context)
+
+
+def _lock_for_undo(model: type[ApprovalRequest], payload: dict) -> ApprovalRequest:
+    """Verrouille la demande (et la fiche du demandeur si elle redevient active) et vérifie
+    que l'événement à défaire est toujours le dernier."""
+    found = model.objects.filter(public_id=payload["id"]).values_list("requester_id").first()
+    if found is None:
+        raise WorkflowError(ALREADY_PROCESSED)
+    if payload["action"] in REACTIVATING:
+        _lock_requester(found[0])
+    request = (
+        model.objects.select_for_update(of=("self",))
+        .select_related("requester", "requester__manager", "requester__company")
+        .filter(public_id=payload["id"])
+        .first()
+    )
+    if request is None:
+        raise WorkflowError(ALREADY_PROCESSED)
+    if payload.get("event") is None or _latest_event_id(request) != payload["event"]:
+        raise WorkflowError(OTHER_DECISION)
+    return request
+
+
+def _undo_submit(request: ApprovalRequest, context: ActionContext) -> None:
+    if request.requester_id != context.person().pk:
+        raise WorkflowError(ALREADY_PROCESSED)
+    Notification.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
+    CalendarEvent.objects.filter(source_type=request.request_type, source_id=request.pk).delete()
+    RequestEvent.objects.filter(request_type=request.request_type, request_id=request.pk).delete()
+    _audit(request, "withdrawn", _("Demande envoyée puis retirée"), context=context)
+    request.delete()
+    if request.file_field:
+        # Justificatif retiré dans les 30 s : supprimé une fois l'annulation validée (L5-05).
+        transaction.on_commit(lambda: _forget_file(request))
+
+
+def _undo_decision(
+    request: ApprovalRequest, payload: dict, context: ActionContext
+) -> ApprovalRequest:
+    action, previous = payload["action"], payload["previous"]
+    if request.status not in UNDO_EXPECTED_STATUS[action] or previous not in ACTIVE_STATUSES:
+        raise WorkflowError(ALREADY_PROCESSED)
+    _restore_previous_state(request, action, payload)
+    if action in REACTIVATING:
+        errors = check_request(request, campaign=getattr(request, "campaign", None))
+        if errors:
+            raise WorkflowError(next(iter(errors.values())))
+    try:
+        _save_checked(request)
+    except RequestValidationError as error:
+        raise WorkflowError(error.message) from error
+    Notification.objects.filter(
+        pk__in=payload.get("notifications", []),
+        source_type=request.request_type,
+        source_id=request.pk,
+    ).delete()
+    notifications.retract_unsent(request)
+    _event(request, context.actor, RequestEvent.Action.REVERTED)
+    sync_calendar(request)
+    # La transition défaite avait retiré « Demande à valider » : les valideurs actuels sont
+    # de nouveau prévenus.
+    if request.status != RequestStatus.APPROVED:
+        _notify_validators(request, _current_validators(request))
+    _audit(request, "reverted", _("Décision annulée"), context=context)
+    return request
+
+
+def _restore_previous_state(request: ApprovalRequest, action: str, payload: dict) -> None:
+    previous = payload["previous"]
+    request.status = previous
+    if action == "cancel_approved":
+        request.decision_comment = payload.get("comment", "")
+    elif action in ("approve", "refuse"):
+        request.decided_by, request.decided_at, request.decision_comment = None, None, ""
+        if previous == RequestStatus.PENDING and isinstance(request, LeaveRequest):
+            request.manager_decided_by, request.manager_decided_at = None, None

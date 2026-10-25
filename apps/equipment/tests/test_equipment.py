@@ -7,6 +7,7 @@ import pytest
 from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog, Company, Notification
 from apps.core.tenancy import tenant_context
 from apps.equipment import services
@@ -126,7 +127,7 @@ def test_two_simultaneous_assignments_give_one_holder(company_a):
         try:
             with tenant_context(company):
                 barrier.wait()
-                services.assign(item, person, actor=hr)
+                services.assign(item, person, context=ActionContext(hr))
                 outcomes.append("ok")
         except services.EquipmentError as error:
             outcomes.append(str(error.message))
@@ -340,3 +341,10 @@ def test_the_only_item_of_the_requested_kind_is_preselected(client_for, company_
     page = hr.get(url).content.decode()
     assert f'<option value="{stock.pk}" selected>' not in page  # plusieurs : à choisir
     assert '<option value="" selected>Choisir…</option>' in page
+
+
+def test_park_filters_are_not_autofilled_by_the_browser(client_for, company_a):
+    content = client_for(company_a.hr).get("/materiel/?onglet=parc&etat=in_stock").content.decode()
+    form = content.split('<form class="filters"', 1)[1].split(">", 1)[0]
+    assert 'autocomplete="off"' in form
+    assert 'name="etat"' in content

@@ -2,7 +2,6 @@
 
 from datetime import timedelta
 
-from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponse
@@ -24,8 +23,18 @@ from apps.administration.forms import (
 )
 from apps.core import permissions
 from apps.core.access import enabled_modules, permission_required
+from apps.core.context import ActionContext
+from apps.core.dates import compact_day_stamp
 from apps.core.files import signed_url
-from apps.core.htmx import Toast, is_htmx, toast_response, trigger
+from apps.core.htmx import (
+    PAGE_CHANGED,
+    RELOAD_PAGE,
+    Toast,
+    after_action,
+    error_response,
+    form_error_response,
+    is_htmx,
+)
 from apps.core.models import AuditLog, Company, Module
 from apps.core.services import set_module
 from apps.people import services as people
@@ -72,10 +81,6 @@ def tab_context(request, current: str) -> dict:
     }
 
 
-def _event(response, name):
-    return trigger(response, **{name: True})
-
-
 # ---------- Entreprise ----------
 
 
@@ -89,13 +94,12 @@ def company(request):
         services.update_company(
             instance,
             data,
-            actor=request.employee,
+            context=ActionContext.of(request),
             logo=form.cleaned_data.get("logo_upload"),
             remove_logo=bool(request.POST.get("remove_logo")),
-            request=request,
         )
-        messages.success(request, _("Paramètres enregistrés"))
-        return redirect("administration:company")
+        toast = Toast(title=_("Paramètres enregistrés"))
+        return after_action(request, toast, refresh=PAGE_CHANGED, page_form=True)
     context = {
         **tab_context(request, "administration:company"),
         "form": form,
@@ -157,24 +161,18 @@ def change_role(request, public_id):
         }
         return render(request, "administration/partials/role_modal.html", context)
     try:
-        people.change_role(person, role, actor=request.employee, request=request)
+        people.change_role(person, role, context=ActionContext.of(request))
     except people.PeopleError as error:
-        return _event(
-            toast_response(
-                Toast(title=str(error.message), kind="err"), close_modal=True, status=409
-            ),
-            USERS_CHANGED,
-        )
-    return _event(
-        toast_response(
-            Toast(
-                title=_("Profil modifié"),
-                message=f"{person.full_name} : {Role(role).label}",
-                emphasis=person.full_name,
-            ),
-            close_modal=True,
+        return error_response(error, close_modal=True, refresh=USERS_CHANGED)
+    return after_action(
+        request,
+        Toast(
+            title=_("Profil modifié"),
+            message=f"{person.full_name} : {Role(role).label}",
+            emphasis=person.full_name,
         ),
-        USERS_CHANGED,
+        refresh=USERS_CHANGED,
+        close_modal=True,
     )
 
 
@@ -185,17 +183,16 @@ def send_invitation(request, public_id):
     try:
         accounts.invite(person, sent_by=request.employee, request=request)
     except accounts.InvitationError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
-    return _event(
-        toast_response(
-            Toast(
-                title=_("Invitation envoyée"),
-                message=_("Un lien valable 7 jours a été envoyé à %(email)s.")
-                % {"email": person.email},
-                emphasis=person.email,
-            )
+        return error_response(error)
+    return after_action(
+        request,
+        Toast(
+            title=_("Invitation envoyée"),
+            message=_("Un lien valable 7 jours a été envoyé à %(email)s.")
+            % {"email": person.email},
+            emphasis=person.email,
         ),
-        USERS_CHANGED,
+        refresh=USERS_CHANGED,
     )
 
 
@@ -256,20 +253,20 @@ def structure_form(request, kind, pk=None):
     context = {"form": form, "action_url": action_url, "title": title, "is_rename": bool(pk)}
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", context, status=422)
+            return form_error_response(request, template, context)
         name = form.cleaned_data["name"]
         alsace = form.cleaned_data.get("alsace_moselle") if kind == "sites" else None
         if instance:
             services.rename_structure(
-                kind, instance, name, actor=request.employee, request=request, alsace_moselle=alsace
+                kind, instance, name, context=ActionContext.of(request), alsace_moselle=alsace
             )
             toast = Toast(title=_("Modifié") if kind == "sites" else _("Renommé"), message=name)
         else:
             services.add_structure(
-                kind, name, actor=request.employee, request=request, alsace_moselle=bool(alsace)
+                kind, name, context=ActionContext.of(request), alsace_moselle=bool(alsace)
             )
             toast = Toast(title=_("Ajouté"), message=name)
-        return _event(toast_response(toast, close_modal=True), STRUCTURE_CHANGED)
+        return after_action(request, toast, refresh=STRUCTURE_CHANGED, close_modal=True)
     return render(request, template, context)
 
 
@@ -294,14 +291,14 @@ def structure_delete(request, kind, pk):
         )
         return render(request, template, context)
     try:
-        services.delete_structure(kind, instance, actor=request.employee, request=request)
+        services.delete_structure(kind, instance, context=ActionContext.of(request))
     except services.AdministrationError as error:
-        return toast_response(
-            Toast(title=str(error.message), kind="err"), close_modal=True, status=409
-        )
-    return _event(
-        toast_response(Toast(title=_("Supprimé"), message=instance.name), close_modal=True),
-        STRUCTURE_CHANGED,
+        return error_response(error, close_modal=True)
+    return after_action(
+        request,
+        Toast(title=_("Supprimé"), message=instance.name),
+        refresh=STRUCTURE_CHANGED,
+        close_modal=True,
     )
 
 
@@ -340,26 +337,27 @@ def closure_add(request):
     context = {"form": form, "action_url": reverse("administration:closure_add")}
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", context, status=422)
+            return form_error_response(request, template, context)
         try:
             closure, concerned = services.add_closure(
                 day=form.cleaned_data["date"],
                 label=form.cleaned_data["label"],
                 site=form.cleaned_data["site"],
-                actor=request.employee,
-                request=request,
+                context=ActionContext.of(request),
             )
         except services.ClosureError as error:
             form.add_error(error.field, error.message)
-            return render(request, f"{template}#form", context, status=422)
+            return form_error_response(request, template, context)
         message = closure.label
         if concerned:
             message = _(
                 "%(label)s. %(n)s demande(s) de télétravail concernée(s) : les RH sont prévenus."
             ) % {"label": closure.label, "n": len(concerned)}
-        return _event(
-            toast_response(Toast(title=_("Fermeture ajoutée"), message=message), close_modal=True),
-            CLOSURES_CHANGED,
+        return after_action(
+            request,
+            Toast(title=_("Fermeture ajoutée"), message=message),
+            refresh=CLOSURES_CHANGED,
+            close_modal=True,
         )
     return render(request, template, context)
 
@@ -379,12 +377,12 @@ def closure_delete(request, pk):
                 "action_url": reverse("administration:closure_delete", args=[pk]),
             },
         )
-    services.delete_closure(closure, actor=request.employee, request=request)
-    return _event(
-        toast_response(
-            Toast(title=_("Fermeture supprimée"), message=closure.label), close_modal=True
-        ),
-        CLOSURES_CHANGED,
+    services.delete_closure(closure, context=ActionContext.of(request))
+    return after_action(
+        request,
+        Toast(title=_("Fermeture supprimée"), message=closure.label),
+        refresh=CLOSURES_CHANGED,
+        close_modal=True,
     )
 
 
@@ -429,11 +427,11 @@ def toggle_module(request, module):
                 "action_url": reverse("administration:toggle_module", args=[module]),
             },
         )
-    set_module(request.company, module, enable, actor=request.employee, request=request)
+    set_module(request.company, module, enable, context=ActionContext.of(request))
     title = _("Module activé") if enable else _("Module désactivé")
-    response = toast_response(Toast(title=title, message=label), close_modal=True)
-    response["HX-Refresh"] = "true"  # le menu de la page change aussi
-    return response
+    # Le menu change aussi : toute la page se recharge.
+    toast = Toast(title=title, message=label)
+    return after_action(request, toast, refresh=RELOAD_PAGE, close_modal=True)
 
 
 # ---------- Journal d'activité ----------
@@ -471,9 +469,9 @@ def journal_export(request):
     start, end = form.period()
     q = (getattr(form, "cleaned_data", {}) or {}).get("q", "")
     content = services.export_journal_csv(
-        q=q, start=start, end=end, actor=request.employee, request=request
+        q=q, start=start, end=end, context=ActionContext.of(request)
     )
     response = HttpResponse(content, content_type="text/csv; charset=utf-8")
-    filename = f"journal-{start:%Y%m%d}-{end:%Y%m%d}.csv"
+    filename = f"journal-{compact_day_stamp(start)}-{compact_day_stamp(end)}.csv"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response

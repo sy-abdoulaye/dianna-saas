@@ -1,30 +1,42 @@
 """Opérations de plateforme (équipe Dianna) : création d'entreprise, modules."""
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
 from django.db import transaction
+from django.http import HttpRequest
 from django.utils.translation import gettext as _
 
 from apps.core import audit
+from apps.core.context import SYSTEM, ActionContext
 from apps.core.models import Company, CompanyModule, Module
 from apps.core.tenancy import tenant_context
 
+if TYPE_CHECKING:
+    from apps.people.models import Employee
+
 
 @transaction.atomic
+@dataclass(frozen=True)
+class NewCompany:
+    """Nouvel espace client et son premier administrateur (administration éditeur)."""
+
+    name: str
+    slug: str
+    admin_first_name: str
+    admin_last_name: str
+    admin_email: str
+
+
 def create_company(
-    *,
-    name: str,
-    slug: str,
-    admin_first_name: str,
-    admin_last_name: str,
-    admin_email: str,
-    invite: bool = True,
-    request=None,
-):
+    data: NewCompany, *, invite: bool = True, request: HttpRequest | None = None
+) -> tuple[Company, "Employee"]:
     """Crée l'entreprise, active tous les modules, crée la fiche du premier administrateur et
     lui envoie son invitation. Renvoie (company, employee)."""
     from apps.accounts import services as accounts
     from apps.people.models import Employee, Role
 
-    company = Company(name=name, slug=slug)
+    company = Company(name=data.name, slug=data.slug)
     company.full_clean()
     company.save()
     with tenant_context(company):
@@ -32,9 +44,9 @@ def create_company(
             [CompanyModule(company=company, module=m, enabled=True) for m in Module.values]
         )
         admin = Employee.objects.create(
-            first_name=admin_first_name,
-            last_name=admin_last_name,
-            email=admin_email,
+            first_name=data.admin_first_name,
+            last_name=data.admin_last_name,
+            email=data.admin_email,
             role=Role.ADMIN,
             job_title=_("Administrateur"),
         )
@@ -49,7 +61,10 @@ def create_company(
     return company, admin
 
 
-def set_module(company: Company, module: str, enabled: bool, *, actor=None, request=None):
+def set_module(
+    company: Company, module: str, enabled: bool, *, context: ActionContext = SYSTEM
+) -> CompanyModule:
+    actor, request = context.actor, context.request
     with tenant_context(company):
         row, _created = CompanyModule.objects.get_or_create(module=module)
         if row.enabled == enabled:

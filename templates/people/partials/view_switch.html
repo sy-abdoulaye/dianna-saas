@@ -1,0 +1,6 @@
+{% load i18n %}
+{% comment %}Choix de l'affichage de l'annuaire (liste ou cartes), en fin de barre de filtres.{% endcomment %}
+<div class="ml-auto self-end">
+  {% translate "Affichage" as legend %}
+  {% include "components/segmented.html" with name="vue" legend=legend options=view_options selected=view %}
+</div>

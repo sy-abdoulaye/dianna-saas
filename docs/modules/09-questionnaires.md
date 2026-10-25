@@ -30,7 +30,7 @@ Brouillon → (Publier, confirmation, notification au public) → Ouvert → (Cl
 
 ## Limite connue (L1-09)
 
-L'anonymat est garanti au niveau de l'application. En base, par un accès SQL direct, l'ordre physique des lignes et le numéro de transaction (`xmin` du reçu = `xmin` de la réponse + 1, le reçu étant écrit dans une sous-transaction) peuvent permettre de les rapprocher quand les réponses sont peu nombreuses ; une sauvegarde (`pg_dump`) garde l'ordre physique, donc ce lien. Les réponses ne portent plus de date (L6-02). Risque résiduel accepté pour la V1, à revoir au lot 8 (réécriture groupée des réponses, aucun accès SQL direct hors procédure tracée).
+L'anonymat est garanti au niveau de l'application. En base, par un accès SQL direct, l'ordre physique des lignes et le numéro de transaction (`xmin` du reçu supérieur à celui de la réponse et inférieur à celui de la réponse suivante, le reçu étant écrit dans une sous-transaction) peuvent permettre de les rapprocher quand les réponses sont peu nombreuses ; une sauvegarde (`pg_dump`) garde l'ordre physique, donc ce lien. Les réponses ne portent plus de date (L6-02). Risque résiduel accepté pour la V1, à revoir au lot 8 (réécriture groupée des réponses, aucun accès SQL direct hors procédure tracée).
 
 ## Critères d'acceptation
 

@@ -12,16 +12,16 @@ from apps.announcements import selectors, services
 from apps.announcements.forms import AnnouncementForm, FilterForm
 from apps.announcements.models import Announcement
 from apps.core import permissions, undo
-from apps.core.access import module_required, permission_required, require
+from apps.core.access import module_required, permission_required
+from apps.core.context import ActionContext
 from apps.core.htmx import (
+    PAGE_CHANGED,
     Toast,
+    after_action,
     confirm_response,
     error_response,
     is_htmx,
-    location,
     modal_form_response,
-    toast_response,
-    trigger,
 )
 from apps.core.models import Module
 
@@ -98,16 +98,14 @@ def announcement_new(request):
     if request.method == "GET" or not form.is_valid():
         return _form_response(request, form, action_url=action_url)
     try:
-        announcement = services.publish(
-            form.announcement_data(), actor=request.employee, request=request
-        )
+        announcement = services.publish(form.announcement_data(), context=ActionContext.of(request))
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url)
     toast = Toast(
         title=_("Annonce publiée"), message=_("Tous les salariés présents sont notifiés.")
     )
-    return location(toast_response(toast, close_modal=True), _detail_url(announcement))
+    return after_action(request, toast, go_to=_detail_url(announcement), close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -121,14 +119,12 @@ def announcement_edit(request, public_id):
     if request.method == "GET" or not form.is_valid():
         return _form_response(request, form, action_url=action_url, announcement=announcement)
     try:
-        services.update(
-            announcement, form.announcement_data(), actor=request.employee, request=request
-        )
+        services.update(announcement, form.announcement_data(), context=ActionContext.of(request))
     except services.AnnouncementError as error:
         form.add_error(error.field, error.message)
         return _form_response(request, form, action_url=action_url, announcement=announcement)
-    toast = toast_response(Toast(title=_("Annonce modifiée")), close_modal=True)
-    return location(toast, _detail_url(announcement))
+    toast = Toast(title=_("Annonce modifiée"))
+    return after_action(request, toast, refresh=PAGE_CHANGED, close_modal=True)
 
 
 @require_POST
@@ -136,11 +132,11 @@ def announcement_edit(request, public_id):
 @permission_required("announcements.manage")
 def announcement_pin(request, public_id):
     try:
-        announcement = services.toggle_pin(_get(public_id), actor=request.employee, request=request)
+        announcement = services.toggle_pin(_get(public_id), context=ActionContext.of(request))
     except services.AnnouncementError as error:
         return error_response(error)
     title = _("Annonce épinglée") if announcement.pinned else _("Annonce désépinglée")
-    return location(toast_response(Toast(title=title)), _detail_url(announcement))
+    return after_action(request, Toast(title=title), refresh=PAGE_CHANGED)
 
 
 @require_http_methods(["GET", "POST"])
@@ -159,7 +155,7 @@ def announcement_delete(request, public_id):
             danger=True,
         )
     try:
-        services.delete(announcement, actor=request.employee, request=request)
+        services.delete(announcement, context=ActionContext.of(request))
     except services.AnnouncementError as error:
         return error_response(error)
     token = undo.make_token(request, "announcements.delete", str(announcement.public_id))
@@ -168,23 +164,13 @@ def announcement_delete(request, public_id):
         message=_("« %(title)s » n'est plus visible.") % {"title": announcement.title},
         undo_url=reverse("announcements:undo", args=[token]),
     )
-    return location(toast_response(toast, close_modal=True), reverse("announcements:list"))
+    return after_action(request, toast, go_to=reverse("announcements:list"), close_modal=True)
 
 
-@require_POST
-@module_required(Module.ANNOUNCEMENTS)
-def undo_delete(request, token):
-    """« Annuler » dans la notification visuelle : 30 s, auteur seulement (L0-03)."""
-    require(request, "announcements.manage")
-    try:
-        data = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
-    if data.action != "announcements.delete":
-        raise Http404
-    try:
-        announcement = services.restore(data.target, actor=request.employee, request=request)
-    except services.AnnouncementError as error:
-        return error_response(error)
-    toast = Toast(title=_("Suppression annulée"), message=announcement.title, kind="info")
-    return trigger(toast_response(toast), **{CHANGED: True})
+def _undo_delete(request, payload) -> Toast:
+    """Annulation d'une suppression (vue commune apps.core.views.undo_action)."""
+    announcement = services.restore(payload.target, context=ActionContext.of(request))
+    return Toast(title=_("Suppression annulée"), message=announcement.title, kind="info")
+
+
+undo.register("announcements.delete", _undo_delete, refresh=CHANGED)

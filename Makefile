@@ -27,7 +27,7 @@ TAILWIND := bin/tailwindcss-$(TAILWIND_VERSION)-$(TW_PLATFORM)
 CSS_IN := static/css/app.css
 CSS_OUT := static/build/app.css
 
-.PHONY: help install up down db css css-build migrate test cov e2e lint format seed shell check worker purge-tasks
+.PHONY: help install up down db css css-build migrate test cov e2e lint typecheck format seed shell check worker purge-tasks
 
 help: ## Affiche cette aide
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
@@ -80,6 +80,9 @@ lint: ## ruff check, ruff format --check, djlint
 	$(RUN) ruff check .
 	$(RUN) ruff format --check .
 	$(RUN) djlint templates --lint
+
+typecheck: ## mypy (django-stubs), bloquant sur tous les services.py et selectors.py
+	$(RUN) mypy
 
 format: ## Formate le code Python et les templates
 	$(RUN) ruff check --fix .

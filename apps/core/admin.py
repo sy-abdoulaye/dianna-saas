@@ -99,14 +99,14 @@ class CompanyAdmin(admin.ModelAdmin):
         if change:
             super().save_model(request, obj, form, change)
             return
-        company, _admin = services.create_company(
+        data = services.NewCompany(
             name=form.cleaned_data["name"],
             slug=form.cleaned_data["slug"],
             admin_first_name=form.cleaned_data["admin_first_name"],
             admin_last_name=form.cleaned_data["admin_last_name"],
             admin_email=form.cleaned_data["admin_email"],
-            request=request,
         )
+        company, _admin = services.create_company(data, request=request)
         obj.pk = company.pk
         messages.success(request, _("Invitation envoyée au premier administrateur."))
 

@@ -102,7 +102,7 @@ Remboursement estimé calculé à l'affichage (50 %, M-06), jamais stocké comme
 **SurveyResponse** (`TenantBase`) : clé primaire **UUID aléatoire**, `survey`. **Aucun lien vers le salarié, aucune date** (`submitted_on` supprimé, L6-02).
 **Answer** (`TenantBase`) : clé primaire UUID aléatoire, `response`, `question`, `score` (1 à 5, nul), `text`, `comment` (justification facultative de la note). Unique (response, question).
 
-`SurveyResponse` et `Answer` héritent de `TenantBase`, l'isolation sans le mixin `Timestamped` (pas d'horodatage, pas de clé séquentielle) : sinon on retrouverait le répondant en rapprochant l'ordre des reçus et des réponses. Le reçu et la réponse sont créés dans la même transaction, sans clé commune. Des tests vérifient qu'aucun champ ne les relie, qu'aucun ne permet de les trier dans l'ordre des reçus, et que répondre n'écrit ni journal, ni notification, ni tâche. Risque résiduel en base : L1-09 (ordre physique ; `xmin` du reçu = `xmin` de la réponse + 1, le reçu étant écrit dans une sous-transaction ; sauvegardes).
+`SurveyResponse` et `Answer` héritent de `TenantBase`, l'isolation sans le mixin `Timestamped` (pas d'horodatage, pas de clé séquentielle) : sinon on retrouverait le répondant en rapprochant l'ordre des reçus et des réponses. Le reçu et la réponse sont créés dans la même transaction, sans clé commune. Des tests vérifient qu'aucun champ ne les relie, qu'aucun ne permet de les trier dans l'ordre des reçus, et que répondre n'écrit ni journal, ni notification, ni tâche. Risque résiduel en base : L1-09 (ordre physique ; `xmin` du reçu supérieur à celui de la réponse et inférieur à celui de la réponse suivante, le reçu étant écrit dans une sous-transaction ; sauvegardes).
 
 ## Carrière (`careers`)
 

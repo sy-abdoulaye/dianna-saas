@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pytest
 from django.test import Client
 
+from apps.core.context import ActionContext
 from apps.core.tenancy import tenant_context
 from apps.people.models import Role
 from tests.factories import (
@@ -371,7 +372,7 @@ def submit():
             data.setdefault("start", next_weekday(offset_days=21))
             data.setdefault("end", data["start"] + timedelta(days=6))
         with tenant_context(company_data.company):
-            return workflow.submit(model, employee, data)
+            return workflow.submit(model, data, context=ActionContext(employee))
 
     return _submit
 

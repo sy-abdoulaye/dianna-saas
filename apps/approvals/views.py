@@ -19,6 +19,7 @@ from apps.approvals.forms import (
     CampaignForm,
     MonthExportForm,
     ReasonForm,
+    RequestFilterForm,
 )
 from apps.approvals.kinds import KINDS, euros, summary
 from apps.approvals.models import (
@@ -31,12 +32,19 @@ from apps.approvals.models import (
 from apps.approvals.selectors import TAB_MINE, is_validator
 from apps.core import permissions, undo
 from apps.core.access import module_is_enabled, require
+from apps.core.context import ActionContext
 from apps.core.files import (
-    STORAGE_UNAVAILABLE,
     StorageUnavailableError,
     storage_unavailable_response,
 )
-from apps.core.htmx import Toast, is_htmx, toast_response, trigger
+from apps.core.htmx import (
+    Toast,
+    after_action,
+    download_response,
+    error_response,
+    form_error_response,
+    is_htmx,
+)
 from apps.core.models import Module
 from apps.core.ratelimit import (
     EXPORT_LIMIT_MESSAGE,
@@ -64,10 +72,6 @@ def module_view(view):
         return view(request, kind, *args, **kwargs)
 
     return wrapper
-
-
-def _changed(response):
-    return trigger(response, **{CHANGED: True})
 
 
 def get_request(request, kind, public_id):
@@ -122,13 +126,7 @@ def request_list(request, kind):
         "list_url": url,
         "filtered": bool(q or status),
         "query": q,
-        "status_choices": [
-            ("", _("Tous")),
-            ("pending", _("En attente")),
-            ("approved", _("Validées")),
-            ("refused", _("Refusées")),
-            ("cancelled", _("Annulées")),
-        ],
+        "filter_form": RequestFilterForm(request.GET, tab=tab, mine=tab == TAB_MINE),
         "status": status,
         "new_url": reverse("approvals:new", args=[kind]),
         "is_hr": workflow.is_hr_or_admin(me),
@@ -190,17 +188,16 @@ def new_request(request, kind):
     form = form_class(request.POST, request.FILES, requester=me)
     if form.is_valid():
         try:
-            result = workflow.submit(meta.model, me, form.model_data(), http_request=request)
+            result = workflow.submit(
+                meta.model, form.model_data(), context=ActionContext(me, request)
+            )
         except StorageUnavailableError:
-            # Stockage indisponible : rien n'est enregistré, la modale reste ouverte (L5-17).
-            return toast_response(Toast(title=str(STORAGE_UNAVAILABLE), kind="err"), status=503)
+            return storage_unavailable_response(request)
         except workflow.RequestValidationError as error:
             for name, message in error.errors.items():
                 form.add_error(name if name in form.fields else None, message)
     if not form.is_valid():
-        return render(
-            request, f"{template}#form", _form_context(meta, form, action_url), status=422
-        )
+        return form_error_response(request, template, _form_context(meta, form, action_url))
     return _with_undo(request, result, "submit", _submit_toast(result))
 
 
@@ -228,7 +225,7 @@ def _submit_toast(result) -> Toast:
 def _with_undo(request, result, action, toast: Toast):
     token = undo.make_token(request, f"requests.{action}", json.dumps(result.undo_payload(action)))
     toast = Toast(**{**toast.__dict__, "undo_url": reverse("approvals:undo", args=[token])})
-    return _changed(toast_response(toast, close_modal=True))
+    return after_action(request, toast, refresh=CHANGED, close_modal=True)
 
 
 # ---------- Détail et décisions ----------
@@ -269,9 +266,8 @@ def _urls(kind, obj):
 
 
 def _decision_error(error):
-    return _changed(
-        toast_response(Toast(title=str(error.message), kind="err"), close_modal=True, status=409)
-    )
+    """Refus d'une décision : erreur, et la liste se recharge (la demande a changé)."""
+    return error_response(error, close_modal=True, refresh=CHANGED)
 
 
 @require_POST
@@ -279,7 +275,7 @@ def _decision_error(error):
 def approve(request, kind, public_id):
     obj = get_request(request, kind, public_id)
     try:
-        result = workflow.approve(obj, request.employee, http_request=request)
+        result = workflow.approve(obj, context=ActionContext.of(request))
     except workflow.WorkflowError as error:
         return _decision_error(error)
     title = (
@@ -319,10 +315,10 @@ def refuse(request, kind, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     try:
         result = workflow.refuse(
-            obj, request.employee, reason=form.cleaned_data["reason"], http_request=request
+            obj, reason=form.cleaned_data["reason"], context=ActionContext.of(request)
         )
     except workflow.WorkflowError as error:
         return _decision_error(error)
@@ -352,7 +348,7 @@ def cancel(request, kind, public_id):
             },
         )
     try:
-        result = workflow.cancel(obj, request.employee, http_request=request)
+        result = workflow.cancel(obj, context=ActionContext.of(request))
     except workflow.WorkflowError as error:
         return _decision_error(error)
     return _with_undo(request, result, "cancel", Toast(title=_("Demande annulée")))
@@ -381,10 +377,10 @@ def cancel_approved(request, kind, public_id):
     if request.method == "GET":
         return render(request, template, context)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     try:
         result = workflow.cancel_approved(
-            obj, request.employee, reason=form.cleaned_data["reason"], http_request=request
+            obj, reason=form.cleaned_data["reason"], context=ActionContext.of(request)
         )
     except workflow.WorkflowError as error:
         return _decision_error(error)
@@ -397,34 +393,28 @@ def cancel_approved(request, kind, public_id):
     return _with_undo(request, result, "cancel_approved", toast)
 
 
-@require_POST
-def undo_transition(request, token):
-    """« Annuler » dans la notification visuelle : 30 s, auteur seulement (L0-03)."""
-    try:
-        payload = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+def _undo_request(request, payload) -> Toast:
+    """Annulation d'une transition de demande (vue commune apps.core.views.undo_action)."""
     data = json.loads(payload.target)
     model = REQUEST_MODELS.get(data.get("type"))
     if model is None or payload.action != f"requests.{data.get('action')}":
         raise Http404
     if not module_is_enabled(request, model.module):
         raise Http404
-    try:
-        restored = workflow.undo(model, data, request.employee, http_request=request)
-    except workflow.WorkflowError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+    restored = workflow.undo(model, data, context=ActionContext.of(request))
     if restored is None:
-        toast = Toast(title=_("Envoi annulé"), message=_("La demande a été retirée."), kind="info")
-    else:
-        toast = Toast(
-            title=_("Décision annulée"),
-            message=_("La demande est de nouveau en attente.")
-            if restored.is_open
-            else _("La demande est rétablie."),
-            kind="info",
-        )
-    return _changed(toast_response(toast))
+        return Toast(title=_("Envoi annulé"), message=_("La demande a été retirée."), kind="info")
+    return Toast(
+        title=_("Décision annulée"),
+        message=_("La demande est de nouveau en attente.")
+        if restored.is_open
+        else _("La demande est rétablie."),
+        kind="info",
+    )
+
+
+for _action in ("submit", "approve", "refuse", "cancel", "cancel_approved"):
+    undo.register(f"requests.{_action}", _undo_request, refresh=CHANGED)
 
 
 # ---------- Campagnes de congés d'été (RH) ----------
@@ -469,16 +459,12 @@ def new_campaign(request):
     template = "approvals/partials/campaign_modal.html"
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", {"form": form}, status=422)
+            return form_error_response(request, template, {"form": form})
         campaign = workflow.create_summer_campaign(
-            form.cleaned_data, request.employee, http_request=request
+            form.cleaned_data, context=ActionContext.of(request)
         )
-        return trigger(
-            toast_response(
-                Toast(title=_("Campagne créée"), message=campaign.label), close_modal=True
-            ),
-            **{CAMPAIGNS_CHANGED: True},
-        )
+        toast = Toast(title=_("Campagne créée"), message=campaign.label)
+        return after_action(request, toast, refresh=CAMPAIGNS_CHANGED, close_modal=True)
     return render(request, template, {"form": form})
 
 
@@ -492,12 +478,12 @@ def campaign_status(request, pk, action):
     if action not in services:
         raise Http404
     try:
-        campaign = services[action](campaign, request.employee, http_request=request)
+        campaign = services[action](campaign, context=ActionContext.of(request))
     except workflow.WorkflowError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
+        return error_response(error)
     title = _("Campagne ouverte") if action == "ouvrir" else _("Campagne close")
-    return trigger(
-        toast_response(Toast(title=title, message=campaign.label)), **{CAMPAIGNS_CHANGED: True}
+    return after_action(
+        request, Toast(title=title, message=campaign.label), refresh=CAMPAIGNS_CHANGED
     )
 
 
@@ -510,7 +496,6 @@ def proof_file(request, public_id):
     contrôlée à chaque téléchargement (jamais de lien signé). Fichier isolé : type exact,
     `nosniff`, `sandbox`. Toute consultation par une autre personne que le demandeur (RH,
     administrateur) est inscrite au journal d'audit, sans nom de fichier."""
-    from apps.core import audit
     from apps.core.files import serve_isolated
 
     if not module_is_enabled(request, Module.TRANSPORT):
@@ -525,14 +510,7 @@ def proof_file(request, public_id):
         )
     except StorageUnavailableError:
         return storage_unavailable_response(request)
-    if obj.requester_id != request.employee.pk:
-        audit.log(
-            "requests.proof_downloaded",
-            _("Justificatif de transport consulté"),
-            actor=request.employee,
-            target=obj,
-            request=request,
-        )
+    workflow.record_proof_access(obj, context=ActionContext.of(request))
     return response
 
 
@@ -567,11 +545,9 @@ def export_requests(request, kind):
     if is_htmx(request) and form.is_valid() and not export_allowed(me):
         form.add_error(None, EXPORT_LIMIT_MESSAGE)
     if not form.is_valid():
-        return render(request, f"{template}#form", context, status=422)
+        return form_error_response(request, template, context)
     if is_htmx(request):
-        response = HttpResponse(status=204)
-        response["HX-Redirect"] = f"{action_url}?{request.GET.urlencode()}"
-        return response
+        return download_response(f"{action_url}?{request.GET.urlencode()}")
     if not record_export(me):
         return export_limited_response(request, reverse(KINDS[kind].url_name))
     return _download(*exports.export_file(kind, me, form.cleaned_data, request=request))

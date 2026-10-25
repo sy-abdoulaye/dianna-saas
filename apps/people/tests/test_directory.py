@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.core.context import ActionContext
 from apps.core.models import AuditLog
 from apps.core.tenancy import tenant_context
 from apps.core.tests.test_files import bomb_png
@@ -51,7 +52,7 @@ def test_employee_sees_no_status_no_left_people_no_hr_info(client_for, company_a
         status="left",
         registration_number="MAT-SECRET",
     )
-    content = client_for(company_a.employee).get("/annuaire/").content.decode()
+    content = client_for(company_a.employee).get("/annuaire/", follow=True).content.decode()
     assert "Les informations RH (contrat, matricule) ne sont pas affichées." in content
     assert ">Statut<" not in content
     assert "Partie" not in content
@@ -59,7 +60,7 @@ def test_employee_sees_no_status_no_left_people_no_hr_info(client_for, company_a
 
 
 def test_hr_sees_status_and_actions(client_for, company_a):
-    content = client_for(company_a.hr).get("/annuaire/").content.decode()
+    content = client_for(company_a.hr).get("/annuaire/", follow=True).content.decode()
     assert ">Statut<" in content
     assert "Ajouter un collaborateur" in content
     assert f"Archiver {company_a.employee.full_name}" in content
@@ -69,21 +70,21 @@ def test_upcoming_arrivals_are_visible_and_counted_in_post(client_for, company_a
     EmployeeFactory(
         company=company_a.company, user=None, last_name="Arrivante", status=EmployeeStatus.UPCOMING
     )
-    content = client_for(company_a.employee).get("/annuaire/").content.decode()
+    content = client_for(company_a.employee).get("/annuaire/", follow=True).content.decode()
     assert "Arrivante" in content
     assert "Arrivée prochaine" in content
-    hr = client_for(company_a.hr).get("/annuaire/?statut=en_poste").content.decode()
+    hr = client_for(company_a.hr).get("/annuaire/?statut=en_poste", follow=True).content.decode()
     assert "Arrivante" in hr
 
 
 def test_hr_filters_left_people(client_for, company_a):
     EmployeeFactory(company=company_a.company, user=None, last_name="Partie", status="left")
-    content = client_for(company_a.hr).get("/annuaire/?statut=partis").content.decode()
+    content = client_for(company_a.hr).get("/annuaire/?statut=partis", follow=True).content.decode()
     assert "Partie" in content and company_a.employee.last_name not in content
 
 
 def test_search_without_result_shows_the_empty_state(client_for, company_a):
-    content = client_for(company_a.employee).get("/annuaire/?q=zzzz").content.decode()
+    content = client_for(company_a.employee).get("/annuaire/?q=zzzz", follow=True).content.decode()
     assert "Aucun collaborateur trouvé" in content
     assert "Aucune fiche ne correspond à « zzzz »" in content
     assert "Réinitialiser les filtres" in content
@@ -91,7 +92,7 @@ def test_search_without_result_shows_the_empty_state(client_for, company_a):
 
 def test_filters_and_page_live_in_the_url_and_htmx_returns_the_fragment(client_for, company_a):
     client = client_for(company_a.employee)
-    url = f"/annuaire/?q={company_a.manager.last_name}&page=1"
+    url = f"/annuaire/?q={company_a.manager.last_name}&page=1&vue=liste"
     full = client.get(url).content.decode()
     assert "<html" in full and company_a.manager.full_name in full
     fragment = client.get(url, headers={"HX-Request": "true", "HX-Target": "results"})
@@ -100,13 +101,24 @@ def test_filters_and_page_live_in_the_url_and_htmx_returns_the_fragment(client_f
     assert company_a.employee.full_name not in content
 
 
+def test_directory_address_always_carries_the_view(client_for, company_a):
+    client = client_for(company_a.employee)
+    first = client.get("/annuaire/?q=dupont")
+    assert first.status_code == 302 and first["Location"] == "/annuaire/?q=dupont&vue=liste"
+    client.get("/annuaire/?vue=cartes")
+    remembered = client.get("/annuaire/?vue=inconnue&page=2")
+    assert remembered["Location"] == "/annuaire/?vue=cartes&page=2"
+    content = client.get("/annuaire/?vue=cartes&q=zzzz").content.decode()
+    assert 'href="/annuaire/?vue=cartes"' in content  # Réinitialiser garde l'affichage
+
+
 def test_cards_view_is_remembered_and_shows_12_per_page(client_for, company_a):
     for index in range(14):
         EmployeeFactory(company=company_a.company, user=None, last_name=f"Zz{index:02d}")
     client = client_for(company_a.employee)
     content = client.get("/annuaire/?vue=cartes").content.decode()
     assert "1 à 12 sur" in content and "person-card" in content
-    assert "person-card" in client.get("/annuaire/").content.decode()  # mémorisé
+    assert "person-card" in client.get("/annuaire/", follow=True).content.decode()  # mémorisé
     assert "1 à 8 sur" in client.get("/annuaire/?vue=liste").content.decode()
 
 
@@ -296,7 +308,7 @@ def test_last_admin_cannot_be_demoted_from_the_record(client_for, company_a):
         pk=third.pk
     ).update(role=Role.HR)
     with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
-        services.update_employee(third, {"role": Role.EMPLOYEE}, actor=None)
+        services.update_employee(third, {"role": Role.EMPLOYEE}, context=ActionContext(None))
     assert "dernier administrateur actif" in str(error.value.message)
 
 
@@ -329,7 +341,7 @@ def test_update_employee_refuses_a_change_of_ones_own_role(company_a):
     admin = company_a.admin
     EmployeeFactory(company=company_a.company, role=Role.ADMIN)
     with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
-        services.update_employee(admin, {"role": Role.EMPLOYEE}, actor=admin)
+        services.update_employee(admin, {"role": Role.EMPLOYEE}, context=ActionContext(admin))
     assert str(error.value.message) == "Vous ne pouvez pas modifier votre propre profil."
     assert Employee.all_companies.get(pk=admin.pk).role == Role.ADMIN
 
@@ -471,7 +483,7 @@ def test_hr_cannot_archive_an_administrator(client_for, company_a):
     client = client_for(company_a.hr)
     detail = client.get(detail_url(admin)).content.decode()
     assert f"/annuaire/{admin.public_id}/archiver/" not in detail
-    listing = client.get("/annuaire/").content.decode()
+    listing = client.get("/annuaire/", follow=True).content.decode()
     assert f"/annuaire/{admin.public_id}/archiver/" not in listing
     assert f"/annuaire/{company_a.employee.public_id}/archiver/" in listing
     response = client.post(
@@ -549,7 +561,7 @@ def test_hr_cannot_archive_themselves_nor_the_last_admin(client_for, company_a):
     assert "Seul un administrateur peut archiver un administrateur." in admin.content.decode()
     # Le dernier administrateur reste protégé, même hors requête (plateforme, commande).
     with tenant_context(company_a.company), pytest.raises(services.PeopleError) as error:
-        services.archive(company_a.admin, actor=None)
+        services.archive(company_a.admin, context=ActionContext(None))
     assert "dernier administrateur actif" in str(error.value.message)
 
 
@@ -661,6 +673,29 @@ def test_import_confirmation_without_a_matching_preview_restarts(client_for, com
     assert "L&#x27;import a expiré. Recommencez." in page
 
 
+def test_import_confirmation_with_htmx_uses_the_common_bricks(client_for, company_a):
+    client = client_for(company_a.admin)
+    expired = client.post(
+        "/annuaire/import/", {"step": "confirm", "token": "faux"}, headers={"HX-Request": "true"}
+    )
+    assert expired.status_code == 409
+    assert json.loads(expired["HX-Location"])["path"] == "/annuaire/import/"
+    assert json.loads(expired["HX-Trigger"])["toast"] == {
+        "title": "L'import a expiré. Recommencez.",
+        "kind": "err",
+    }
+    text = HEADER + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"
+    preview = client.post("/annuaire/import/", {"step": "upload", "file": upload(text)})
+    content = preview.content.decode()
+    assert 'hx-post="/annuaire/import/"' in content
+    token = content.split('name="token" value="')[1].split('"')[0]
+    done = client.post(
+        "/annuaire/import/", {"step": "confirm", "token": token}, headers={"HX-Request": "true"}
+    )
+    assert done.status_code == 204
+    assert json.loads(done["HX-Location"])["path"] == "/annuaire/"
+
+
 def test_import_confirmation_with_an_emptied_session_restarts(client_for, company_a):
     client = client_for(company_a.admin)
     text = HEADER + "Jean;Neuf;jean.neuf@exemple.fr;Comptable;Finance;Lyon;;03/11/2025;CDI\n"
@@ -754,7 +789,7 @@ def test_duplicate_email_reaching_the_service_is_a_message_not_a_500(
         with pytest.raises(services.PeopleError) as error:
             services.create_employee(
                 {"first_name": "Léa", "last_name": "Double", "email": company_a.manager.email},
-                actor=company_a.hr,
+                context=ActionContext(company_a.hr),
             )
         assert error.value.field == "email"
         assert Employee.objects.filter(last_name="Double").count() == 0

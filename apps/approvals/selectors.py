@@ -6,17 +6,20 @@ from django.utils.translation import gettext as _
 
 from apps.approvals import workflow
 from apps.approvals.kinds import summary
-from apps.approvals.models import RequestStatus
+from apps.approvals.models import ApprovalRequest, RequestStatus
 from apps.core import permissions
+from apps.people.models import Employee
 
 TAB_MINE, TAB_TODO, TAB_TEAM = "mes-demandes", "a-valider", "equipe"
 
 
-def is_validator(employee) -> bool:
+def is_validator(employee: Employee) -> bool:
     return employee.has_reports or workflow.is_hr_or_admin(employee)
 
 
-def request_tabs(me, model) -> tuple[list[tuple[str, str, int]], QuerySet]:
+def request_tabs(
+    me: Employee, model: type[ApprovalRequest]
+) -> tuple[list[tuple[str, str, int]], QuerySet]:
     """Onglets (clé, libellé, compteur) et demandes « À valider ». Types validés par les RH
     (transport) : ni « À valider » ni « Mon équipe » pour un manager, qui ne voit pas les
     justificatifs de son équipe (docs/04-permissions.md)."""
@@ -32,7 +35,15 @@ def request_tabs(me, model) -> tuple[list[tuple[str, str, int]], QuerySet]:
     return tabs, todo
 
 
-def request_rows(me, model, tab: str, todo: QuerySet, *, q: str, status: str) -> QuerySet:
+def request_rows(
+    me: Employee,
+    model: type[ApprovalRequest],
+    tab: str,
+    todo: QuerySet,
+    *,
+    q: str,
+    status: str,
+) -> QuerySet:
     if tab == TAB_MINE:
         rows = model.objects.filter(requester=me)
     elif tab == TAB_TODO:

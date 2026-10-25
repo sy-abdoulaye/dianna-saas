@@ -156,7 +156,7 @@ function openModal(dialog, opener) {
     // Les listes qui ont ouvert une confirmation (profil, module) se rechargent pour
     // retrouver l'état réel si la confirmation a été annulée.
     document.body.dispatchEvent(new CustomEvent("modalClosed", { bubbles: true }));
-    if (modalOpener && document.body.contains(modalOpener)) modalOpener.focus();
+    if (modalOpener) returnFocus(modalOpener);
     modalOpener = null;
   });
   // Clic sur le fond : en dehors de la boîte de la modale.
@@ -194,6 +194,70 @@ document.addEventListener("click", (event) => {
 });
 
 document.body.addEventListener("closeModal", closeModal);
+
+/* ---------- Focus après une action (WCAG 2.4.3) ---------- */
+// Après une action ou la fermeture d'une modale, le focus revient au bouton d'origine.
+// Ce bouton est souvent remplacé par le rechargement de sa zone, qui arrive après : on
+// retrouve alors son remplaçant (même id ou même adresse d'action), sinon le premier
+// élément utile de la zone rechargée.
+const FOCUS_WINDOW = 3000;
+const FOCUSABLE =
+  "a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+const ACTION_ATTRIBUTES = ["hx-post", "hx-get", "hx-delete", "href"];
+let focusOrigin = null;
+
+function returnFocus(elt) {
+  const attribute = ACTION_ATTRIBUTES.find((name) => elt.hasAttribute(name));
+  focusOrigin = {
+    elt,
+    id: elt.id,
+    attribute,
+    value: attribute ? elt.getAttribute(attribute) : "",
+    text: elt.textContent.trim(),
+    until: Date.now() + FOCUS_WINDOW,
+  };
+  if (elt.isConnected) elt.focus();
+}
+
+function focusLost() {
+  const active = document.activeElement;
+  return !active || active === document.body || !active.isConnected;
+}
+
+function replacementOf(origin) {
+  if (origin.elt.isConnected) return origin.elt;
+  if (origin.id) return document.getElementById(origin.id);
+  if (!origin.attribute) return null;
+  const same = $$(`[${origin.attribute}="${CSS.escape(origin.value)}"]`);
+  return same.find((elt) => elt.textContent.trim() === origin.text) || same[0] || null;
+}
+
+function firstUseful(zone) {
+  const candidates = zone && zone.isConnected ? $$(FOCUSABLE, zone) : [];
+  const visible = candidates.find((elt) => elt.offsetParent !== null && !elt.closest("[inert]"));
+  if (visible) return visible;
+  const heading = $("#content h1");
+  if (heading) heading.setAttribute("tabindex", "-1");
+  return heading;
+}
+
+document.body.addEventListener("htmx:beforeRequest", (event) => {
+  // Action lancée depuis la page (pas depuis une modale, ni une notification) : on garde
+  // son bouton pour y revenir après le rechargement de la zone.
+  const elt = event.detail.elt;
+  const verb = (event.detail.requestConfig && event.detail.requestConfig.verb) || "get";
+  if (verb !== "get" && elt instanceof HTMLElement && !elt.closest("dialog, #toasts")) {
+    returnFocus(event.detail.requestConfig.triggeringEvent?.submitter || elt);
+  }
+});
+
+document.body.addEventListener("htmx:afterSettle", (event) => {
+  if (!focusOrigin || Date.now() > focusOrigin.until || $("dialog[open]")) return;
+  if (!focusLost()) return;
+  const target = replacementOf(focusOrigin) || firstUseful(event.detail.target);
+  if (target) target.focus();
+  focusOrigin = null;
+});
 
 /* ---------- Notifications visuelles ---------- */
 const BADGE_ICON = { ok: "check", info: "info", warn: "alert", err: "alert" };

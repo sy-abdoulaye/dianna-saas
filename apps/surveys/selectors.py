@@ -28,7 +28,7 @@ from apps.surveys.models import Answer, Question, Survey, SurveyInvitation, Surv
 from apps.surveys.services import accepts_answers, is_due_passed
 
 
-def _count(model) -> Coalesce:
+def _count(model: type[SurveyInvitation | SurveyReceipt]) -> Coalesce:
     rows = (
         model.objects.filter(survey=OuterRef("pk"))
         .order_by()

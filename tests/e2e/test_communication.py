@@ -4,6 +4,7 @@ annulée ; questionnaire créé, modifié, publié, rempli, puis résultats apr�
 import pytest
 from playwright.sync_api import expect
 
+from apps.core.context import ActionContext
 from apps.core.tenancy import tenant_context
 from apps.surveys import services
 from apps.surveys.models import Survey
@@ -161,9 +162,9 @@ def test_show_more_moves_the_keyboard_focus_to_the_first_loaded_comment(
     with tenant_context(company_a.company):
         survey = services.create_draft(
             services.DraftData("Ambiance", "all", None, ["Je me sens bien."]),
-            actor=company_a.hr,
+            context=ActionContext(company_a.hr),
         )
-        services.publish(survey, actor=company_a.hr)
+        services.publish(survey, context=ActionContext(company_a.hr))
         question = survey.questions.get(order=1)
         for index, person in enumerate(people):
             services.submit_answers(
@@ -171,7 +172,7 @@ def test_show_more_moves_the_keyboard_focus_to_the_first_loaded_comment(
                 person,
                 {question.pk: {"score": 4, "comment": f"Commentaire numéro {index:02d}"}},
             )
-        services.close(Survey.objects.get(pk=survey.pk), actor=company_a.hr)
+        services.close(Survey.objects.get(pk=survey.pk), context=ActionContext(company_a.hr))
     sign_in(page, urls, company_a.hr)
     page.goto(urls(f"/questionnaires/{survey.public_id}/"))
     more = page.get_by_role("button", name="Afficher plus (7 restants)")

@@ -16,11 +16,12 @@ la période, les fermetures et les sites d'Alsace-Moselle. Jamais de requête pa
 """
 
 import calendar
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from django.core.paginator import Paginator
-from django.db.models import Case, IntegerField, Q, Value, When
+from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext_lazy
 
@@ -115,6 +116,17 @@ class PeopleFilter:
 NO_FILTER = PeopleFilter()
 
 
+@dataclass(frozen=True)
+class GridPage:
+    """Page affichée et déclaration depuis la grille (sa propre ligne, module Télétravail)."""
+
+    number: int | str | None = 1
+    can_declare: bool = False
+
+
+FIRST_PAGE = GridPage()
+
+
 @dataclass
 class Grid:
     first: date
@@ -140,9 +152,12 @@ def month_of(anchor: date) -> tuple[date, date]:
 
 
 def shift(anchor: date, view: str, step: int) -> date:
+    """Période précédente ou suivante : le même jour (borné à la fin du mois), pour que la
+    date de référence reste dans la semaine correspondante au retour en vue Semaine."""
     if view == "mois":
         month = anchor.month - 1 + step
-        return date(anchor.year + month // 12, month % 12 + 1, 1)
+        year, month = anchor.year + month // 12, month % 12 + 1
+        return date(year, month, min(anchor.day, calendar.monthrange(year, month)[1]))
     return anchor + timedelta(days=7 * step)
 
 
@@ -158,7 +173,9 @@ def period_title(view: str, first: date, last: date) -> str:
 # ---------- Périmètre ----------
 
 
-def people_in_scope(viewer, *, q="", service=None, site=None):
+def people_in_scope(
+    viewer: Employee, *, q: str = "", service: int | None = None, site: int | None = None
+) -> QuerySet[Employee]:
     """Personnes visibles : salarié, son service ; manager, son service et son équipe
     (L1-06) ; RH et administrateur, toute l'entreprise. Les filtres ne font que restreindre :
     un identifiant de service hors périmètre dans l'URL ne montre personne de plus."""
@@ -174,7 +191,7 @@ def people_in_scope(viewer, *, q="", service=None, site=None):
     return people.select_related("site", "service")
 
 
-def ordered(people, viewer):
+def ordered(people: QuerySet[Employee], viewer: Employee) -> QuerySet[Employee]:
     """La personne connectée en premier, puis par nom."""
     return people.annotate(
         me_first=Case(
@@ -186,7 +203,7 @@ def ordered(people, viewer):
 # ---------- Confidentialité (L4-16) ----------
 
 
-def sees_details(viewer, person) -> bool:
+def sees_details(viewer: Employee | None, person: Employee) -> bool:
     """Type exact d'absence et demandes en attente : soi, son équipe directe, RH et admin.
     Sans `viewer` (calculs internes), tout est visible."""
     if viewer is None or person.pk == viewer.pk:
@@ -196,7 +213,7 @@ def sees_details(viewer, person) -> bool:
     return person.manager_id == viewer.pk
 
 
-def leave_types(source_ids) -> dict:
+def leave_types(source_ids: list[int]) -> dict:
     """{id de la demande de congé: libellé du type} en une requête."""
     if not source_ids:
         return {}
@@ -211,9 +228,9 @@ def leave_types(source_ids) -> dict:
 # ---------- Cases ----------
 
 
-def _events(employee_ids, first, last):
+def _events(employee_ids: list[int], first: date, last: date) -> dict[tuple, dict]:
     """{(employee_id, jour): {type: (statut, libellé du congé)}} pour la période (2 requêtes)."""
-    found = {}
+    found: dict[tuple, dict] = {}
     rows = list(
         CalendarEvent.objects.filter(
             employee_id__in=employee_ids, start__lte=last, end__gte=first
@@ -227,7 +244,15 @@ def _events(employee_ids, first, last):
     return found
 
 
-def build_rows(people, first, last, *, viewer=None, can_declare=False, today=None):
+def build_rows(
+    people: Iterable[Employee],
+    first: date,
+    last: date,
+    *,
+    viewer: Employee | None = None,
+    can_declare: bool = False,
+    today: date | None = None,
+) -> list[Row]:
     people = list(people)
     events = _events([p.pk for p in people], first, last)
     offs = DayOffs(first, last)
@@ -242,8 +267,7 @@ def build_rows(people, first, last, *, viewer=None, can_declare=False, today=Non
                 day,
                 events.get((person.pk, day), {}),
                 offs,
-                is_me and can_declare,
-                today,
+                today if is_me and can_declare else None,
                 full,
             )
             for day in period
@@ -252,7 +276,16 @@ def build_rows(people, first, last, *, viewer=None, can_declare=False, today=Non
     return rows
 
 
-def _cell(person, day, kinds, offs, can_declare, today, full=True):
+def _cell(
+    person: Employee,
+    day: date,
+    kinds: dict,
+    offs: DayOffs,
+    declarable_from: date | None,
+    full: bool = True,
+) -> Cell:
+    """`declarable_from` : premier jour où la personne peut déclarer du télétravail depuis la
+    case (aujourd'hui, sur sa propre ligne), sinon None."""
     if not full:
         # Collègue : seulement les demandes validées.
         kinds = {
@@ -287,31 +320,31 @@ def _cell(person, day, kinds, offs, can_declare, today, full=True):
             if state == LEAVE:
                 cell.leave_label = label if full else str(ABSENT)
             return cell
-    cell.clickable = can_declare and today is not None and day >= today
+    cell.clickable = declarable_from is not None and day >= declarable_from
     return cell
 
 
-def present_today(people, today, viewer=None) -> int:
+def present_today(people: QuerySet[Employee], today: date, viewer: Employee | None = None) -> int:
     """Personnes du périmètre filtré sur site aujourd'hui (pied du planning)."""
     return count_today(people, today, viewer)[SITE]
 
 
-def count_today(people, today, viewer=None) -> dict:
+def count_today(people: QuerySet[Employee], today: date, viewer: Employee | None = None) -> dict:
     """Répartition du jour : sur site, télétravail, congés, astreinte (3 requêtes).
 
     Même règle que les cases (L4-16, L4-20, `sees_details`) : pour une personne dont le
     regardeur ne voit pas le détail, seules les demandes validées comptent."""
-    people = list(people.values_list("pk", "site_id", "arrival_date", "manager_id"))
+    members = list(people.values_list("pk", "site_id", "arrival_date", "manager_id"))
     counts = {SITE: 0, TELEWORK: 0, LEAVE: 0, "on_call": 0}
-    if not people:
+    if not members:
         return counts
-    kinds = {}
+    kinds: dict[int, dict[str, str]] = {}
     for employee_id, kind, status in CalendarEvent.objects.filter(
-        employee_id__in=[p[0] for p in people], start__lte=today, end__gte=today
+        employee_id__in=[m[0] for m in members], start__lte=today, end__gte=today
     ).values_list("employee_id", "kind", "status"):
         kinds.setdefault(employee_id, {})[kind] = status
     offs = DayOffs(today, today)
-    for pk, site_id, arrival, manager_id in people:
+    for pk, site_id, arrival, manager_id in members:
         person = Employee(pk=pk, manager_id=manager_id)
         full = sees_details(viewer, person)
         mine = {
@@ -332,18 +365,26 @@ def count_today(people, today, viewer=None) -> dict:
     return counts
 
 
-def grid(viewer, *, view, anchor, today, page=1, filters=NO_FILTER, can_declare=False) -> Grid:
+def grid(
+    viewer: Employee,
+    *,
+    view: str,
+    anchor: date,
+    today: date,
+    filters: PeopleFilter = NO_FILTER,
+    page: GridPage = FIRST_PAGE,
+) -> Grid:
     first, last = month_of(anchor) if view == "mois" else week_of(anchor)
     people = people_in_scope(viewer, q=filters.q, service=filters.service, site=filters.site)
     others = ordered(people.exclude(pk=viewer.pk), viewer)
-    page_obj = Paginator(others, PER_PAGE).get_page(page)
+    page_obj = Paginator(others, PER_PAGE).get_page(page.number)
     shown = list(page_obj.object_list)
     me = people.filter(pk=viewer.pk).first()
     if me is not None:
         shown.insert(0, me)  # « (vous) » en tête de chaque page
     result = Grid(first, last, list(days(first, last)), page_obj=page_obj)
     result.rows = build_rows(
-        shown, first, last, viewer=viewer, can_declare=can_declare, today=today
+        shown, first, last, viewer=viewer, can_declare=page.can_declare, today=today
     )
     result.total = page_obj.paginator.count + (1 if me is not None else 0)
     result.present_today = present_today(people, today, viewer)
@@ -353,15 +394,22 @@ def grid(viewer, *, view, anchor, today, page=1, filters=NO_FILTER, can_declare=
 # ---------- Export ----------
 
 
-def in_bounds(day) -> bool:
+def in_bounds(day: date | None) -> bool:
     return day is not None and MIN_DATE <= day <= MAX_DATE
 
 
-def export_people(viewer, *, service=None):
+def export_people(viewer: Employee, *, service: int | None = None) -> QuerySet[Employee]:
     return ordered(people_in_scope(viewer, service=service), viewer)
 
 
-def export_rows(viewer, first, last, *, service=None, people=None):
+def export_rows(
+    viewer: Employee,
+    first: date,
+    last: date,
+    *,
+    service: int | None = None,
+    people: Iterable[Employee] | None = None,
+) -> tuple[list[str], list[list[str]], list[Row], list[date]]:
     """Lignes de l'export : jours ouvrés (lundi à vendredi) de la période, périmètre de la
     personne. Le service choisi ne fait que restreindre ce périmètre. Les cases suivent la
     même règle de confidentialité que la vue (L4-16)."""

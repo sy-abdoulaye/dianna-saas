@@ -1,15 +1,16 @@
 """Pages d'erreur du design system, notifications et vitrine."""
 
-from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.core import notifications
 from apps.core.forms import SpaceAccessForm, email_digest, send_space_link
+from apps.core.htmx import Toast, after_action
 from apps.core.http import client_ip
 from apps.core.models import Notification
 from apps.core.ratelimit import over_limit
@@ -107,12 +108,43 @@ def notification_open(request, pk):
 
 
 @require_POST
+def undo_action(request, token, *, prefix: str, module: str = "", permission: str = ""):
+    """« Annuler » dans la notification visuelle (30 s, auteur seulement, L0-03) : seule vue
+    d'annulation. Chaque URL d'application la sert avec le préfixe de ses actions ; le module
+    et la permission de l'écran sont vérifiés avant le jeton, comme pour l'action annulée."""
+    from django.http import Http404
+
+    from apps.core import undo
+    from apps.core.access import module_is_enabled, require
+    from apps.core.errors import ServiceError
+    from apps.core.htmx import error_response
+    from apps.core.models import Module
+
+    if module and not module_is_enabled(request, module):
+        return module_disabled(request, Module(module).label)
+    if permission:
+        require(request, permission)
+    try:
+        data = undo.read_token(request, token)
+    except undo.UndoError as error:
+        return error_response(error)
+    handler = undo.HANDLERS.get(data.action) if data.action.startswith(prefix) else None
+    if handler is None:
+        raise Http404
+    try:
+        toast = handler.run(request, data)
+    except ServiceError as error:
+        return error_response(error)
+    return after_action(request, toast, refresh=handler.refresh)
+
+
+@require_POST
 def notification_read_all(request):
     notifications.mark_all_read(request.employee)
     if request.htmx:
         return render(request, "core/partials/bell.html")
-    messages.success(request, _("Toutes les notifications sont lues."))
-    return redirect("core:notifications")
+    toast = Toast(title=_("Toutes les notifications sont lues."))
+    return after_action(request, toast, go_to=reverse("core:notifications"), page_form=True)
 
 
 # ---------- Vitrine (dianna.fr) ----------

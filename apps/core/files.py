@@ -346,8 +346,9 @@ def file_writes():
         raise
 
 
-def delete_after_commit(name: str) -> None:
-    """Ancien fichier remplacé ou retiré : supprimé seulement si la transaction aboutit."""
+def delete_after_commit(name: str | None) -> None:
+    """Ancien fichier remplacé ou retiré : supprimé seulement si la transaction aboutit (rien
+    si le champ était vide)."""
     from django.db import transaction
 
     if name:
@@ -355,9 +356,14 @@ def delete_after_commit(name: str) -> None:
 
 
 def storage_unavailable_response(request):
-    """Page 503 « Le stockage des fichiers est momentanément indisponible »."""
+    """Stockage indisponible (statut 503) : notification d'erreur pour une requête HTMX (la
+    modale reste ouverte, rien n'est perdu, L5-17), page 503 sinon."""
     from django.shortcuts import render
 
+    from apps.core.htmx import Toast, is_htmx, toast_response
+
+    if is_htmx(request):
+        return toast_response(Toast(title=str(STORAGE_UNAVAILABLE), kind="err"), status=503)
     return render(
         request, "pages/storage_unavailable.html", {"message": STORAGE_UNAVAILABLE}, status=503
     )

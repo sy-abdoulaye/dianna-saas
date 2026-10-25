@@ -60,7 +60,7 @@
         {% url "people:import" as import_url %}
         {% button _("Déposer un autre fichier") variant="secondary" href=import_url %}
         {% if preview.is_valid %}
-          <form method="post">
+          <form method="post" hx-post="{{ import_url }}" hx-swap="none">
             {% csrf_token %}
             <input type="hidden" name="step" value="confirm">
             <input type="hidden" name="token" value="{{ token }}">

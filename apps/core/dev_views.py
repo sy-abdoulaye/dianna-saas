@@ -17,7 +17,14 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.core import undo
 from apps.core.dev_forms import DemoFieldsForm, DemoFilterForm, DemoRequestForm
-from apps.core.htmx import Toast, is_htmx, toast_response
+from apps.core.htmx import (
+    Toast,
+    after_action,
+    confirm_response,
+    error_response,
+    form_error_response,
+    is_htmx,
+)
 from apps.core.navigation import build_demo_nav
 from apps.core.status import STATUSES
 
@@ -180,9 +187,10 @@ def demo_modal(request):
         return render(request, template, {"form": DemoRequestForm()})
     form = DemoRequestForm(request.POST)
     if not form.is_valid():
-        return render(request, f"{template}#form", {"form": form}, status=422)
+        return form_error_response(request, template, {"form": form})
     token = undo.make_token(request, "demo.request", form.cleaned_data["day"].isoformat())
-    return toast_response(
+    return after_action(
+        request,
         Toast(
             title=_("Demande envoyée"),
             message=_("Votre demande a été transmise à Louise Martin."),
@@ -209,7 +217,7 @@ def demo_confirm(request):
             )
         else:
             toast = Toast(title=_("Entretien marqué comme réalisé"))
-        return toast_response(toast, close_modal=True)
+        return after_action(request, toast, close_modal=True)
     context = {
         "danger": danger,
         "action_url": request.get_full_path(),
@@ -223,7 +231,7 @@ def demo_confirm(request):
         "ok_label": _("Archiver") if danger else _("Marquer comme réalisé"),
         "ok_icon": "trash" if danger else "check",
     }
-    return render(request, "components/confirm.html", context)
+    return confirm_response(request, **context)
 
 
 @login_not_required
@@ -233,9 +241,10 @@ def demo_undo(request, token):
     try:
         undo.read_token(request, token)
     except undo.UndoError as exc:
-        return toast_response(Toast(title=str(exc.message), kind="err"), status=409)
-    return toast_response(
-        Toast(title=_("Action annulée"), message=_("La demande a été retirée."), kind="info")
+        return error_response(exc)
+    return after_action(
+        request,
+        Toast(title=_("Action annulée"), message=_("La demande a été retirée."), kind="info"),
     )
 
 
@@ -251,8 +260,8 @@ def demo_toast(request):
         "err": (_("Envoi impossible"), _("Corrigez les informations signalées.")),
     }
     title, message = titles.get(kind, titles["ok"])
-    return toast_response(
-        Toast(title=title, message=message, kind=kind if kind in titles else "ok")
+    return after_action(
+        request, Toast(title=title, message=message, kind=kind if kind in titles else "ok")
     )
 
 

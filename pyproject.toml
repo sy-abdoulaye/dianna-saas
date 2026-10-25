@@ -24,8 +24,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "django-stubs[compatible-mypy]>=6.1,<6.2",
     "djlint>=1.46.6",
     "factory-boy>=3.3.3",
+    "mypy>=2.4,<3",
     "pre-commit>=4.7.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
@@ -65,7 +67,7 @@ max-complexity = 10
 [tool.ruff.lint.pylint]
 max-returns = 6
 max-branches = 12
-max-args = 8
+max-args = 6
 max-statements = 50
 
 [tool.ruff.lint.isort]
@@ -91,3 +93,23 @@ indent = 2
 max_line_length = 120
 ignore = "H006,H021,H023,H030,H031,T002"
 extension = "html"
+
+# Types (refacto-1) : bloquant sur tous les services.py et selectors.py ; le reste au lot 8.
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main"]
+files = ["apps/*/services.py", "apps/*/selectors.py", "apps/approvals/workflow/*.py"]
+# Les modules importés sont analysés pour connaître leurs types, sans y signaler d'erreur.
+follow_imports = "silent"
+warn_unused_ignores = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# Bibliothèques sans types (ni marqueur py.typed, ni paquet de stubs) : vues comme Any.
+[[tool.mypy.overrides]]
+module = ["allauth.*", "botocore.*", "environ", "storages.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"

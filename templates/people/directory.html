@@ -27,39 +27,7 @@
     {% include "components/banner.html" with kind="info" text=hr_note %}
   {% endif %}
   <div class="card">
-    <form class="filters"
-          method="get"
-          action="{{ list_url }}"
-          role="search"
-          hx-get="{{ list_url }}"
-          hx-target="#results"
-          hx-push-url="true"
-          hx-trigger="input changed delay:300ms, submit"
-          hx-sync="this:replace">
-      <div class="field grow">
-        <label class="label" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>
-        <div class="search-input">{% icon "search" %}{% control filter_form.q %}</div>
-      </div>
-      <div class="field">
-        <label class="label" for="{{ filter_form.service.id_for_label }}">{{ filter_form.service.label }}</label>
-        {% control filter_form.service %}
-      </div>
-      <div class="field">
-        <label class="label" for="{{ filter_form.site.id_for_label }}">{{ filter_form.site.label }}</label>
-        {% control filter_form.site %}
-      </div>
-      {% if filter_form.statut %}
-        <div class="field">
-          <label class="label" for="{{ filter_form.statut.id_for_label }}">{{ filter_form.statut.label }}</label>
-          {% control filter_form.statut %}
-        </div>
-      {% endif %}
-      <noscript>{% button _("Filtrer") type="submit" %}</noscript>
-      {% button _("Réinitialiser") variant="ghost" href=list_url hx_get=list_url hx_target="#results" hx_push_url="true" data_filters_reset=True %}
-      <div class="ml-auto self-end">
-        {% include "components/segmented.html" with name="vue" legend=_("Affichage") options=view_options selected=view %}
-      </div>
-    </form>
+    {% include "components/filters.html" with form=filter_form action=list_url extra_template="people/partials/view_switch.html" %}
     <div id="results"
          aria-live="polite"
          hx-get="{{ request.get_full_path }}"

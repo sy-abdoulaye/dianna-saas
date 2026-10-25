@@ -2,12 +2,12 @@
 
 import json
 import uuid
+from urllib.parse import urlencode
 
-from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import DatabaseError
 from django.db.models import Q
-from django.http import Http404, HttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -17,8 +17,16 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts import services as accounts
 from apps.core import permissions, undo
 from apps.core.access import PermissionRequiredMixin, permission_required, require
+from apps.core.context import ActionContext
+from apps.core.errors import ServiceError
 from apps.core.files import signed_url
-from apps.core.htmx import Toast, is_htmx, toast_response, trigger
+from apps.core.htmx import (
+    Toast,
+    after_action,
+    error_response,
+    form_error_response,
+    is_htmx,
+)
 from apps.people import importer, services
 from apps.people.forms import (
     STATUS_IN_POST,
@@ -62,6 +70,9 @@ class DirectoryView(PermissionRequiredMixin, View):
     template_name = "people/directory.html"
 
     def get(self, request):
+        view = request.GET.get("vue")
+        if view not in PER_PAGE:
+            return self._with_view(request)
         me = request.employee
         can_see_left = permissions.can(me, "people.view_left")
         form = DirectoryFilterForm(request.GET or None, show_status=can_see_left)
@@ -86,8 +97,6 @@ class DirectoryView(PermissionRequiredMixin, View):
             people = people.filter(service=data["service"])
         if data.get("site"):
             people = people.filter(site=data["site"])
-        view = request.GET.get("vue") or request.session.get(VIEW_SESSION_KEY, "liste")
-        view = view if view in PER_PAGE else "liste"
         request.session[VIEW_SESSION_KEY] = view  # sélecteur mémorisé
         page_obj = Paginator(people, PER_PAGE[view]).get_page(request.GET.get("page"))
         for person in page_obj.object_list:
@@ -106,12 +115,22 @@ class DirectoryView(PermissionRequiredMixin, View):
                 "sites": in_post.values("site").distinct().exclude(site=None).count(),
                 "services": in_post.values("service").distinct().exclude(service=None).count(),
             },
-            "list_url": reverse("people:list"),
+            # Réinitialiser garde l'affichage choisi.
+            "list_url": f"{reverse('people:list')}?{urlencode({'vue': view})}",
             "view_options": [("liste", _("Liste"), "list"), ("cartes", _("Cartes"), "grid")],
         }
         if is_htmx(request) and request.htmx.target == "results":
             return render(request, f"{self.template_name}#results", context)
         return render(request, self.template_name, context)
+
+    @staticmethod
+    def _with_view(request):
+        """L'adresse porte toujours l'affichage (liste ou cartes) : Retour retrouve celui de
+        la page quittée, et non le dernier mémorisé."""
+        params = request.GET.copy()
+        saved = request.session.get(VIEW_SESSION_KEY)
+        params["vue"] = saved if saved in PER_PAGE else "liste"
+        return redirect(f"{request.path}?{params.urlencode()}")
 
 
 @require_GET
@@ -241,7 +260,7 @@ class EmployeeFormView(PermissionRequiredMixin, View):
         try:
             if public_id is None:
                 employee = services.create_employee(
-                    form.model_data(), actor=request.employee, photo=photo, request=request
+                    form.model_data(), context=ActionContext.of(request), photo=photo
                 )
                 message = _("Fiche créée")
                 if form.cleaned_data.get("invite"):
@@ -251,18 +270,17 @@ class EmployeeFormView(PermissionRequiredMixin, View):
                 services.update_employee(
                     employee,
                     form.model_data(),
-                    actor=request.employee,
+                    context=ActionContext.of(request),
                     photo=photo,
                     remove_photo=form.cleaned_data.get("remove_photo", False),
-                    request=request,
                 )
                 message = _("Fiche enregistrée")
         except (services.PeopleError, accounts.InvitationError) as error:
             field = getattr(error, "field", None)
             form.add_error(field if field in form.fields else None, error.message)
             return self.render_form(request, form, employee, status=422)
-        messages.success(request, message)
-        return redirect("people:detail", public_id=employee.public_id)
+        detail = reverse("people:detail", args=[employee.public_id])
+        return after_action(request, Toast(title=message), go_to=detail, page_form=True)
 
 
 # ---------- Archivage ----------
@@ -280,73 +298,58 @@ def archive(request, public_id):
     held = held_by(employee)
     if request.method == "POST":
         if not form.is_valid():
-            return render(
+            return form_error_response(
                 request,
-                f"{template}#form",
+                template,
                 {"form": form, "person": employee, "action_url": url, "held": held},
-                status=422,
             )
         try:
             previous = services.archive(
                 employee,
-                actor=request.employee,
+                context=ActionContext.of(request),
                 departure_date=form.cleaned_data["departure_date"],
-                request=request,
             )
         except services.PeopleError as error:
             form.add_error(None, error.message)
-            return render(
+            return form_error_response(
                 request,
-                f"{template}#form",
+                template,
                 {"form": form, "person": employee, "action_url": url, "held": held},
-                status=422,
             )
         token = undo.make_token(
             request, "people.archive", json.dumps({"id": str(employee.public_id), **previous})
         )
-        return _with_event(
-            toast_response(
-                Toast(
-                    title=_("Fiche archivée"),
-                    message=_("%(name)s est maintenant au statut Parti.")
-                    % {"name": employee.full_name},
-                    emphasis=employee.full_name,
-                    undo_url=reverse("people:undo", args=[token]),
-                ),
-                close_modal=True,
-            )
+        return after_action(
+            request,
+            Toast(
+                title=_("Fiche archivée"),
+                message=_("%(name)s est maintenant au statut Parti.")
+                % {"name": employee.full_name},
+                emphasis=employee.full_name,
+                undo_url=reverse("people:undo", args=[token]),
+            ),
+            refresh=CHANGED_EVENT,
+            close_modal=True,
         )
     return render(
         request, template, {"form": form, "person": employee, "action_url": url, "held": held}
     )
 
 
-def _with_event(response: HttpResponse) -> HttpResponse:
-    """Les zones qui affichent les fiches se rechargent (liste, en-tête de fiche)."""
-    return trigger(response, **{CHANGED_EVENT: True})
-
-
-@require_POST
-def undo_archive(request, token):
-    try:
-        payload = undo.read_token(request, token)
-    except undo.UndoError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
-    if payload.action != "people.archive":
-        raise Http404
+def _undo_archive(request, payload) -> Toast:
+    """Annulation d'un archivage (vue commune apps.core.views.undo_action)."""
     previous = json.loads(payload.target)
     employee = get_object_or_404(Employee, public_id=previous["id"])
     require(request, "people.manage", employee)
-    services.undo_archive(employee, previous, actor=request.employee, request=request)
-    return _with_event(
-        toast_response(
-            Toast(
-                title=_("Archivage annulé"),
-                message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
-                kind="info",
-            )
-        )
+    services.undo_archive(employee, previous, context=ActionContext.of(request))
+    return Toast(
+        title=_("Archivage annulé"),
+        message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
+        kind="info",
     )
+
+
+undo.register("people.archive", _undo_archive, refresh=CHANGED_EVENT)
 
 
 @require_POST
@@ -354,16 +357,16 @@ def reactivate(request, public_id):
     employee = get_employee(request, public_id)
     require(request, "people.manage", employee)
     try:
-        services.reactivate(employee, actor=request.employee, request=request)
+        services.reactivate(employee, context=ActionContext.of(request))
     except services.PeopleError as error:
-        return toast_response(Toast(title=str(error.message), kind="err"), status=409)
-    return _with_event(
-        toast_response(
-            Toast(
-                title=_("Fiche réactivée"),
-                message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
-            )
-        )
+        return error_response(error)
+    return after_action(
+        request,
+        Toast(
+            title=_("Fiche réactivée"),
+            message=_("%(name)s est de nouveau en poste.") % {"name": employee.full_name},
+        ),
+        refresh=CHANGED_EVENT,
     )
 
 
@@ -379,15 +382,18 @@ def edit_contact(request):
     form = ContactForm(request.POST or None, initial=initial)
     if request.method == "POST":
         if not form.is_valid():
-            return render(request, f"{template}#form", {"form": form}, status=422)
+            return form_error_response(request, template, {"form": form})
         services.update_contact(
             me,
             phone=form.cleaned_data["phone"],
             office=form.cleaned_data["office"],
             request=request,
         )
-        return _with_event(
-            toast_response(Toast(title=_("Coordonnées enregistrées")), close_modal=True)
+        return after_action(
+            request,
+            Toast(title=_("Coordonnées enregistrées")),
+            refresh=CHANGED_EVENT,
+            close_modal=True,
         )
     return render(request, template, {"form": form})
 
@@ -404,27 +410,26 @@ def import_people(request):
     if step == "confirm":
         stored = request.session.get(IMPORT_SESSION_KEY) or {}
         token = request.POST.get("token") or ""
+        restart = reverse("people:import")
         if not token or stored.get("token") != token or not stored.get("rows"):
             # Aucun aperçu en session, jeton absent ou différent : retour à l'étape 1.
             request.session.pop(IMPORT_SESSION_KEY, None)
-            messages.error(request, _("L'import a expiré. Recommencez."))
-            return redirect("people:import")
+            error = ServiceError(_("L'import a expiré. Recommencez."))
+            return error_response(error, go_to=restart, request=request)
         try:
             count = importer.run(
                 importer.rows_from_session(stored["rows"]),
-                actor=request.employee,
-                request=request,
+                context=ActionContext.of(request),
             )
         except importer.ImportFileError as error:
-            messages.error(request, str(error.message))
-            return redirect("people:import")
+            return error_response(error, go_to=restart, request=request)
         except DatabaseError:
             # Conflit apparu entre l'aperçu et la confirmation : rien n'est importé.
-            messages.error(request, _("L'import n'a pas pu être enregistré. Recommencez."))
-            return redirect("people:import")
+            error = ServiceError(_("L'import n'a pas pu être enregistré. Recommencez."))
+            return error_response(error, go_to=restart, request=request)
         request.session.pop(IMPORT_SESSION_KEY, None)
-        messages.success(request, _("%(n)s fiches importées") % {"n": count})
-        return redirect("people:list")
+        toast = Toast(title=_("%(n)s fiches importées") % {"n": count})
+        return after_action(request, toast, go_to=reverse("people:list"), page_form=True)
     form = ImportUploadForm(request.POST or None, request.FILES or None)
     preview = None
     if request.method == "POST" and form.is_valid():

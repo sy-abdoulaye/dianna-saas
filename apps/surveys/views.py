@@ -13,14 +13,15 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.core import permissions
 from apps.core.access import module_required, permission_required
+from apps.core.context import ActionContext
 from apps.core.htmx import (
+    PAGE_CHANGED,
     Toast,
+    after_action,
     confirm_response,
     error_response,
     is_htmx,
-    location,
     modal_form_response,
-    toast_response,
 )
 from apps.core.models import Module
 from apps.surveys import selectors, services
@@ -143,7 +144,7 @@ def survey_answer(request, public_id):
             return _render_detail(request, survey, form)
         return error_response(error, close_modal=True)
     toast = Toast(title=_("Réponses envoyées"), message=_("Merci. Vos réponses sont anonymes."))
-    return location(toast_response(toast), _url(survey))
+    return after_action(request, toast, refresh=PAGE_CHANGED)
 
 
 def _form_response(request, form, *, action_url, survey=None):
@@ -157,19 +158,16 @@ def _save_draft(request, form, *, action_url, survey=None):
         return _form_response(request, form, action_url=action_url, survey=survey)
     try:
         if survey is None:
-            survey = services.create_draft(
-                form.draft_data(), actor=request.employee, request=request
-            )
-            title = _("Brouillon créé")
-        else:
-            services.update_draft(
-                survey, form.draft_data(), actor=request.employee, request=request
-            )
-            title = _("Brouillon modifié")
+            survey = services.create_draft(form.draft_data(), context=ActionContext.of(request))
+            # Nouveau brouillon : sa page (autre page que la liste).
+            toast = Toast(title=_("Brouillon créé"))
+            return after_action(request, toast, go_to=_url(survey), close_modal=True)
+        services.update_draft(survey, form.draft_data(), context=ActionContext.of(request))
     except services.SurveyError as error:
         form.add_error(error.field if error.field in form.fields else None, error.message)
         return _form_response(request, form, action_url=action_url, survey=survey)
-    return location(toast_response(Toast(title=title), close_modal=True), _url(survey))
+    toast = Toast(title=_("Brouillon modifié"))
+    return after_action(request, toast, refresh=PAGE_CHANGED, close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -220,14 +218,14 @@ def survey_publish(request, public_id):
             action="publish",
         )
     try:
-        size = services.publish(survey, actor=request.employee, request=request)
+        size = services.publish(survey, context=ActionContext.of(request))
     except services.SurveyError as error:
         return error_response(error, close_modal=True)
     toast = Toast(
         title=_("Questionnaire publié"),
         message=_("%(n)s personnes sont notifiées.") % {"n": size},
     )
-    return location(toast_response(toast, close_modal=True), _url(survey))
+    return after_action(request, toast, refresh=PAGE_CHANGED, close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -250,12 +248,11 @@ def survey_close(request, public_id):
             action="close",
         )
     try:
-        services.close(survey, actor=request.employee, request=request)
+        services.close(survey, context=ActionContext.of(request))
     except services.SurveyError as error:
         return error_response(error, close_modal=True)
-    return location(
-        toast_response(Toast(title=_("Questionnaire clos")), close_modal=True), _url(survey)
-    )
+    toast = Toast(title=_("Questionnaire clos"))
+    return after_action(request, toast, refresh=PAGE_CHANGED, close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -278,11 +275,11 @@ def survey_delete(request, public_id):
             danger=True,
         )
     try:
-        services.delete_draft(survey, actor=request.employee, request=request)
+        services.delete_draft(survey, context=ActionContext.of(request))
     except services.SurveyError as error:
         return error_response(error, close_modal=True)
-    toast = toast_response(Toast(title=_("Brouillon supprimé")), close_modal=True)
-    return location(toast, reverse("surveys:list"))
+    toast = Toast(title=_("Brouillon supprimé"))
+    return after_action(request, toast, go_to=reverse("surveys:list"), close_modal=True)
 
 
 @require_http_methods(["GET", "POST"])
@@ -305,13 +302,13 @@ def survey_extend(request, public_id):
         return modal_form_response(request, "surveys/partials/extend_modal.html", context)
     try:
         services.extend_due_date(
-            survey, form.cleaned_data["due_date"], actor=request.employee, request=request
+            survey, form.cleaned_data["due_date"], context=ActionContext.of(request)
         )
     except services.SurveyError as error:
         form.add_error(error.field, error.message)
         return modal_form_response(request, "surveys/partials/extend_modal.html", context)
     toast = Toast(title=_("Échéance prolongée"), message=survey.title)
-    return location(toast_response(toast, close_modal=True), _url(survey))
+    return after_action(request, toast, refresh=PAGE_CHANGED, close_modal=True)
 
 
 @require_GET

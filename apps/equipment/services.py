@@ -6,13 +6,16 @@ détenteur à la fois (L5-08) : deux attributions simultanées du même équipem
 attribution et un message, jamais une erreur 500 (contraintes de base en dernier rempart)."""
 
 import unicodedata
+from datetime import datetime
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
-from apps.core import audit, notifications
+from apps.core import audit, constraints, notifications
+from apps.core.context import ActionContext
+from apps.core.errors import ServiceError
 from apps.core.models import Notification
 from apps.equipment.models import (
     EquipmentAssignment,
@@ -30,37 +33,32 @@ NOT_AVAILABLE = gettext_lazy("Cet équipement n'est plus disponible.")
 CHANGED = gettext_lazy("Cet équipement a changé d'état entre-temps. Rien n'a été modifié.")
 
 
-class EquipmentError(Exception):
-    def __init__(self, message, field=None):
-        super().__init__(str(message))
-        self.message = message
-        self.field = field
+class EquipmentError(ServiceError):
+    """Refus d'une action sur le matériel (message affiché, champ éventuel)."""
 
 
-# Contrainte de base → (message, champ) : chaque IntegrityError est traduite selon la
-# contrainte en cause (L5-19).
-CONSTRAINT_MESSAGES = {
-    "equipment_serial_unique": (SERIAL_TAKEN, "serial_number"),
-    "equipment_one_open_assignment": (ALREADY_ASSIGNED, None),
-    "equipment_one_assignment_per_request": (
-        gettext_lazy("Un équipement a déjà été attribué pour cette demande."),
-        None,
-    ),
-    "equipment_holder_matches_status": (CHANGED, None),
-}
+# Contraintes du matériel, inscrites dans la table commune (L5-19).
+constraints.register(
+    {
+        "equipment_serial_unique": ("serial_number", SERIAL_TAKEN),
+        "equipment_one_open_assignment": (None, ALREADY_ASSIGNED),
+        "equipment_one_assignment_per_request": (
+            None,
+            gettext_lazy("Un équipement a déjà été attribué pour cette demande."),
+        ),
+        "equipment_holder_matches_status": (None, CHANGED),
+    }
+)
 
 
-def _integrity_error(exc) -> EquipmentError:
-    from apps.approvals.workflow import constraint_name
-
-    message, field = CONSTRAINT_MESSAGES.get(
-        constraint_name(exc),
-        (gettext_lazy("L'opération n'a pas pu être enregistrée. Réessayez."), None),
+def _integrity_error(exc: IntegrityError) -> EquipmentError:
+    field, message = constraints.translate(
+        exc, gettext_lazy("L'opération n'a pas pu être enregistrée. Réessayez.")
     )
     return EquipmentError(message, field)
 
 
-def _lock(item) -> EquipmentItem:
+def _lock(item: EquipmentItem) -> EquipmentItem:
     return (
         EquipmentItem.objects.select_for_update(of=("self",))
         .select_related("holder")
@@ -68,17 +66,23 @@ def _lock(item) -> EquipmentItem:
     )
 
 
-def _event(item, action, actor, employee=None, comment="") -> int:
+def _event(
+    item: EquipmentItem,
+    action: str,
+    actor: Employee | None,
+    employee: Employee | None = None,
+    comment: str = "",
+) -> int:
     return EquipmentEvent.objects.create(
         item=item, action=action, actor=actor, employee=employee, comment=comment
     ).pk
 
 
-def _label(item) -> str:
+def _label(item: EquipmentItem) -> str:
     return f"{item.get_kind_display()} {item.serial_number}"
 
 
-def _hr():
+def _hr() -> list[Employee]:
     """RH en poste avec un compte ; à défaut, les administrateurs (signalements)."""
     people = Employee.objects.filter(status__in=IN_POST_STATUSES, user__is_active=True)
     return list(people.filter(role=Role.HR)) or list(people.filter(role=Role.ADMIN))
@@ -94,9 +98,10 @@ def normalize_serial(value: str) -> str:
 
 
 @transaction.atomic
-def add_item(*, kind, model, serial_number, actor, request=None) -> EquipmentItem:
+def add_item(*, kind: str, model: str, serial_number: str, context: ActionContext) -> EquipmentItem:
     """Numéro de série normalisé, puis unique dans l'entreprise (contrainte de base sur la
     valeur normalisée)."""
+    actor, request = context.actor, context.request
     serial_number = normalize_serial(serial_number)
     if not serial_number:
         raise EquipmentError(_("Indiquez le numéro de série."), "serial_number")
@@ -119,8 +124,15 @@ def add_item(*, kind, model, serial_number, actor, request=None) -> EquipmentIte
 
 
 @transaction.atomic
-def assign(item, employee, *, actor, equipment_request=None, request=None) -> dict:
+def assign(
+    item: EquipmentItem,
+    employee: Employee,
+    *,
+    context: ActionContext,
+    equipment_request: EquipmentRequest | None = None,
+) -> dict:
     """Attribue un équipement en stock. Renvoie ce qu'il faut pour l'annulation immédiate."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status == Status.ASSIGNED or item.holder_id:
         raise EquipmentError(ALREADY_ASSIGNED)
@@ -173,10 +185,11 @@ def assign(item, employee, *, actor, equipment_request=None, request=None) -> di
 
 
 @transaction.atomic
-def undo_assign(payload: dict, *, actor, request=None) -> EquipmentItem:
+def undo_assign(payload: dict, *, context: ActionContext) -> EquipmentItem:
     """« Annuler » après une attribution (30 s, auteur seulement) : l'équipement revient en
     stock, l'attribution et la notification disparaissent. Refusé si l'équipement a changé
     depuis (dernier événement différent)."""
+    actor, request = context.actor, context.request
     item = EquipmentItem.objects.filter(public_id=payload["item"]).first()
     if item is None:
         raise EquipmentError(CHANGED)
@@ -203,15 +216,16 @@ def undo_assign(payload: dict, *, actor, request=None) -> EquipmentItem:
     return item
 
 
-def _close_assignment(item, now):
+def _close_assignment(item: EquipmentItem, now: datetime) -> None:
     EquipmentAssignment.objects.filter(item=item, returned_at__isnull=True).update(
         returned_at=now, updated_at=now
     )
 
 
 @transaction.atomic
-def return_item(item, *, actor, request=None) -> EquipmentItem:
+def return_item(item: EquipmentItem, *, context: ActionContext) -> EquipmentItem:
     """Restitution : l'équipement repasse en stock, l'attribution est fermée."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status != Status.ASSIGNED:
         raise EquipmentError(CHANGED)
@@ -231,9 +245,10 @@ def return_item(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def send_to_repair(item, *, actor, comment="", request=None) -> dict:
+def send_to_repair(item: EquipmentItem, *, context: ActionContext, comment: str = "") -> dict:
     """En stock ou attribué → en réparation ; le détenteur éventuel est conservé (L5-10).
     Renvoie ce qu'il faut pour l'annulation immédiate (30 s)."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status not in (Status.IN_STOCK, Status.ASSIGNED):
         raise EquipmentError(CHANGED)
@@ -252,11 +267,12 @@ def send_to_repair(item, *, actor, comment="", request=None) -> dict:
 
 
 @transaction.atomic
-def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
+def undo_repair(payload: dict, *, context: ActionContext) -> EquipmentItem:
     """« Annuler » après un envoi en réparation (30 s, auteur seulement) : l'équipement
     reprend son état précédent ; l'historique garde « Envoyé en réparation » et ajoute « Envoi
     en réparation annulé », comme une attribution annulée. Refusé si l'équipement a changé
     depuis, donc aussi pour un jeton déjà utilisé (le dernier événement n'est plus le même)."""
+    actor, request = context.actor, context.request
     item = EquipmentItem.objects.filter(public_id=payload["item"]).first()
     if item is None:
         raise EquipmentError(CHANGED)
@@ -284,8 +300,9 @@ def undo_repair(payload: dict, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def back_from_repair(item, *, actor, request=None) -> EquipmentItem:
+def back_from_repair(item: EquipmentItem, *, context: ActionContext) -> EquipmentItem:
     """Fin de réparation : rendu à son détenteur s'il en a un, sinon remis en stock (L5-10)."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status != Status.REPAIR:
         raise EquipmentError(CHANGED)
@@ -303,8 +320,9 @@ def back_from_repair(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def retire(item, *, actor, request=None) -> EquipmentItem:
+def retire(item: EquipmentItem, *, context: ActionContext) -> EquipmentItem:
     """Retirer du parc : seulement un équipement sans détenteur, en stock ou en réparation."""
+    actor, request = context.actor, context.request
     item = _lock(item)
     if item.status not in (Status.IN_STOCK, Status.REPAIR) or item.holder_id:
         raise EquipmentError(
@@ -327,8 +345,11 @@ def retire(item, *, actor, request=None) -> EquipmentItem:
 
 
 @transaction.atomic
-def report_issue(item, *, reporter, description, request=None) -> EquipmentIssue:
+def report_issue(
+    item: EquipmentItem, *, context: ActionContext, description: str
+) -> EquipmentIssue:
     """« Signaler un problème » : par le détenteur ; les RH sont prévenus."""
+    reporter, request = context.person(), context.request
     item = _lock(item)
     if item.holder_id != reporter.pk:
         raise EquipmentError(_("Vous ne détenez pas cet équipement."))
@@ -338,8 +359,7 @@ def report_issue(item, *, reporter, description, request=None) -> EquipmentIssue
         "name": reporter.full_name,
         "item": _label(item),
     }
-    for person in _hr():
-        notifications.notify(person, text, url="/materiel/?onglet=signalements")
+    notifications.notify_many(_hr(), text, url="/materiel/?onglet=signalements")
     audit.log(
         "equipment.issue_reported",
         _("Problème signalé : %(item)s") % {"item": _label(item)},
@@ -350,7 +370,7 @@ def report_issue(item, *, reporter, description, request=None) -> EquipmentIssue
     return issue
 
 
-def _lock_issue(issue) -> EquipmentIssue:
+def _lock_issue(issue: EquipmentIssue) -> EquipmentIssue:
     issue = EquipmentIssue.objects.select_for_update().get(pk=issue.pk)
     if issue.status != EquipmentIssue.Status.OPEN:
         raise EquipmentError(_("Ce signalement est déjà clos."))
@@ -358,7 +378,10 @@ def _lock_issue(issue) -> EquipmentIssue:
 
 
 @transaction.atomic
-def close_issue(issue, *, actor, resolution, request=None) -> EquipmentIssue:
+def close_issue(
+    issue: EquipmentIssue, *, context: ActionContext, resolution: str
+) -> EquipmentIssue:
+    actor, request = context.actor, context.request
     issue = _lock_issue(issue)
     issue.status = EquipmentIssue.Status.CLOSED
     issue.closed_by, issue.closed_at, issue.resolution = actor, timezone.now(), resolution
@@ -381,16 +404,16 @@ def close_issue(issue, *, actor, resolution, request=None) -> EquipmentIssue:
 
 
 @transaction.atomic
-def issue_to_repair(issue, *, actor, request=None) -> dict:
+def issue_to_repair(issue: EquipmentIssue, *, context: ActionContext) -> dict:
     """« Envoyer en réparation » depuis un signalement : le détenteur est conservé."""
     issue = _lock_issue(issue)
-    return send_to_repair(issue.item, actor=actor, comment=issue.description, request=request)
+    return send_to_repair(issue.item, context=context, comment=issue.description)
 
 
 # ---------- Archivage d'un salarié ----------
 
 
-def held_by(employee) -> list:
+def held_by(employee: Employee) -> list[EquipmentItem]:
     return list(
         EquipmentItem.objects.filter(holder=employee)
         .exclude(status=Status.RETIRED)
@@ -398,7 +421,7 @@ def held_by(employee) -> list:
     )
 
 
-def alert_hr_on_departure(employee, *, actor) -> int:
+def alert_hr_on_departure(employee: Employee, *, actor: Employee | None) -> int:
     """Archivage d'un détenteur : il n'est pas bloqué (L5-11) ; les RH reçoivent la liste du
     matériel à restituer."""
     items = held_by(employee)
@@ -411,6 +434,5 @@ def alert_hr_on_departure(employee, *, actor) -> int:
     if len(text) > 255:
         text = text[:254] + "…"
     recipients = [p for p in _hr() if actor is None or p.pk != actor.pk] or _hr()
-    for person in recipients:
-        notifications.notify(person, text, url="/materiel/?onglet=parc")
+    notifications.notify_many(recipients, text, url="/materiel/?onglet=parc")
     return len(items)
