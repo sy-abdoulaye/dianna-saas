@@ -1,11 +1,11 @@
 # Note de livraison : reprise technique refacto-1
 
-Date : 26 octobre 2026. Branche : `refacto-1`, créée depuis `main` après la fusion du lot 6.
+Date : 25 octobre 2026. Branche : `refacto-1`, créée depuis `main` après la fusion du lot 6.
 
-Reprise technique avant le lot 7, en deux temps.
+Reprise technique avant le lot 7, en deux temps, puis les corrections de la vérification.
 
 - **Premier envoi** : aucun changement de comportement visible ; tous les tests passaient sans modification.
-- **Second envoi** (décisions du 26 oct.) :
+- **Second envoi** (décisions du 25 oct.) :
   - navigation unifiée (R1-02), le seul changement visible ;
   - `ActionContext` dans les services publics, avec un commit séparé qui adapte mécaniquement les appels des tests ;
   - filtres, contraintes et annulation par des briques uniques.
@@ -33,15 +33,17 @@ Reprise technique avant le lot 7, en deux temps.
 
   | Module | Contenu | Lignes |
   |---|---|---|
-  | `common` | erreurs, résultat d'une transition, verrous, événements, enregistrement contrôlé, fichier joint, agenda, journal | 218 |
-  | `validators` | qui valide, qui peut décider ou annuler | 122 |
-  | `checks` | contrôles métier (A3-02) | 148 |
-  | `notifications` | valideurs et demandeur | 75 |
-  | `transitions` | envoi, validation, refus, annulation | 253 |
-  | `undo` | annulation immédiate | 123 |
-  | `campaigns` | campagnes de congés d'été | 72 |
+  | `common` | erreurs, résultat d'une transition, verrous, événements, enregistrement contrôlé, fichier joint, agenda, journal | 238 |
+  | `validators` | qui valide, qui peut décider ou annuler | 124 |
+  | `checks` | contrôles métier (A3-02) | 150 |
+  | `notifications` | valideurs et demandeur | 86 |
+  | `transitions` | envoi, validation, refus, annulation | 263 |
+  | `undo` | annulation immédiate | 138 |
+  | `campaigns` | campagnes de congés d'été | 76 |
 
-  Les imports publics ne changent pas (`from apps.approvals import workflow`, `from apps.approvals.workflow import constraint_name`). Les modules s'appellent entre eux par la façade `workflow` : un seul point d'entrée, et les deux tests qui remplacent `workflow._event` et `workflow._check_transport` gardent tout leur sens sans être modifiés.
+  Lignes après la vérification (annotations comprises).
+
+  Les imports publics ne changent pas (`from apps.approvals import workflow`, `from apps.approvals.workflow import constraint_name`). Depuis la vérification, la façade n'exporte que les noms publics et les modules s'importent directement entre eux, sans cycle ; les deux tests qui remplaçaient `workflow._event` et `workflow._check_transport` injectent la panne plus bas (voir plus loin).
 - **mypy et django-stubs** (R1-01) : mypy 2.4.0 et django-stubs 6.1.2, en dépendances de développement.
   - `make typecheck` est bloquant dans l'intégration continue sur les 11 `services.py` et `selectors.py` et sur le moteur des demandes (19 fichiers, 0 erreur).
   - Les 13 erreurs trouvées sont corrigées : annotations manquantes, `user` peut-être vide sur une fiche, type du résultat d'une transition.
@@ -53,11 +55,11 @@ Reprise technique avant le lot 7, en deux temps.
 - **Navigation unifiée (R1-02).** Une seule brique, `htmx.after_action`, termine toute action réussie (40 appels) :
   - même page : notification visuelle et rechargement de la zone ; `PAGE_CHANGED` recharge toute la zone `#content` ;
   - autre page : `HX-Location` ;
-  - export : `HX-Redirect`, inchangé ;
+  - export : `HX-Redirect`, par la brique `download_response` depuis la vérification ;
   - seule exception : l'activation d'un module recharge le document entier (`refresh=RELOAD_PAGE`), car le menu change aussi.
   - La fiche de l'annuaire et les paramètres de l'entreprise passent par HTMX : erreurs en 422 sur place, plus de rechargement complet. Sans JavaScript (`page_form`), ces formulaires, l'import CSV et « Tout marquer comme lu » reçoivent un message, puis une redirection.
   - Une page rendue par un formulaire refusé se recharge depuis l'adresse affichée par le navigateur (`HX-Current-URL`), jamais depuis celle du POST. Un parcours l'avait révélé.
-  - Les trois parcours annoncés passaient tels quels : aucun parcours existant n'a été modifié. Deux nouveaux parcours vérifient que le document n'est pas rechargé (paramètres, création d'une fiche). Des tests unitaires couvrent `after_action` et l'adresse rechargée.
+  - Les trois parcours annoncés passaient tels quels. Un seul parcours existant a changé, et de façon mécanique : `test_communication.py` prépare son questionnaire avec `context=ActionContext(…)` au lieu de `actor=…` (commit d'adaptation des appels). Deux nouveaux parcours vérifient que le document n'est pas rechargé (paramètres, création d'une fiche). Des tests unitaires couvrent `after_action` et l'adresse rechargée.
 - **ActionContext dans les services publics.**
   - 36 fonctions de service prennent `context: ActionContext` au lieu de `actor` et `request` (`SYSTEM` pour une action sans personne : clôture automatique, plateforme). Les vues passent `ActionContext.of(request)`.
   - Trois actions exigent une personne (`context.person()`) : publier un questionnaire, publier une annonce, signaler un problème de matériel.
@@ -88,6 +90,24 @@ Reprise technique avant le lot 7, en deux temps.
   - `submit`, `approve`, `refuse`, `cancel`, `cancel_approved`, `undo` et les trois fonctions des campagnes prennent `context: ActionContext`, comme les autres services. La personne n'est plus un argument positionnel, et `http_request` disparaît des signatures publiques.
   - Commit séparé, mécanique : 61 appels dans 8 fichiers de tests.
 
+### Corrections de la vérification (25 oct.)
+
+Chaque point a son test.
+
+- **a. Cache des fragments.** Le middleware `HtmxCacheMiddleware` pose `Vary: HX-Request` sur toute réponse et `Cache-Control: no-store` sur celles d'HTMX. Sans lui, Retour puis Suivant après une action affichait le fragment seul (`<section class="card">` sans la page) : reproduit sur les fermetures et l'onglet « À valider » avant la correction. Tests unitaires des en-têtes ; parcours action, Retour, Suivant sur `/teletravail/`, l'onglet « À valider » et `/administration/fermetures/`.
+- **b. Planning.** La date de l'adresse n'est plus ramenée au début de la période : Semaine, Mois, Semaine revient à la même semaine. Précédent et suivant partent du jour de référence (le mois suivant garde le même jour, borné à la fin du mois). Les liens `week_url` et `month_url`, inutilisés, sont retirés. Les parcours aller-retour passent par un gabarit commun, `round_trip` : chaque état est vérifié à l'aller, au Retour jusqu'au départ, puis au Suivant jusqu'au dernier ; la période du planning est vérifiée à chaque étape.
+- **c. mypy.** `disallow_untyped_defs` et `disallow_incomplete_defs` dans le périmètre bloquant : 118 fonctions annotées (134 erreurs mypy, une fonction sans aucune annotation en donnant deux). `ignore_missing_imports` n'est plus global : seules allauth, botocore, django-environ et django-storages, sans types, sont nommées. Les annotations ont révélé quelques imprécisions, corrigées : `has_hr_step` devient un `TypeGuard[LeaveRequest]`, le champ du justificatif est vérifié avant l'écriture, la campagne verrouillée a son propre nom, le site d'une fermeture est testé explicitement. Test de la configuration.
+- **d. Focus.** Après une action ou la fermeture d'une modale, le focus revient au bouton d'origine ; s'il a été remplacé par le rechargement de sa zone, à son remplaçant (même id ou même adresse d'action), sinon au premier élément utile de la zone (`ui.js`). La modale d'export se ferme après le téléchargement (`download_response`). Quatre parcours ; les deux premiers échouaient avant la correction.
+- **e. Filtres.** `autocomplete="off"` sur tous les formulaires de filtres. L'annuaire redirige vers la même adresse avec la vue mémorisée quand `vue` manque ; « Réinitialiser » garde la vue. Parcours aller-retour du filtre « État » du parc.
+- **f. Briques restantes.**
+  - `storage_unavailable_response` sert aussi les requêtes HTMX (notification 503, la modale reste ouverte) ; l'envoi d'une demande l'utilise.
+  - La consultation d'un justificatif est journalisée par le moteur (`workflow.record_proof_access`), plus par la vue.
+  - `error_response` accepte `refresh` (erreur suivie du rechargement d'une zone, deux appels) et `go_to` ; l'import CSV l'utilise au lieu de `messages` puis `redirect`, et sa confirmation passe par HTMX.
+  - `_audit`, `_campaign_audit`, `_undo_submit`, `_undo_decision`, `_submit`, `_approve_automatically` et `_create_employee` prennent `ActionContext` ; les reconstructions `ActionContext(actor, request)` des services de l'annuaire, de l'administration et du matériel disparaissent aussi.
+- **g. Façade du moteur.** Les tests de la transaction d'envoi et de la traduction des contraintes injectent la panne sur `RequestEvent.objects.create` et par un enregistrement direct du modèle. Les modules s'importent directement ; la façade n'exporte que les noms publics ; `seed_demo` utilise `module_url`, devenu public.
+- **h. CLAUDE.md.** Fin d'un export (`download_response`), erreur suivie d'un rechargement de zone (`error_response(refresh=…)`), `storage_unavailable_response`, middleware de cache, gabarit `round_trip`, annotations complètes.
+- **i. Dates.** La note, R1-01 et R1-02 portaient le 26 oct., date à venir : corrigées au 25 oct. La même erreur dans le lot 6 (L6-19, L6-21, L6-23, `lot-6.md`) est corrigée aussi.
+
 ## Chiffres avant et après
 
 | Mesure | Avant | Après |
@@ -101,8 +121,13 @@ Reprise technique avant le lot 7, en deux temps.
 | Fonctions au-dessus de 10 de complexité | 0 | 0 |
 | Fonctions au-dessus de 7 de complexité | 11 | 11 |
 | Fonctions à plus de 6 arguments | 9 | 0 (seuil abaissé à 6) |
-| Plus gros fichier du moteur des demandes | 931 lignes (`workflow.py`) | 253 lignes (`workflow/transitions.py`) |
+| Plus gros fichier du moteur des demandes | 931 lignes (`workflow.py`) | 263 lignes (`workflow/transitions.py`) |
 | Erreurs mypy sur les services, sélecteurs et le moteur | 13 | 0 |
+| Fonctions non annotées dans ce périmètre | 118 | 0 (`disallow_untyped_defs`) |
+| `ignore_missing_imports` | global | 4 bibliothèques nommées |
+| Réponses HTMX que le navigateur peut garder en cache | toutes | 0 (`no-store`, `Vary: HX-Request`) |
+| `messages` puis `redirect` dans les vues | 3 (import CSV) | 0 |
+| HX-Redirect écrit à la main | 1 | 0 (`download_response`) |
 | Façons de naviguer après une action | 4 | 1 brique (`after_action`, 40 appels) |
 | Paires `actor=request.employee, request=request` dans les vues | 27 | 0 (`ActionContext.of(request)`) |
 | Barres de filtres écrites à la main | 6 | 0 |
@@ -110,7 +135,7 @@ Reprise technique avant le lot 7, en deux temps.
 | Vues d'annulation | 4 | 1 |
 | Exceptions `noqa` | 19 | 20 (une dans un test : classe imitant l'objet `diag` de psycopg) |
 
-Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lignes, `approvals/views.py` 627, `equipment/views.py` 510, `administration/views.py` 478, `people/views.py` 435, `core/models.py` 426.
+Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lignes, `approvals/views.py` 617, `equipment/views.py` 510, `administration/views.py` 477, `people/views.py` 447, `equipment/services.py` 438.
 
 ## Ce qui reste pour le lot 8
 
@@ -124,7 +149,7 @@ Plus gros fichiers (hors tests et migrations), après : `seed_demo.py` 1 072 lig
 | Commande | Résultat |
 |---|---|
 | `make lint` | sans erreur |
-| `make typecheck` | 19 fichiers, aucune erreur |
-| `make test` | 784 tests : 782 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; puis 6 tests de performance |
-| `make e2e` | 56 parcours (2 nouveaux pour la navigation, 6 pour les allers-retours) ; aucun parcours existant modifié |
+| `make typecheck` | 19 fichiers, aucune erreur (annotations complètes exigées) |
+| `make test` | 798 tests : 796 réussis, 2 sautés (S3 sans MinIO local ; relance du transport, qui dépend du jour) ; couverture 96 % ; puis 6 tests de performance |
+| `make e2e` | 64 parcours (2 pour la navigation, 10 pour les allers-retours, 4 pour le focus) ; un seul parcours existant modifié, mécaniquement (`test_communication.py`) |
 | `make check` | aucune alerte |

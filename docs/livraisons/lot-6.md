@@ -96,7 +96,7 @@ Date : 24 octobre 2026. Branche : `lot-6`.
 - **Questionnaires.**
   - « Répondre » disparaît après l'échéance.
   - Une confirmation ne s'ouvre que si l'action est possible, avec un message d'état exact (L6-20).
-  - « Prolonger l'échéance » est journalisé, seulement tant que l'échéance n'est pas passée ; un questionnaire échu est clos partout (L6-21, corrigé le 26 oct.).
+  - « Prolonger l'échéance » est journalisé, seulement tant que l'échéance n'est pas passée ; un questionnaire échu est clos partout (L6-21, corrigé le 25 oct.).
   - Commentaires : 5 par question, puis « Afficher plus » par paquets de 20 (L6-22).
 - **Tests.**
   - Test renommé `test_response_keys_do_not_follow_the_order_of_receipts`.
@@ -107,7 +107,7 @@ Date : 24 octobre 2026. Branche : `lot-6`.
   - Annotations de type sur `actor`, `viewer` et `employee`.
   - Les annonces passent au service un objet `AnnouncementData`.
 
-## Derniers points de la vérification (26 oct. 2026)
+## Derniers points de la vérification (25 oct. 2026)
 
 - **Course à minuit (L6-23).** Les lectures des résultats prennent un verrou partagé et attendent une réponse en cours. Le test utilise deux connexions réelles ; il échoue sans le verrou.
 - **Accessibilité.** Après « Afficher plus », le focus va sur le premier commentaire chargé. Un parcours au clavier le vérifie ; il échoue sans la correction.
