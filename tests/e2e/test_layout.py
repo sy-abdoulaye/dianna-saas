@@ -274,3 +274,75 @@ def test_scroll_position_is_restored_after_back(browser, urls, company_a):
     expect(page).to_have_url(re.compile("/interventions/nouveau/"))
     page.wait_for_function(f"() => Math.abs(scrollY - {position}) <= 2")
     context.close()
+
+
+# ---------- Fin du menu et espacement ----------
+
+MENU_SCREENS = [(1920, 880), (1366, 650), (1280, 600), (1440, 900), (390, 844)]
+# Espacement du prototype entre deux entrées d'un même groupe : 40 px d'entrée + 2 px d'écart.
+ENTRY_STEP = 42
+
+MENU_END = """() => new Promise((done) => {
+  const side = document.getElementById('side');
+  side.scrollTop = side.scrollHeight;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const box = side.getBoundingClientRect();
+    const fade = parseFloat(getComputedStyle(side).getPropertyValue('--side-fade'));
+    const items = [...side.querySelectorAll('.nav-item')];
+    const shown = [...side.children].filter((e) => getComputedStyle(e).display !== 'none');
+    const last = shown[shown.length - 1].getBoundingClientRect();
+    const lastItem = items[items.length - 1].getBoundingClientRect();
+    const steps = [];
+    for (const list of side.querySelectorAll('ul.nav')) {
+      const entries = [...list.querySelectorAll('.nav-item')]
+        .map((e) => e.getBoundingClientRect().top);
+      for (let i = 1; i < entries.length; i++) steps.push(Math.round(entries[i] - entries[i - 1]));
+    }
+    done({
+      inner: innerHeight, sideTop: box.top, sideBottom: box.bottom,
+      topbar: document.querySelector('.topbar').getBoundingClientRect().height,
+      lastBottom: last.bottom, lastItemBottom: lastItem.bottom,
+      fadeBottom: side.classList.contains('fade-bottom'), fade, steps,
+    });
+  }));
+})"""
+
+
+@pytest.mark.parametrize("profile", PROFILES)
+def test_the_end_of_the_menu_is_fully_visible_with_the_same_spacing(
+    browser, urls, company_a, profile
+):
+    login = browser.new_context(locale="fr-FR")
+    page = login.new_page()
+    sign_in(page, urls, getattr(company_a, profile))
+    state = login.storage_state()
+    login.close()
+    problems = []
+    for width, height in MENU_SCREENS:
+        modes = ["drawer"] if width < 1024 else NAV_STATES
+        for mode in modes:
+            context = browser.new_context(
+                storage_state=state, viewport={"width": width, "height": height}, locale="fr-FR"
+            )
+            if mode == "collapsed":
+                context.add_init_script("localStorage.setItem('dianna.nav', 'collapsed')")
+            view = context.new_page()
+            view.goto(urls("/"))
+            open_menu_if_drawer(view)
+            end = view.evaluate(MENU_END)
+            label = f"{width}×{height} {mode}"
+            if end["sideBottom"] > end["inner"] + 0.5:
+                problems.append(f"{label} : menu jusqu'à {end['sideBottom']} px, sous l'écran")
+            if (
+                mode != "drawer"
+                and abs(end["sideBottom"] - end["sideTop"] - (height - end["topbar"])) > 0.5
+            ):
+                problems.append(f"{label} : hauteur du menu différente de l'écran moins l'en-tête")
+            visible_bottom = end["sideBottom"] - (end["fade"] if end["fadeBottom"] else 0)
+            for name in ("lastBottom", "lastItemBottom"):
+                if end[name] > visible_bottom + 0.5:
+                    problems.append(f"{label} : fin du menu ({name}) cachée à {end[name]} px")
+            if set(end["steps"]) != {ENTRY_STEP}:
+                problems.append(f"{label} : espacements {sorted(set(end['steps']))}")
+            context.close()
+    assert problems == [], "\n".join(problems)

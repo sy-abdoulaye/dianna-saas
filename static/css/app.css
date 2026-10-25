@@ -265,14 +265,17 @@
   @media (min-width: 1440px) { .app { --page-pad: 32px; } }
   @media (max-width: 640px) { .app { --page-pad: 16px; } }
   .app { min-height: 100dvh; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "top top" "side main"; }
-  /* Entrées resserrées sur les écrans peu hauts ; au-delà, le menu défile sans barre visible. */
-  .side { grid-area: side; position: sticky; top: var(--top-h); align-self: start; height: calc(100dvh - var(--top-h)); width: var(--side-w); background: var(--surface); border-right: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  /* Espacements du prototype (docs/05-design-system.md, menu latéral) à toutes les hauteurs
+     d'écran : le menu défile sans barre visible quand ses entrées dépassent. Hauteur : l'écran
+     moins l'en-tête. Marge du bas plus grande que le dégradé : la dernière entrée s'affiche
+     entièrement au-dessus du bord, jamais sous le dégradé. */
+  .side { --side-fade: 24px; grid-area: side; position: sticky; top: var(--top-h); align-self: start; height: calc(100dvh - var(--top-h)); width: var(--side-w); background: var(--surface); border-right: 1px solid var(--line); padding: 16px 12px calc(16px + var(--side-fade)); display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
   .side::-webkit-scrollbar { display: none; }
   /* Dégradé : il reste des entrées en bas (ou en haut, une fois défilé). Masque d'opacité fait
      avec un jeton opaque, sans couleur visible. */
-  .side.fade-bottom { mask-image: linear-gradient(to bottom, var(--surface) calc(100% - 32px), transparent); }
-  .side.fade-top { mask-image: linear-gradient(to top, var(--surface) calc(100% - 32px), transparent); }
-  .side.fade-top.fade-bottom { mask-image: linear-gradient(to bottom, transparent, var(--surface) 32px, var(--surface) calc(100% - 32px), transparent); }
+  .side.fade-bottom { mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--side-fade)), transparent); }
+  .side.fade-top { mask-image: linear-gradient(to top, var(--surface) calc(100% - var(--side-fade)), transparent); }
+  .side.fade-top.fade-bottom { mask-image: linear-gradient(to bottom, transparent, var(--surface) var(--side-fade), var(--surface) calc(100% - var(--side-fade)), transparent); }
   .brand { display: flex; align-items: center; gap: 10px; flex: none; height: 40px; padding: 0 4px; text-decoration: none; }
   .brand span { font: 700 20px/28px var(--font-display); letter-spacing: -0.02em; color: var(--title); }
   .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -301,7 +304,7 @@
   /* Rail d'icônes (≥ 1 024 px, état mémorisé : data-nav="collapsed" sur <html>). Les libellés
      restent lus par les lecteurs d'écran ; l'infobulle vient de l'attribut title (ui.js). */
   @media (min-width: 1024px) {
-    [data-nav="collapsed"] .side { width: var(--rail-w); padding: 12px 8px; }
+    [data-nav="collapsed"] .side { width: var(--rail-w); padding-left: 8px; padding-right: 8px; }
     [data-nav="collapsed"] .nav-item { justify-content: center; padding: 0; }
     [data-nav="collapsed"] .nav-label, [data-nav="collapsed"] .soon, [data-nav="collapsed"] .side-me-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     [data-nav="collapsed"] .nav-group { height: 1px; padding: 0; margin: 12px 8px; background: var(--line); color: transparent; overflow: hidden; }
@@ -330,19 +333,6 @@
     html:has(.app.nav-open) { overflow: hidden; }
   }
   @media (max-width: 640px) { .brand span { display: none; } .topbar { gap: 8px; } }
-  /* Écrans peu hauts : entrées resserrées, puis la carte de la personne masquée (son nom et son
-     profil restent dans le menu de l'avatar), pour que le menu tienne sans défiler. */
-  @media (max-height: 960px) {
-    .nav-item { min-height: 34px; }
-    .nav-group { padding: 10px 12px 4px; }
-    .side-me { padding: 8px 12px; }
-  }
-  @media (max-height: 800px) {
-    .nav-item { min-height: 28px; }
-    .nav-group { padding: 6px 12px 2px; }
-    [data-nav="collapsed"] .nav-group { margin: 6px 8px; }
-  }
-  @media (max-height: 760px) { .side-me { display: none; } }
 
   /* ---------- Cartes ---------- */
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--sh-1); }

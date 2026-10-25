@@ -142,8 +142,11 @@ document.addEventListener("click", (event) => {
 function syncSideFades() {
   const side = document.getElementById("side");
   if (!side) return;
-  side.classList.toggle("fade-top", side.scrollTop > 1);
-  side.classList.toggle("fade-bottom", side.scrollTop + side.clientHeight < side.scrollHeight - 1);
+  // Tolérance de 2 px : au zoom ou sur un écran haute densité, la position de fin de défilement
+  // est fractionnaire ; sans elle, le dégradé du bas resterait et masquerait la fin du menu.
+  const rest = side.scrollHeight - side.clientHeight - side.scrollTop;
+  side.classList.toggle("fade-top", side.scrollTop > 2);
+  side.classList.toggle("fade-bottom", rest > 2);
 }
 
 function revealCurrentEntry() {
