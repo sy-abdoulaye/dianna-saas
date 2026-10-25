@@ -1,0 +1,90 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% if report %}{% translate "Modifier le compte rendu" %}{% else %}{% translate "Nouveau compte rendu" %}{% endif %} · Dianna{% endblock %}
+{% block content %}
+  {% url "interventions:list" as list_url %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ list_url }}">{% translate "Suivi d'intervention" %}</a> › {% if report %}{% translate "Modifier" %}{% else %}{% translate "Nouveau compte rendu" %}{% endif %}</div>
+      <h1 class="h1">{% if report %}{% translate "Modifier le compte rendu" %}{% else %}{% translate "Nouveau compte rendu" %}{% endif %}</h1>
+      <p class="sub">{% translate "Les champs marqués d'une étoile sont obligatoires pour l'envoi. Le brouillon peut rester incomplet." %}</p>
+    </div>
+  </div>
+  {% if report and report.status == "changes_requested" and report.reviewer_note %}
+    {% translate "Complément demandé :" as note_title %}
+    {% blocktranslate asvar note_text with note=report.reviewer_note %}« {{ note }} »{% endblocktranslate %}
+    {% include "components/banner.html" with kind="warn" title=note_title text=note_text %}
+  {% endif %}
+  {% partialdef form inline %}
+    <form id="report-form" method="post" action="{{ save_url }}" hx-post="{{ save_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-autosave novalidate>
+      {% csrf_token %}
+      {{ form.report }}{{ form.version }}
+      <div class="split">
+        <div class="stack">
+          {% include "components/form_errors.html" %}
+          <section class="card card-body stack" aria-labelledby="h-mission">
+            <h2 class="h2" id="h-mission">{% translate "Intervention" %}</h2>
+            <div class="form-grid">
+              {% include "components/field.html" with field=form.mission %}
+              {% include "components/field.html" with field=form.period %}
+            </div>
+            <datalist id="missions">
+              {% for mission in missions %}<option value="{{ mission }}"></option>{% endfor %}
+            </datalist>
+          </section>
+          <section class="card card-body stack" aria-labelledby="h-done">
+            <div>
+              <h2 class="h2" id="h-done">{% translate "Travaux réalisés sur la période" %}</h2>
+              <p class="meta">{% translate "Descriptif, difficultés, solutions proposées, taux de réalisation, délai et commentaires." %}</p>
+            </div>
+            {% translate "Ajouter un travail réalisé" as add_done %}
+            {% translate "Au moins un travail est nécessaire" as min_title %}
+            {% translate "Videz les champs si vous ne souhaitez rien déclarer." as min_message %}
+            {% translate "Travail retiré" as removed_title %}
+            {% include "components/repeatable.html" with formset=done block=done_block name="interventions-done" add_label=add_done min_title=min_title min_message=min_message removed_title=removed_title %}
+          </section>
+          <section class="card card-body stack" aria-labelledby="h-next">
+            <div>
+              <h2 class="h2" id="h-next">{% translate "Travaux prévus pour la période suivante" %}</h2>
+              <p class="meta">{% translate "Description, taux de réalisation visé, délai et commentaires." %}</p>
+            </div>
+            {% translate "Ajouter un travail prévu" as add_next %}
+            {% include "components/repeatable.html" with formset=next block=next_block name="interventions-next" add_label=add_next min_title=min_title min_message=min_message removed_title=removed_title %}
+          </section>
+          <section class="card card-body stack" aria-labelledby="h-visibility">
+            <h2 class="h2" id="h-visibility">{% translate "Visibilité, prolongation et suivi" %}</h2>
+            <div class="form-grid">
+              {% include "components/field.html" with field=form.visibility required_mark=True %}
+              {% include "components/field.html" with field=form.planned_end required_mark=True %}
+              <div class="field">
+                <span class="label" aria-hidden="true">{{ form.extension.label }}</span>
+                <div>{% include "components/segmented.html" with name="extension" options=extension_options selected=form.extension.value legend=form.extension.label %}</div>
+              </div>
+              {% include "components/field.html" with field=form.extension_until %}
+            </div>
+            {% include "components/field.html" with field=form.follow_up %}
+          </section>
+        </div>
+        <aside class="stack sticky-aside">
+          <div class="card card-body stack">
+            <h3 class="h3">{% translate "Enregistrer" %}</h3>
+            {% button _("Envoyer à mon manager") variant="primary" icon="send" type="submit" name="act" value="send" block=True %}
+            {% button _("Enregistrer le brouillon") type="submit" name="act" value="draft" block=True %}
+            {% button _("Annuler") variant="ghost" href=cancel_url block=True %}
+            {% include "interventions/partials/autosave.html" %}
+          </div>
+          <div class="card card-body stack">
+            <h3 class="h3">{% translate "Synthèse" %}</h3>
+            <dl class="dl">
+              <dt>{% translate "Envoyé à" %}</dt>
+              <dd>{{ recipient }}</dd>
+            </dl>
+          </div>
+          {% translate "Visible par vous, votre manager et les RH. Le brouillon s'enregistre automatiquement toutes les 30 secondes." as privacy %}
+          {% include "components/banner.html" with kind="info" text=privacy %}
+        </aside>
+      </div>
+      <div hidden hx-post="{{ save_url }}" hx-trigger="autosave from:closest form" hx-include="closest form" hx-vals='{"act": "autosave"}' hx-target="#autosave-status" hx-swap="outerHTML" data-autosave-sender></div>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

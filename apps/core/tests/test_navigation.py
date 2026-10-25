@@ -29,8 +29,9 @@ def test_real_menu_shows_existing_routes_and_soon_entries_without_link():
     # Lot 6 : communication interne et questionnaires.
     assert items["announcements"].url == "/annonces/"
     assert items["surveys"].url == "/questionnaires/"
-    # Lot 7 : carrière et évaluations.
+    # Lot 7 : carrière et évaluations, suivi d'intervention.
     assert items["careers"].url == "/carriere/"
+    assert items["interventions"].url == "/interventions/"
 
 
 def test_recruitment_is_shown_to_people_with_reports_not_to_the_manager_profile_alone():

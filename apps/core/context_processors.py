@@ -45,5 +45,6 @@ def page_url(request) -> str:
 
 def _menu_counts(request) -> dict:
     from apps.approvals.views import menu_counts
+    from apps.interventions.views import menu_count
 
-    return menu_counts(request)
+    return {**menu_counts(request), **menu_count(request)}

@@ -1,0 +1,23 @@
+{% extends "components/modal.html" %}
+{% load i18n ui %}
+{% block modal_icon %}{% if approve %}{% icon "check" %}{% else %}{% icon "edit" %}{% endif %}{% endblock %}
+{% block modal_title %}{% if approve %}{% translate "Valider le compte rendu" %}{% else %}{% translate "Demander un complément" %}{% endif %}{% endblock %}
+{% block modal_content %}
+  {% partialdef form inline %}
+    <form hx-post="{{ action_url }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" novalidate>
+      <div class="modal-body">
+        <p class="meta">{{ report.employee.full_name }} · {{ report.mission.name }} · {{ report.period|fr_date:"month" }}</p>
+        {% if replaced %}
+          {% blocktranslate asvar replaced_title with name=replaced.full_name %}Vous agissez à la place de {{ name }}.{% endblocktranslate %}
+          {% include "components/banner.html" with kind="warn" title=replaced_title %}
+        {% endif %}
+        {% include "components/form_errors.html" %}
+        {% include "components/field.html" with field=form.note %}
+      </div>
+      <footer class="modal-foot">
+        {% button _("Annuler") data_modal_close=True %}
+        {% if approve %}{% button _("Valider") variant="primary" type="submit" %}{% else %}{% button _("Envoyer la demande") variant="primary" type="submit" %}{% endif %}
+      </footer>
+    </form>
+  {% endpartialdef %}
+{% endblock %}

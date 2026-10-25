@@ -1,0 +1,7 @@
+{% load i18n %}
+{% include "components/field.html" with field=form.description required_mark=True %}
+<div class="form-grid">
+  {% include "components/field.html" with field=form.completion required_mark=True suffix="%" %}
+  {% include "components/field.html" with field=form.due_date %}
+</div>
+{% include "components/field.html" with field=form.comments %}

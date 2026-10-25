@@ -246,6 +246,8 @@ document.body.addEventListener("htmx:beforeRequest", (event) => {
   // son bouton pour y revenir après le rechargement de la zone.
   const elt = event.detail.elt;
   const verb = (event.detail.requestConfig && event.detail.requestConfig.verb) || "get";
+  // L'enregistrement automatique ne touche jamais au focus de la saisie en cours.
+  if (elt instanceof HTMLElement && elt.matches("[data-autosave-sender]")) return;
   if (verb !== "get" && elt instanceof HTMLElement && !elt.closest("dialog, #toasts")) {
     returnFocus(event.detail.requestConfig.triggeringEvent?.submitter || elt);
   }
@@ -462,6 +464,33 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
   const added = visibleRows(container).at(-1);
   $("textarea, input:not([type=hidden]), select", added)?.focus();
   added?.scrollIntoView({ block: "center" });
+});
+
+/* ---------- Enregistrement automatique (compte rendu d'intervention, lot 7) ---------- */
+// Toutes les 30 s, seulement si la saisie a changé depuis le dernier envoi. Le serveur refuse
+// un enregistrement fait depuis une version dépassée (autre onglet) : l'enregistrement
+// automatique s'arrête alors, et la notification demande de recharger la page.
+const AUTOSAVE_EVERY = 30000;
+
+function markDirty(event) {
+  const form = event.target.closest && event.target.closest("form[data-autosave]");
+  if (form) form.dataset.dirty = "1";
+}
+document.addEventListener("input", markDirty);
+document.addEventListener("change", markDirty);
+
+setInterval(() => {
+  $$("form[data-autosave]").forEach((form) => {
+    if (form.dataset.dirty !== "1" || form.dataset.autosaveStopped) return;
+    form.dataset.dirty = "";
+    form.dispatchEvent(new CustomEvent("autosave"));
+  });
+}, AUTOSAVE_EVERY);
+
+document.body.addEventListener("htmx:afterRequest", (event) => {
+  const sender = event.detail.elt;
+  if (!sender || !sender.matches || !sender.matches("[data-autosave-sender]")) return;
+  if (event.detail.xhr.status === 409) sender.closest("form").dataset.autosaveStopped = "1";
 });
 
 /* ---------- Filtres : « Réinitialiser » vide aussi les champs ---------- */

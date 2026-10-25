@@ -1,0 +1,95 @@
+{% extends "layouts/app.html" %}
+{% load i18n ui %}
+{% block title %}{% translate "Compte rendu" %} · {{ report.mission.name }} · Dianna{% endblock %}
+{% block content %}
+  {% url "interventions:list" as list_url %}
+  {% blocktranslate asvar page_title with period=report.period|fr_date:"month"|capfirst %}Compte rendu · {{ period }}{% endblocktranslate %}
+  <div class="page-head">
+    <div>
+      <div class="crumbs"><a href="{{ list_url }}">{% translate "Suivi d'intervention" %}</a> › {{ page_title }}</div>
+      <h1 class="h1">{{ page_title }}</h1>
+      <p class="sub">{{ report.mission.name }} · {{ report.employee.full_name }}</p>
+    </div>
+    <div class="actions">
+      {% url "interventions:pdf" report.public_id as pdf_url %}
+      {% button _("Exporter en PDF") icon="dl" href=pdf_url %}
+      {% if editable %}
+        {% url "interventions:edit" report.public_id as edit_url %}
+        {% url "interventions:send" report.public_id as send_url %}
+        {% button _("Modifier") icon="edit" href=edit_url %}
+        {% button _("Envoyer à mon manager") variant="primary" icon="send" hx_get=send_url hx_target="#modal-root" %}
+      {% endif %}
+      {% if can_decide %}
+        {% url "interventions:request_changes" report.public_id as changes_url %}
+        {% url "interventions:approve" report.public_id as approve_url %}
+        {% button _("Demander un complément") hx_get=changes_url hx_target="#modal-root" %}
+        {% button _("Valider") variant="primary" icon="check" hx_get=approve_url hx_target="#modal-root" %}
+      {% endif %}
+    </div>
+  </div>
+  <div>{% if can_decide %}{% status_badge "report" report.status _("À valider") %}{% else %}{% status_badge "report" report.status %}{% endif %}</div>
+  {% if replaced %}
+    {% blocktranslate asvar replaced_title with name=replaced.full_name %}Vous agissez à la place de {{ name }}.{% endblocktranslate %}
+    {% translate "Votre décision est inscrite au journal d'activité." as replaced_text %}
+    {% include "components/banner.html" with kind="warn" title=replaced_title text=replaced_text %}
+  {% endif %}
+  {% if report.status == "changes_requested" and report.reviewer_note %}
+    {% translate "Complément demandé :" as t %}{% blocktranslate asvar x with note=report.reviewer_note %}« {{ note }} »{% endblocktranslate %}
+    {% include "components/banner.html" with kind="warn" title=t text=x %}
+  {% elif report.status == "approved" %}
+    {% translate "Compte rendu validé." as t %}
+    {% if report.reviewer_note %}{% blocktranslate asvar x with note=report.reviewer_note %}« {{ note }} »{% endblocktranslate %}{% endif %}
+    {% include "components/banner.html" with kind="ok" title=t text=x %}
+  {% elif report.status == "submitted" and report.employee_id == current_employee.pk %}
+    {% if validator %}{% blocktranslate asvar x with name=validator.full_name %}Envoyé à {{ name }}. Vous serez notifié de sa réponse.{% endblocktranslate %}{% else %}{% translate "Envoyé à l'équipe RH. Vous serez notifié de sa réponse." as x %}{% endif %}
+    {% include "components/banner.html" with kind="info" text=x %}
+  {% endif %}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% translate "Avancement moyen" as l1 %}{% blocktranslate asvar v1 %}{{ average }} %{% endblocktranslate %}
+    {% include "components/kpi.html" with label=l1 value=v1 progress=average %}
+    {% translate "Travaux réalisés" as l2 %}{% include "components/kpi.html" with label=l2 value=done_items|length %}
+    {% translate "Travaux prévus" as l3 %}{% include "components/kpi.html" with label=l3 value=next_items|length %}
+    <div class="card kpi">
+      <span class="kpi-label">{% translate "Visibilité" %}</span>
+      <div>{% if report.visibility %}{% status_badge "visibility" report.visibility %}{% else %}—{% endif %}</div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="stack">
+      <section class="card card-body stack" aria-labelledby="h-done">
+        <h2 class="h2" id="h-done">{% translate "Travaux réalisés sur la période" %}</h2>
+        {% for item in done_items %}{% include "interventions/partials/item_read.html" with number=forloop.counter %}{% empty %}<p class="meta">{% translate "Aucun travail renseigné." %}</p>{% endfor %}
+      </section>
+      <section class="card card-body stack" aria-labelledby="h-next">
+        <h2 class="h2" id="h-next">{% translate "Travaux prévus pour la période suivante" %}</h2>
+        {% for item in next_items %}{% include "interventions/partials/item_read.html" with number=forloop.counter next=True %}{% empty %}<p class="meta">{% translate "Aucun travail prévu." %}</p>{% endfor %}
+      </section>
+      <section class="card card-body stack" aria-labelledby="h-visibility">
+        <h2 class="h2" id="h-visibility">{% translate "Visibilité, prolongation et suivi" %}</h2>
+        <dl class="dl">
+          <dt>{% translate "Visibilité" %}</dt><dd>{% if report.visibility %}{% status_badge "visibility" report.visibility %}{% else %}—{% endif %}</dd>
+          <dt>{% translate "Fin prévue" %}</dt><dd>{% if report.planned_end %}{{ report.planned_end|fr_date:"long" }}{% else %}—{% endif %}</dd>
+          <dt>{% translate "Prolongation souhaitée" %}</dt><dd>{% if report.extension_wanted %}{% if report.extension_until %}{% blocktranslate with day=report.extension_until|fr_date:"long" %}Oui, jusqu'au {{ day }}{% endblocktranslate %}{% else %}{% translate "Oui" %}{% endif %}{% else %}{% translate "Non" %}{% endif %}</dd>
+          <dt>{% translate "Points de suivi" %}</dt><dd>{% if report.follow_up %}{{ report.follow_up|plain_text }}{% else %}<span class="text-ink-3">{% translate "Aucun" %}</span>{% endif %}</dd>
+        </dl>
+      </section>
+    </div>
+    <aside class="stack">
+      <div class="card card-body stack">
+        <h3 class="h3">{% translate "Historique" %}</h3>
+        {% if events %}
+          <ul class="rows">
+            {% for event in events %}
+              <li><span>{{ event.get_action_display }}<span class="meta block">{{ event.actor.full_name|default:"" }}</span></span><span class="meta">{{ event.created_at|fr_date:"short" }}</span></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="meta">{% translate "Pas encore envoyé." %}</p>
+        {% endif %}
+      </div>
+      {% blocktranslate asvar privacy with name=report.employee.first_name %}Visible par {{ name }}, son manager et les RH.{% endblocktranslate %}
+      {% include "components/banner.html" with kind="info" text=privacy %}
+      {% button _("Retour à la liste") icon="left" href=list_url %}
+    </aside>
+  </div>
+{% endblock %}

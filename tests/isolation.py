@@ -181,6 +181,31 @@ ISOLATION_CASES = {
     "careers:file": ("get", lambda b: reverse("careers:file", args=[b.employee.public_id])),
     "careers:note": ("get", lambda b: reverse("careers:note", args=[b.employee.public_id])),
     "careers:file_pdf": ("get", lambda b: reverse("careers:file_pdf", args=[b.employee.public_id])),
+    # Suivi d'intervention (lot 7) : un compte rendu de B.
+    "interventions:detail": (
+        "get",
+        lambda b: reverse("interventions:detail", args=[b.requests["report"].public_id]),
+    ),
+    "interventions:edit": (
+        "get",
+        lambda b: reverse("interventions:edit", args=[b.requests["report"].public_id]),
+    ),
+    "interventions:send": (
+        "post",
+        lambda b: reverse("interventions:send", args=[b.requests["report"].public_id]),
+    ),
+    "interventions:approve": (
+        "post",
+        lambda b: reverse("interventions:approve", args=[b.requests["report"].public_id]),
+    ),
+    "interventions:request_changes": (
+        "get",
+        lambda b: reverse("interventions:request_changes", args=[b.requests["report"].public_id]),
+    ),
+    "interventions:pdf": (
+        "get",
+        lambda b: reverse("interventions:pdf", args=[b.requests["report"].public_id]),
+    ),
     "people:detail": ("get", lambda b: reverse("people:detail", args=[b.employee.public_id])),
     "people:edit": ("get", lambda b: reverse("people:edit", args=[b.employee.public_id])),
     "people:archive": ("get", lambda b: reverse("people:archive", args=[b.employee.public_id])),

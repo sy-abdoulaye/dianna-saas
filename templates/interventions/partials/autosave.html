@@ -1,0 +1,6 @@
+{% load i18n %}
+<span id="autosave-status" class="hint" aria-live="polite">{% if saved_at %}{% blocktranslate %}Brouillon enregistré à {{ saved_at }}{% endblocktranslate %}{% elif pending %}{% translate "Brouillon non enregistré : indiquez l'intervention et la période, ou corrigez les champs signalés." %}{% endif %}</span>
+{% if report %}
+  <input type="hidden" name="report" value="{{ report.public_id }}" id="id_report" hx-swap-oob="true">
+  <input type="hidden" name="version" value="{{ report.version }}" id="id_version" hx-swap-oob="true">
+{% endif %}
